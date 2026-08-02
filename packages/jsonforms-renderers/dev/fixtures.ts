@@ -255,6 +255,134 @@ export const fixtures: Fixture[] = [
   },
 
   {
+    id: 'data-table',
+    name: 'Data table',
+    schema: {
+      type: 'object',
+      properties: {
+        sales: {
+          type: 'array',
+          title: 'Particulars of Sale',
+          readOnly: true,
+          items: {
+            type: 'object',
+            properties: {
+              date_of_sale: { type: 'string', format: 'date', title: 'Date of Sale' },
+              garden_mark: { type: 'string', title: 'Garden Mark' },
+              grade: { type: 'string', title: 'Grade' },
+              rate_per_kg: { type: 'number', title: 'Rate per KG' },
+              quantity_kg: { type: 'number', title: 'QTY in KG' },
+              total_value: { type: 'number', title: 'Total Value (Rs)' },
+            },
+          },
+        },
+      },
+    },
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/sales',
+          options: { table: true, totals: ['quantity_kg', 'total_value'] },
+        },
+      ],
+    } as UISchemaElement,
+    // Seeded so the grid renders without an upload; clear `sales` in the data
+    // to see the empty state.
+    data: {
+      sales: [
+        {
+          date_of_sale: '2012-03-14',
+          garden_mark: 'GLENANORE',
+          grade: 'BOP',
+          rate_per_kg: 250,
+          quantity_kg: 25000,
+          total_value: 6250000,
+        },
+        {
+          date_of_sale: '2012-03-14',
+          garden_mark: 'POONAGALA',
+          grade: 'BOP FANNINGS',
+          rate_per_kg: 450,
+          quantity_kg: 10000,
+          total_value: 4500000,
+        },
+      ],
+    },
+  },
+  {
+    id: 'excel-source-file',
+    name: 'Excel source file',
+    schema: {
+      type: 'object',
+      properties: {
+        sales_file: {
+          type: 'string',
+          format: 'file',
+          title: 'Upload Sales Sheet',
+          description: 'Pick an .xlsx and the table below fills in from it.',
+          'x-file': { accept: '.xlsx' },
+          'x-excel': {
+            target: 'sales',
+            columns: {
+              date_of_sale: { match: ['date of sale', 'sale date'], type: 'date', required: true },
+              garden_mark: { match: ['garden mark', 'garden'], type: 'string' },
+              grade: { match: ['grade'], type: 'string' },
+              rate_per_kg: { match: ['rate per kg', 'rate'], type: 'number' },
+              quantity_kg: { match: ['qty in kg', 'quantity in kg', 'qty'], type: 'number', required: true },
+              total_value: { match: ['total value rs', 'total value', 'total'], type: 'number' },
+            },
+            derive: {
+              total_quantity_kg: { op: 'sum', column: 'quantity_kg' },
+              avg_rate_per_kg: { op: 'ratio', numerator: 'total_value', denominator: 'quantity_kg', precision: 2 },
+              dominant_grade: { op: 'dominant', column: 'grade', weightBy: 'quantity_kg' },
+            },
+          },
+        },
+        sales: {
+          type: 'array',
+          title: 'Particulars of Sale',
+          readOnly: true,
+          items: {
+            type: 'object',
+            properties: {
+              date_of_sale: { type: 'string', format: 'date', title: 'Date of Sale' },
+              garden_mark: { type: 'string', title: 'Garden Mark' },
+              grade: { type: 'string', title: 'Grade' },
+              rate_per_kg: { type: 'number', title: 'Rate per KG' },
+              quantity_kg: { type: 'number', title: 'QTY in KG' },
+              total_value: { type: 'number', title: 'Total Value (Rs)' },
+            },
+          },
+        },
+        total_quantity_kg: { type: 'number', title: 'Total Quantity (KG)', readOnly: true },
+        avg_rate_per_kg: { type: 'number', title: 'Avg Rate per KG', readOnly: true },
+        dominant_grade: { type: 'string', title: 'Grade / Standard', readOnly: true },
+      },
+      required: ['sales_file'],
+    } as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/sales_file' },
+        {
+          type: 'Control',
+          scope: '#/properties/sales',
+          options: { table: true, totals: ['quantity_kg', 'total_value'] },
+        },
+        {
+          type: 'HorizontalLayout',
+          elements: [
+            { type: 'Control', scope: '#/properties/total_quantity_kg' },
+            { type: 'Control', scope: '#/properties/avg_rate_per_kg' },
+            { type: 'Control', scope: '#/properties/dominant_grade' },
+          ],
+        },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'label',
     name: 'Label',
     schema: {

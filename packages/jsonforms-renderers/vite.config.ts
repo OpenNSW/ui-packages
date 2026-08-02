@@ -40,6 +40,8 @@ export default defineConfig(({ command }) => ({
         '@radix-ui/themes',
         '@radix-ui/react-icons',
         'dayjs',
+        'read-excel-file',
+        'read-excel-file/browser',
       ],
     },
   },

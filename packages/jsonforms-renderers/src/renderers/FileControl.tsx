@@ -20,7 +20,7 @@ interface XFileOptions {
   accept?: string
 }
 
-interface FileControlProps {
+export interface FileControlProps {
   data: string | string[] | null
   handleChange(path: string, value: string | string[] | null): void
   path: string
@@ -31,6 +31,14 @@ interface FileControlProps {
   enabled?: boolean
   errors: string
   visible?: boolean
+  // Lifecycle hooks for controls that build on this one (see
+  // ExcelSourceFileControl). onFileAccepted fires once a picked file has
+  // passed the count/size/type checks and before the upload is attempted —
+  // the raw File is observable nowhere else, since only the storage key
+  // survives the upload. onFileCleared fires when a file is removed. Both are
+  // fire-and-forget: a listener that throws must not disturb the upload.
+  onFileAccepted?: (file: File) => void
+  onFileCleared?: () => void
 }
 
 function normalizeData(data: string | string[] | null): string[] {
@@ -67,7 +75,7 @@ function formatAccept(accept: string): string {
     .join(', ')
 }
 
-const FileControl = ({
+export const FileControlView = ({
   data,
   handleChange,
   path,
@@ -78,6 +86,8 @@ const FileControl = ({
   enabled,
   errors,
   visible = true,
+  onFileAccepted,
+  onFileCleared,
 }: FileControlProps) => {
   const uploadContext = useUpload()
 
@@ -137,6 +147,16 @@ const FileControl = ({
         return
       }
 
+      // Announced before the upload so a listener (e.g. a spreadsheet parse)
+      // can work on the local file while the bytes are still in flight.
+      if (onFileAccepted) {
+        try {
+          onFileAccepted(file)
+        } catch {
+          // A misbehaving listener is not the upload's problem.
+        }
+      }
+
       if (!uploadContext?.onUpload) {
         setError('Upload service not configured.')
         return
@@ -157,7 +177,7 @@ const FileControl = ({
         if (inputRef.current) inputRef.current.value = ''
       }
     },
-    [currentKeys, maxFiles, maxSize, accept, uploadContext, path, handleChange, isMulti],
+    [currentKeys, maxFiles, maxSize, accept, uploadContext, path, handleChange, isMulti, onFileAccepted],
   )
 
   if (visible === false) {
@@ -200,6 +220,13 @@ const FileControl = ({
     })
     const newKeys = currentKeys.filter((k) => k !== key)
     handleChange(path, isMulti ? (newKeys.length > 0 ? newKeys : null) : (newKeys[0] ?? null))
+    if (onFileCleared) {
+      try {
+        onFileCleared()
+      } catch {
+        // As with onFileAccepted, a listener's failure stays its own.
+      }
+    }
   }
 
   const onView = async (e: React.MouseEvent<HTMLButtonElement>, key: string) => {
@@ -355,4 +382,4 @@ const FileControl = ({
   )
 }
 
-export default withJsonFormsControlProps(FileControl)
+export default withJsonFormsControlProps(FileControlView)

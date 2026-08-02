@@ -4,9 +4,20 @@ import { Theme, Flex, Box, Heading, Card, Text, Separator, TextArea, Badge } fro
 import '@radix-ui/themes/styles.css'
 import { JsonForms } from '@jsonforms/react'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
-import { radixRenderers } from '../src'
+import { radixRenderers, UploadProvider } from '../src'
 import { ajv } from './ajv'
 import { fixtures, type Fixture } from './fixtures'
+
+const uploadedBlobs = new Map<string, string>()
+
+const mockUpload = (file: File) => {
+  const key = `dev-${uploadedBlobs.size + 1}-${file.name}`
+  uploadedBlobs.set(key, URL.createObjectURL(file))
+  return Promise.resolve({ key, name: file.name })
+}
+
+const mockDownloadUrl = (key: string) =>
+  Promise.resolve({ url: uploadedBlobs.get(key) ?? '', expiresAt: Number.MAX_SAFE_INTEGER })
 
 // Parse JSON text, returning the parsed value or an error message — never throws.
 const parse = (text: string): { value?: unknown; error?: string } => {
@@ -145,16 +156,18 @@ function Playground() {
               <Text size="2" weight="bold" mb="2" as="div">
                 Rendered form
               </Text>
-              <JsonForms
-                key={formKey}
-                schema={schema}
-                uischema={uischema}
-                data={data}
-                renderers={radixRenderers}
-                ajv={ajv}
-                onChange={({ data }) => setData(data as Record<string, unknown>)}
-                validationMode="ValidateAndShow"
-              />
+              <UploadProvider onUpload={mockUpload} getDownloadUrl={mockDownloadUrl}>
+                <JsonForms
+                  key={formKey}
+                  schema={schema}
+                  uischema={uischema}
+                  data={data}
+                  renderers={radixRenderers}
+                  ajv={ajv}
+                  onChange={({ data }) => setData(data as Record<string, unknown>)}
+                  validationMode="ValidateAndShow"
+                />
+              </UploadProvider>
             </Card>
             <Card>
               <Text size="2" weight="bold" as="div">
