@@ -170,4 +170,8 @@ const ParseStatusCallout = ({ status }: { status: ParseStatus }) => {
   )
 }
 
-export default withJsonFormsControlProps(ExcelSourceFileControlView)
+// Bound to a name before export: an anonymous default export leaves Fast
+// Refresh unable to identify the component across reloads.
+const ExcelSourceFileControl = withJsonFormsControlProps(ExcelSourceFileControlView)
+
+export default ExcelSourceFileControl

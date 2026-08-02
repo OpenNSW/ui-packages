@@ -133,4 +133,8 @@ export const DataTableControlView = ({ data, schema, label, uischema, visible = 
   )
 }
 
-export default withJsonFormsControlProps(DataTableControlView)
+// Bound to a name before export: an anonymous default export leaves Fast
+// Refresh unable to identify the component across reloads.
+const DataTableControl = withJsonFormsControlProps(DataTableControlView)
+
+export default DataTableControl
