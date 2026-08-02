@@ -99,13 +99,8 @@ export const fixtures: Fixture[] = [
       properties: {
         country: {
           type: 'string',
-          description: 'Type to search — offset-paginated from /api/countries-offset',
-          'x-search': {
-            path: '/api/countries-offset',
-            valueKey: 'id',
-            labelKey: 'name',
-            pageSize: 5,
-          },
+          description: 'Type to search — cursor-paginated, 5 per page',
+          'x-search': { service: 'countries' },
         },
       },
       required: ['country'],
@@ -120,6 +115,7 @@ export const fixtures: Fixture[] = [
         },
       ],
     } as UISchemaElement,
+    data: { country: 'au' },
   },
   {
     id: 'date',

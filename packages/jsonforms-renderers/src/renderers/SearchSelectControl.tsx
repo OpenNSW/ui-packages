@@ -3,62 +3,14 @@ import { withJsonFormsControlProps } from '@jsonforms/react'
 import { Box, Button, Flex, ScrollArea, Spinner, Text, TextField } from '@radix-ui/themes'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react'
-import { useSearchContext } from '../contexts/SearchContext'
+import { useSearchService, type SearchOption } from '../contexts/SearchServiceContext'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { getErrorMessage } from '../utils/error'
 import * as React from 'react'
 
-function resolvePath(obj: unknown, path: string): unknown {
-  if (!path) return obj
-  return path.split('.').reduce<unknown>((acc, key) => {
-    if (acc == null || typeof acc !== 'object') return undefined
-    return (acc as Record<string, unknown>)[key]
-  }, obj)
-}
-
-function buildUrl(baseUrl: string, apiPath: string, params: Record<string, string | undefined>): string {
-  const url = new URL(apiPath, baseUrl)
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== '') url.searchParams.set(k, v)
-  })
-  return url.toString()
-}
-
-interface SearchOption {
-  value: string
-  label: string
-}
-
-function parseItems(json: unknown, itemsPath: string, valueKey: string, labelKey: string): SearchOption[] {
-  const raw = resolvePath(json, itemsPath)
-  if (!Array.isArray(raw)) {
-    throw new Error(`Response path "${itemsPath}" did not resolve to an array`)
-  }
-  return raw.map((item) => {
-    const value = resolvePath(item, valueKey)
-    const label = resolvePath(item, labelKey)
-    return {
-      value: String(value ?? ''),
-      label: String(label ?? value ?? ''),
-    }
-  })
-}
-
-// --- x-search schema config ---
-
 interface XSearchOptions {
-  path: string
-  valueKey?: string
-  labelKey?: string
-  pagination?: 'none' | 'offset' | 'cursor'
-  pageSize?: number
-  itemsPath?: string
-  nextCursorPath?: string
-  searchParam?: string
-  limitParam?: string
-  offsetParam?: string
-  cursorParam?: string
-  loadOnOpen?: boolean // Whether to load options when the dropdown is opened
+  service: string
+  loadOnOpen?: boolean
 }
 
 type SearchSelectProps = ControlProps & {
@@ -77,24 +29,10 @@ const SearchSelectControl = ({
   schema,
   uischema,
 }: SearchSelectProps) => {
-  const ctx = useSearchContext()
-
-  const xSearch: XSearchOptions = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? {
-    path: '',
-  }
-  const apiPath = xSearch.path ?? ''
-  const pagination = xSearch.pagination ?? 'offset'
-  const pageSize = xSearch.pageSize ?? 5
-  const valueKey = xSearch.valueKey ?? 'id'
-  const labelKey = xSearch.labelKey ?? 'name'
-  const searchParam = xSearch.searchParam !== undefined ? xSearch.searchParam : 'q'
-  const limitParam = xSearch.limitParam ?? 'limit'
-  const offsetParam = xSearch.offsetParam ?? 'offset'
-  const cursorParam = xSearch.cursorParam ?? 'cursor'
+  const xSearch = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? { service: '' }
+  const serviceName = xSearch.service ?? ''
   const loadOnOpen = xSearch.loadOnOpen ?? false
-  const defaultItemsPath = pagination === 'none' ? '' : 'items'
-  const itemsPath = xSearch.itemsPath !== undefined ? xSearch.itemsPath : defaultItemsPath
-  const nextCursorPath = xSearch.nextCursorPath ?? 'nextCursor'
+  const service = useSearchService(serviceName)
 
   const isEnabled = enabled !== false
   const isValid = !errors || errors.length === 0
@@ -108,25 +46,42 @@ const SearchSelectControl = ({
   const [error, setError] = useState<string | null>(null)
   const [selectedOption, setSelectedOption] = useState<SearchOption | undefined>(undefined)
 
-  const cursorRef = useRef<string | undefined>(undefined)
-  const offsetRef = useRef(0)
+  const cursorRef = useRef<unknown>(undefined)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  // tracks which value has already been resolved so the effect doesn't re-run when selectedOption changes
+  const lastResolvedRef = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     if (!data) {
       setSelectedOption(undefined)
+      lastResolvedRef.current = undefined
       return
     }
-    if (selectedOption?.value === data) return
-    setSelectedOption({ value: data as string, label: data as string })
-  }, [data, selectedOption?.value])
+    if (lastResolvedRef.current === data) return
+    // mark as resolving immediately — prevents re-runs if resolve is absent, rejects, or returns undefined
+    lastResolvedRef.current = data as string
+    // optimistic raw-value label first, so the field isn't blank while resolving
+    setSelectedOption({ id: data as string, name: data as string })
+    if (!service?.resolve) return
+    let cancelled = false
+    void service
+      .resolve(data as string)
+      .then((opt) => {
+        if (!cancelled && opt) setSelectedOption(opt)
+      })
+      .catch(() => {
+        /* keep raw-value fallback */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [data, service])
 
   const runSearch = useCallback(
     async (q: string, isLoadMore = false) => {
-      if (!apiPath) return
-      if (!ctx) {
+      if (!service) {
         setError('Search service not configured.')
         return
       }
@@ -143,70 +98,32 @@ const SearchSelectControl = ({
       }
 
       try {
-        const params: Record<string, string | undefined> = {}
-        if (searchParam) params[searchParam] = q
-        if (pagination !== 'none') {
-          params[limitParam] = String(pageSize)
-          if (pagination === 'offset') {
-            params[offsetParam] = String(isLoadMore ? offsetRef.current : 0)
-          } else if (pagination === 'cursor' && isLoadMore && cursorRef.current) {
-            params[cursorParam] = cursorRef.current
-          }
-        }
+        const result = await service.search({
+          query: q,
+          cursor: isLoadMore ? cursorRef.current : undefined,
+          signal: controller.signal,
+        })
 
-        const url = buildUrl(ctx.baseUrl, apiPath, params)
-        const headers = await ctx.getHeaders()
-        const res = await fetch(url, { headers, signal: controller.signal })
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-        const json: unknown = await res.json()
+        const newItems = result.options ?? []
+        if (isLoadMore) setOptions((prev) => [...prev, ...newItems])
+        else setOptions(newItems)
 
-        const newItems = parseItems(json, itemsPath, valueKey, labelKey)
-
-        if (isLoadMore) {
-          setOptions((prev) => [...prev, ...newItems])
-          offsetRef.current += newItems.length
-        } else {
-          setOptions(newItems)
-          offsetRef.current = newItems.length
-          cursorRef.current = undefined
-        }
-
-        if (pagination === 'none') {
-          setHasMore(false)
-        } else if (pagination === 'cursor') {
-          const next = resolvePath(json, nextCursorPath)
-          cursorRef.current = typeof next === 'string' && next ? next : undefined
-          setHasMore(typeof next === 'string' && next !== '')
-        } else {
-          setHasMore(newItems.length === pageSize)
-        }
+        cursorRef.current = result.nextCursor
+        setHasMore(result.nextCursor != null)
       } catch (e) {
-        if (e instanceof DOMException && e.name === 'AbortError') return
+        if (controller.signal.aborted) return
         setError('Failed to load results. Please try again.')
       } finally {
+        // only clear loading if this request wasn't aborted — a new request may already be in flight
         if (!controller.signal.aborted) {
           if (isLoadMore) setLoadingMore(false)
           else setLoading(false)
         }
       }
     },
-    [
-      ctx,
-      apiPath,
-      pagination,
-      pageSize,
-      valueKey,
-      labelKey,
-      searchParam,
-      limitParam,
-      offsetParam,
-      cursorParam,
-      itemsPath,
-      nextCursorPath,
-    ],
+    [service],
   )
 
-  // Close dropdown on outside click.
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
@@ -218,7 +135,6 @@ const SearchSelectControl = ({
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // Clear list state and abort in-flight request when dropdown closes.
   useEffect(() => {
     if (!open) {
       abortRef.current?.abort()
@@ -228,10 +144,10 @@ const SearchSelectControl = ({
       setError(null)
       setLoading(false)
       setLoadingMore(false)
+      cursorRef.current = undefined
     }
   }, [open])
 
-  // Debounced search — fires on input change or immediately on open when loadOnOpen is set.
   useEffect(() => {
     if (!open) return
 
@@ -239,7 +155,6 @@ const SearchSelectControl = ({
       setOptions([])
       setHasMore(false)
       setError(null)
-      offsetRef.current = 0
       cursorRef.current = undefined
       return
     }
@@ -249,7 +164,6 @@ const SearchSelectControl = ({
     debounceRef.current = setTimeout(() => {
       setOptions([])
       setHasMore(false)
-      offsetRef.current = 0
       cursorRef.current = undefined
       void runSearch(inputValue)
     }, delay)
@@ -270,14 +184,14 @@ const SearchSelectControl = ({
     setOptions([])
     setHasMore(false)
     setError(null)
-    offsetRef.current = 0
     cursorRef.current = undefined
     setOpen(true)
   }
 
   const onSelect = (option: SearchOption) => {
-    handleChange(path, option.value)
+    handleChange(path, option.id)
     setSelectedOption(option)
+    lastResolvedRef.current = option.id // prevent resolve effect from re-running for the just-selected value
     setOpen(false)
   }
 
@@ -303,7 +217,7 @@ const SearchSelectControl = ({
         <div ref={containerRef} style={{ position: 'relative' }}>
           <TextField.Root
             id={path}
-            value={open ? inputValue : (selectedOption?.label ?? '')}
+            value={open ? inputValue : (selectedOption?.name ?? '')}
             placeholder={open ? 'Search...' : placeholder}
             disabled={!isEnabled}
             style={!isValid ? { outline: '2px solid var(--red-7)', outlineOffset: '-1px' } : undefined}
@@ -324,7 +238,7 @@ const SearchSelectControl = ({
                   <span
                     role="button"
                     tabIndex={0}
-                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseDown={(e) => e.preventDefault()} // prevent input blur before click fires
                     onClick={onClear}
                     onKeyDown={onClearKeyDown}
                     style={{ lineHeight: 1, color: 'var(--gray-9)', padding: '0 2px', cursor: 'pointer' }}
@@ -355,10 +269,10 @@ const SearchSelectControl = ({
                 overflow: 'hidden',
               }}
             >
-              {!apiPath ? (
+              {!service ? (
                 <Box p="3">
                   <Text size="2" color="gray">
-                    Search not configured.
+                    {serviceName ? `Search service "${serviceName}" is not registered.` : 'Search not configured.'}
                   </Text>
                 </Box>
               ) : (
@@ -388,7 +302,7 @@ const SearchSelectControl = ({
 
                     {options.map((opt) => (
                       <Box
-                        key={opt.value}
+                        key={opt.id}
                         px="3"
                         py="2"
                         onMouseDown={(e) => e.preventDefault()}
@@ -396,11 +310,11 @@ const SearchSelectControl = ({
                         style={{
                           cursor: 'pointer',
                           borderRadius: 'var(--radius-2)',
-                          backgroundColor: opt.value === data ? 'var(--accent-3)' : undefined,
+                          backgroundColor: opt.id === data ? 'var(--accent-3)' : undefined,
                         }}
                         className="hover:bg-(--gray-3)"
                       >
-                        <Text size="2">{opt.label}</Text>
+                        <Text size="2">{opt.name}</Text>
                       </Box>
                     ))}
 
