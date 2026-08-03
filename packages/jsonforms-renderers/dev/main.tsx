@@ -16,8 +16,14 @@ const mockUpload = (file: File) => {
   return Promise.resolve({ key, name: file.name })
 }
 
+// The largest value `new Date()` accepts. Blob URLs live as long as the page,
+// so the mock never expires them — but the sentinel still has to be a real
+// timestamp, since consumers of DownloadUrlResult may feed expiresAt to Date,
+// and Number.MAX_SAFE_INTEGER overflows the range to Invalid Date.
+const NEVER_EXPIRES = 8_640_000_000_000_000
+
 const mockDownloadUrl = (key: string) =>
-  Promise.resolve({ url: uploadedBlobs.get(key) ?? '', expiresAt: Number.MAX_SAFE_INTEGER })
+  Promise.resolve({ url: uploadedBlobs.get(key) ?? '', expiresAt: NEVER_EXPIRES })
 
 // Parse JSON text, returning the parsed value or an error message — never throws.
 const parse = (text: string): { value?: unknown; error?: string } => {

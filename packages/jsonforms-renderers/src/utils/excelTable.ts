@@ -8,7 +8,7 @@ import type { JsonSchema } from '@jsonforms/core'
 //
 //   "sales_file": {
 //     "type": "string", "format": "file",
-//     "x-file":  { "accept": ".xlsx" },
+//     "x-file":  { "accept": ".xlsx,.xlsm" },
 //     "x-excel": {
 //       "target": "sales",
 //       "columns": {
@@ -43,10 +43,14 @@ export type ExcelSpec = {
 
 export type ParsedSheetRows = {
   rows: Record<string, unknown>[]
-  // Columns declared in the spec that no header in the sheet matched. Surfaced
-  // to the trader so a renamed template column is visible rather than silently
-  // producing blank cells.
+  // Declared columns that no header in the sheet matched, as their first
+  // `match` spelling. Surfaced to the trader so a renamed template column is
+  // visible rather than silently producing blank cells.
   missingColumns: string[]
+  // The same set as field keys, for callers that need to reason about it
+  // programmatically. Distinct from "every row's cell was blank": a column can
+  // match its header and still carry no values, and that is not missing.
+  missingFields: string[]
   skippedRows: number
 }
 
@@ -187,13 +191,12 @@ export async function evaluateDerived(
   if (entries.length === 0) return { derived, derivedErrors }
 
   const { createFormulaEvaluator } = await import('./excelFormula')
-  // The evaluator needs the declared field keys — including any the sheet did
-  // not carry — so column positions stay stable and absent columns can be
-  // reported rather than silently summing to zero.
-  const missingFields = Object.keys(spec.columns).filter((field) =>
-    parsed.rows.every((row) => row[field] === undefined),
-  )
-  const evaluator = await createFormulaEvaluator(Object.keys(spec.columns), parsed.rows, rawGrid, missingFields)
+  // All declared field keys, including any the sheet did not carry, so column
+  // positions stay stable. parsed.missingFields names the ones whose header
+  // never matched, which the evaluator reports rather than silently summing to
+  // zero — a column that matched but happens to be blank is not in that set and
+  // aggregates normally, as Excel would.
+  const evaluator = await createFormulaEvaluator(Object.keys(spec.columns), parsed.rows, rawGrid, parsed.missingFields)
 
   for (const [field, formula] of entries) {
     if (typeof formula !== 'string') {
@@ -251,11 +254,14 @@ export function parseSheetGrid(grid: unknown[][], spec: ExcelSpec): ParsedSheetR
     rows.push(row)
   }
 
-  const missingColumns = Object.entries(spec.columns)
-    .filter(([field]) => header.indexByField[field] === undefined)
-    .map(([, column]) => column.match[0])
+  // Whether a header matched is known exactly here; do not re-derive it later
+  // from the row values, which cannot tell an unmatched column apart from a
+  // matched one whose cells are all blank.
+  const unmatched = Object.entries(spec.columns).filter(([field]) => header.indexByField[field] === undefined)
+  const missingColumns = unmatched.map(([, column]) => column.match[0])
+  const missingFields = unmatched.map(([field]) => field)
 
-  return { rows, missingColumns, skippedRows }
+  return { rows, missingColumns, missingFields, skippedRows }
 }
 
 export async function parseExcelTable(file: File, spec: ExcelSpec): Promise<ParsedExcelTable> {

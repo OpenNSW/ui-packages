@@ -32,11 +32,12 @@ export interface FileControlProps {
   errors: string
   visible?: boolean
   // Lifecycle hooks for controls that build on this one (see
-  // ExcelSourceFileControl). onFileAccepted fires once a picked file has
-  // passed the count/size/type checks and before the upload is attempted —
-  // the raw File is observable nowhere else, since only the storage key
-  // survives the upload. onFileCleared fires when a file is removed. Both are
-  // fire-and-forget: a listener that throws must not disturb the upload.
+  // ExcelSourceFileControl). onFileAccepted fires once a picked file has passed
+  // the count/size/type checks *and* uploaded successfully, so a listener never
+  // acts on a file that failed to store. It receives the raw File, which is
+  // observable nowhere else since only the storage key survives the upload.
+  // onFileCleared fires when a file is removed. Both are fire-and-forget: a
+  // listener that throws must not disturb the upload.
   onFileAccepted?: (file: File) => void
   onFileCleared?: () => void
 }
@@ -147,16 +148,6 @@ export const FileControlView = ({
         return
       }
 
-      // Announced before the upload so a listener (e.g. a spreadsheet parse)
-      // can work on the local file while the bytes are still in flight.
-      if (onFileAccepted) {
-        try {
-          onFileAccepted(file)
-        } catch {
-          // A misbehaving listener is not the upload's problem.
-        }
-      }
-
       if (!uploadContext?.onUpload) {
         setError('Upload service not configured.')
         return
@@ -172,6 +163,17 @@ export const FileControlView = ({
 
         const newKeys = [...currentKeys, result.key]
         handleChange(path, isMulti ? newKeys : newKeys[0])
+
+        // Announced only once the key is in the form data. Announcing earlier
+        // would let a listener derive form values from a file whose upload then
+        // failed, leaving those values behind with nothing stored to back them.
+        if (onFileAccepted) {
+          try {
+            onFileAccepted(file)
+          } catch {
+            // A misbehaving listener is not the upload's problem.
+          }
+        }
       } catch {
         setError('Upload failed. Please try again.')
         if (inputRef.current) inputRef.current.value = ''

@@ -264,8 +264,10 @@ export const fixtures: Fixture[] = [
           type: 'string',
           format: 'file',
           title: 'Upload Sales Sheet',
-          description: 'Pick an .xlsx and the table below fills in from it.',
-          'x-file': { accept: '.xlsx' },
+          description: 'Pick an .xlsx or .xlsm and the rows below fill in from it.',
+          // FileControl filters the picker and validates against this list, so
+          // an extension missing here never reaches the parse at all.
+          'x-file': { accept: '.xlsx,.xlsm' },
           'x-excel': {
             target: 'sales',
             columns: {

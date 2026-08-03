@@ -30,7 +30,9 @@ names, formulas, or domain knowledge.
     "type": "string",
     "format": "file",
     "title": "Upload Sales Sheet",
-    "x-file": { "accept": ".xlsx" },
+    // FileControl filters the picker and validates against this list, so an
+    // extension left out here never reaches the parse.
+    "x-file": { "accept": ".xlsx,.xlsm" },
     "x-excel": {
       // Sibling array field the parsed rows are written to.
       "target": "sales",
@@ -171,9 +173,11 @@ total reads as "the sheet contained none" rather than "the calculation
 failed". Reported cases include:
 
 - **Excel error values** — `#DIV/0!`, `#NAME?`, `#VALUE!`.
-- **A column the sheet did not carry.** Excel sums an empty range to `0`, so
+- **A column whose header never matched.** Excel sums an empty range to `0`, so
   this is caught before evaluation and reported instead: a column the template
-  omitted must never surface as a confident zero.
+  omitted must never surface as a confident zero. A column that _did_ match but
+  happens to be blank in every row is not this case — it aggregates to `0` as
+  Excel would, because the sheet does carry it.
 - **Unimplemented functions** and syntax errors, quoted verbatim.
 - **No parsed rows**, where every aggregate would be over an empty set.
 
@@ -199,8 +203,14 @@ back to whatever manual fields the form offers.
 
 ## Notes
 
-- Only `.xlsx` / `.xlsm` are parsed. Other files on the same field upload
-  normally and clear any previously parsed table.
+- `.xlsx` and `.xlsm` are parsed. Remember to list both in `x-file.accept` —
+  `FileControl` filters the picker and validates against that list, so an
+  omitted extension never reaches the parse. Other file types on the same field
+  (an `.xml` alternative, say) upload normally and clear any previously parsed
+  rows. A legacy `.xls` is attempted and reports "You passed a legacy `.xls`
+  file", which is more use than an unexplained empty list. The reader inspects
+  the file rather than trusting the extension, so a mislabelled workbook still
+  parses.
 - Removing the uploaded file clears the target array and the derived fields.
 - The spreadsheet reader and the formula engine are both reached through
   dynamic `import()`, so applications that use this renderer set without any

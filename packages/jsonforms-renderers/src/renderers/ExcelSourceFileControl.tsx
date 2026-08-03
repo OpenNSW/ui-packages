@@ -7,10 +7,12 @@ import { FileControlView } from './FileControl'
 import { getExcelSpec, parseExcelTable, type ExcelSpec } from '../utils/excelTable'
 
 // A file control for `format: "file"` properties that also carry an `x-excel`
-// block. It renders the standard FileControl — same upload UX, same storage
-// key semantics — and additionally parses the workbook in the browser as soon
-// as the user picks it, writing the extracted rows into a sibling array field
-// and the aggregates into sibling derived fields.
+// block. It renders the standard FileControl — same upload UX, same storage key
+// semantics — and additionally parses the workbook in the browser once the file
+// has uploaded, writing the extracted rows into a sibling array field and the
+// aggregates into sibling derived fields. Parsing after the upload rather than
+// alongside it keeps the two in step: form values are only ever derived from a
+// file that is actually stored.
 //
 // The target array is displayed by the ordinary ArrayControl. Mark it
 // `readOnly` in the schema — that suppresses its Add/Remove controls, since the
@@ -27,7 +29,13 @@ import { getExcelSpec, parseExcelTable, type ExcelSpec } from '../utils/excelTab
 // width, so putting ten columns on one line squeezes each to a tenth and clips
 // the longer values.
 
-const PARSEABLE = /\.xlsx?$|\.xlsm$/i
+// Extensions worth handing to the reader. `.xls` is deliberately included even
+// though the reader cannot open legacy workbooks: it fails with "You passed a
+// legacy `.xls` file", which reaches the user through the callout below.
+// Excluding it would leave a trader staring at an empty list with no
+// explanation. Note the reader itself ignores the extension and inspects the
+// file, so a mislabelled `.xlsx` still parses.
+const PARSEABLE = /\.(xlsx|xlsm|xls)$/i
 
 type ParseStatus =
   | { state: 'idle' }
