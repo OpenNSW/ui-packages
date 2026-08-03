@@ -40,8 +40,14 @@ export default defineConfig(({ command }) => ({
         '@radix-ui/themes',
         '@radix-ui/react-icons',
         'dayjs',
+        // Runtime dependencies (like dayjs), so consumers resolve them
+        // themselves rather than getting a second copy bundled in. All three
+        // are reached only through dynamic imports, so an application that
+        // never renders an x-excel field never loads them.
         'read-excel-file',
         'read-excel-file/browser',
+        'fast-formula-parser',
+        '@formulajs/formulajs',
       ],
     },
   },

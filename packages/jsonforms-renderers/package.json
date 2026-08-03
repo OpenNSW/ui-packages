@@ -68,7 +68,9 @@
     "vite-plugin-dts": "^4.5.0"
   },
   "dependencies": {
+    "@formulajs/formulajs": "^4.6.1",
     "dayjs": "^1.11.21",
+    "fast-formula-parser": "^1.0.19",
     "read-excel-file": "^9.3.5"
   }
 }

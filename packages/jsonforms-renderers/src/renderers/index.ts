@@ -23,8 +23,6 @@ import ExcelSourceFileControl from './ExcelSourceFileControl'
 import { ExcelSourceFileControlTester } from './ExcelSourceFileControlTester'
 import ArrayControl from './ArrayControl'
 import { ArrayControlTester } from './ArrayControlTester'
-import DataTableControl from './DataTableControl'
-import { DataTableControlTester } from './DataTableControlTester'
 import LabelRenderer, { LabelTester } from './LabelRenderer'
 import { rankWith, isPrimitiveArrayControl } from '@jsonforms/core'
 
@@ -46,7 +44,6 @@ export const radixRenderers = [
   { tester: ExcelSourceFileControlTester, renderer: ExcelSourceFileControl },
   { tester: ArrayControlTester, renderer: ArrayControl },
   { tester: PrimitiveArrayControlTester, renderer: ArrayControl },
-  { tester: DataTableControlTester, renderer: DataTableControl },
   { tester: LabelTester, renderer: LabelRenderer },
 ]
 
@@ -62,8 +59,6 @@ export { default as FileControl } from './FileControl'
 export * from './FileControlTester'
 export { default as ExcelSourceFileControl } from './ExcelSourceFileControl'
 export * from './ExcelSourceFileControlTester'
-export { default as DataTableControl } from './DataTableControl'
-export * from './DataTableControlTester'
 export { default as SearchSelectControl } from './SearchSelectControl'
 export * from './SearchSelectControlTester'
 export { default as ArrayControl } from './ArrayControl'

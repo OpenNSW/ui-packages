@@ -255,63 +255,6 @@ export const fixtures: Fixture[] = [
   },
 
   {
-    id: 'data-table',
-    name: 'Data table',
-    schema: {
-      type: 'object',
-      properties: {
-        sales: {
-          type: 'array',
-          title: 'Particulars of Sale',
-          readOnly: true,
-          items: {
-            type: 'object',
-            properties: {
-              date_of_sale: { type: 'string', format: 'date', title: 'Date of Sale' },
-              garden_mark: { type: 'string', title: 'Garden Mark' },
-              grade: { type: 'string', title: 'Grade' },
-              rate_per_kg: { type: 'number', title: 'Rate per KG' },
-              quantity_kg: { type: 'number', title: 'QTY in KG' },
-              total_value: { type: 'number', title: 'Total Value (Rs)' },
-            },
-          },
-        },
-      },
-    },
-    uischema: {
-      type: 'VerticalLayout',
-      elements: [
-        {
-          type: 'Control',
-          scope: '#/properties/sales',
-          options: { table: true, totals: ['quantity_kg', 'total_value'] },
-        },
-      ],
-    } as UISchemaElement,
-    // Seeded so the grid renders without an upload; clear `sales` in the data
-    // to see the empty state.
-    data: {
-      sales: [
-        {
-          date_of_sale: '2012-03-14',
-          garden_mark: 'GLENANORE',
-          grade: 'BOP',
-          rate_per_kg: 250,
-          quantity_kg: 25000,
-          total_value: 6250000,
-        },
-        {
-          date_of_sale: '2012-03-14',
-          garden_mark: 'POONAGALA',
-          grade: 'BOP FANNINGS',
-          rate_per_kg: 450,
-          quantity_kg: 10000,
-          total_value: 4500000,
-        },
-      ],
-    },
-  },
-  {
     id: 'excel-source-file',
     name: 'Excel source file',
     schema: {
@@ -334,9 +277,11 @@ export const fixtures: Fixture[] = [
               total_value: { match: ['total value rs', 'total value', 'total'], type: 'number' },
             },
             derive: {
-              total_quantity_kg: { op: 'sum', column: 'quantity_kg' },
-              avg_rate_per_kg: { op: 'ratio', numerator: 'total_value', denominator: 'quantity_kg', precision: 2 },
-              dominant_grade: { op: 'dominant', column: 'grade', weightBy: 'quantity_kg' },
+              total_quantity_kg: 'SUM(quantity_kg)',
+              avg_rate_per_kg: 'ROUND(SUM(total_value) / SUM(quantity_kg), 2)',
+              dominant_grade: 'INDEX(grade, MATCH(MAX(quantity_kg), quantity_kg, 0))',
+              all_grades: 'TEXTJOIN(", ", TRUE, grade)',
+              consignment_size: 'IF(SUM(quantity_kg) > 30000, "BULK", "SMALL")',
             },
           },
         },
@@ -359,6 +304,8 @@ export const fixtures: Fixture[] = [
         total_quantity_kg: { type: 'number', title: 'Total Quantity (KG)', readOnly: true },
         avg_rate_per_kg: { type: 'number', title: 'Avg Rate per KG', readOnly: true },
         dominant_grade: { type: 'string', title: 'Grade / Standard', readOnly: true },
+        all_grades: { type: 'string', title: 'All Grades', readOnly: true },
+        consignment_size: { type: 'string', title: 'Consignment Size', readOnly: true },
       },
       required: ['sales_file'],
     } as JsonSchema,
@@ -367,9 +314,38 @@ export const fixtures: Fixture[] = [
       elements: [
         { type: 'Control', scope: '#/properties/sales_file' },
         {
+          // Displayed by the ordinary ArrayControl. `readOnly` on the schema
+          // suppresses its Add/Remove controls; the HorizontalLayout detail
+          // lays each row out across the page instead of as a stack.
           type: 'Control',
           scope: '#/properties/sales',
-          options: { table: true, totals: ['quantity_kg', 'total_value'] },
+          options: {
+            // Grouped into short rows rather than one wide HorizontalLayout:
+            // that renderer gives every element an equal `flex: 1` share, so
+            // ten columns on one line squeezes each to a fraction of the width
+            // and long values get clipped.
+            detail: {
+              type: 'VerticalLayout',
+              elements: [
+                {
+                  type: 'HorizontalLayout',
+                  elements: [
+                    { type: 'Control', scope: '#/properties/date_of_sale' },
+                    { type: 'Control', scope: '#/properties/garden_mark' },
+                    { type: 'Control', scope: '#/properties/grade' },
+                  ],
+                },
+                {
+                  type: 'HorizontalLayout',
+                  elements: [
+                    { type: 'Control', scope: '#/properties/rate_per_kg' },
+                    { type: 'Control', scope: '#/properties/quantity_kg' },
+                    { type: 'Control', scope: '#/properties/total_value' },
+                  ],
+                },
+              ],
+            },
+          },
         },
         {
           type: 'HorizontalLayout',
@@ -377,6 +353,8 @@ export const fixtures: Fixture[] = [
             { type: 'Control', scope: '#/properties/total_quantity_kg' },
             { type: 'Control', scope: '#/properties/avg_rate_per_kg' },
             { type: 'Control', scope: '#/properties/dominant_grade' },
+            { type: 'Control', scope: '#/properties/consignment_size' },
+            { type: 'Control', scope: '#/properties/all_grades' },
           ],
         },
       ],

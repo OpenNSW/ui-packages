@@ -22,8 +22,7 @@ This package provides a collection of JSON Forms controls and layout renderers t
 - **[RadioControl](src/renderers/RadioControl.tsx)**: Option picker rendered as radio group buttons.
 - **[SelectControl](src/renderers/SelectControl.tsx)**: Select drop-down control for `enum` or `oneOf` schemas.
 - **[FileControl](src/renderers/FileControl.tsx)**: File picker control supporting custom attachments.
-- **[ExcelSourceFileControl](src/renderers/ExcelSourceFileControl.tsx)**: `FileControl` for spreadsheet uploads. Parses the workbook in the browser and writes the rows into a sibling array field, along with any derived aggregates. Driven entirely by an `x-excel` block on the schema — see [docs/excel-table.md](docs/excel-table.md).
-- **[DataTableControl](src/renderers/DataTableControl.tsx)**: Read-only grid for arrays of objects, with an optional totals row. Opt in with `options.table`; arrays without it keep the editable `ArrayControl`.
+- **[ExcelSourceFileControl](src/renderers/ExcelSourceFileControl.tsx)**: `FileControl` for spreadsheet uploads. Parses the workbook in the browser and writes the rows into a sibling array field, along with any fields derived by Excel formula. Driven entirely by an `x-excel` block on the schema — see [docs/excel-table.md](docs/excel-table.md).
 
 ### Layouts
 

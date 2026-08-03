@@ -12,17 +12,33 @@ import { getExcelSpec, parseExcelTable, type ExcelSpec } from '../utils/excelTab
 // as the user picks it, writing the extracted rows into a sibling array field
 // and the aggregates into sibling derived fields.
 //
-// Pair it with DataTableControl on the target array to show the result:
+// The target array is displayed by the ordinary ArrayControl. Mark it
+// `readOnly` in the schema — that suppresses its Add/Remove controls, since the
+// rows come from the sheet rather than being typed — and give it a detail
+// layout that groups the columns into short rows of three or four:
 //
 //   { "type": "Control", "scope": "#/properties/sales",
-//     "options": { "table": true } }
+//     "options": { "detail": { "type": "VerticalLayout", "elements": [
+//       { "type": "HorizontalLayout", "elements": [ …3 controls… ] },
+//       { "type": "HorizontalLayout", "elements": [ …3 controls… ] }
+//     ] } } }
+//
+// Grouping matters: HorizontalLayout gives every element an equal share of the
+// width, so putting ten columns on one line squeezes each to a tenth and clips
+// the longer values.
 
 const PARSEABLE = /\.xlsx?$|\.xlsm$/i
 
 type ParseStatus =
   | { state: 'idle' }
   | { state: 'parsing' }
-  | { state: 'parsed'; rowCount: number; skippedRows: number; missingColumns: string[] }
+  | {
+      state: 'parsed'
+      rowCount: number
+      skippedRows: number
+      missingColumns: string[]
+      formulaErrors: Record<string, string>
+    }
   | { state: 'error'; message: string }
 
 // Replaces the last segment of a JSONForms data path, so a control at
@@ -88,6 +104,7 @@ export const ExcelSourceFileControlView = (props: ControlProps) => {
             rowCount: parsed.rows.length,
             skippedRows: parsed.skippedRows,
             missingColumns: parsed.missingColumns,
+            formulaErrors: parsed.derivedErrors,
           })
         })
         .catch((error: unknown) => {
@@ -139,7 +156,7 @@ const ParseStatusCallout = ({ status }: { status: ParseStatus }) => {
           <ExclamationTriangleIcon />
         </Callout.Icon>
         <Callout.Text>
-          {status.message} The file has still been attached — you can continue, but the table below will be empty.
+          {status.message} The file has still been attached — you can continue, but no rows will be shown below.
         </Callout.Text>
       </Callout.Root>
     )
@@ -151,6 +168,12 @@ const ParseStatusCallout = ({ status }: { status: ParseStatus }) => {
   }
   if (status.skippedRows > 0) {
     warnings.push(`${status.skippedRows} incomplete row(s) were skipped.`)
+  }
+  // A formula that could not be computed is named along with its reason. Left
+  // unsaid, an empty total reads as "the sheet contained none" instead of
+  // "the calculation failed".
+  for (const [field, reason] of Object.entries(status.formulaErrors)) {
+    warnings.push(`Could not calculate ${field}: ${reason}.`)
   }
 
   return (
@@ -164,7 +187,7 @@ const ParseStatusCallout = ({ status }: { status: ParseStatus }) => {
             <Text weight="medium">{warnings.join(' ')}</Text>
           </>
         )}{' '}
-        Please check the table below before submitting.
+        Please check the rows below before submitting.
       </Callout.Text>
     </Callout.Root>
   )

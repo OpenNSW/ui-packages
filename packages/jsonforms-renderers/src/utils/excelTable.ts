@@ -12,10 +12,12 @@ import type { JsonSchema } from '@jsonforms/core'
 //     "x-excel": {
 //       "target": "sales",
 //       "columns": {
-//         "quantity_kg": { "match": ["qty in kg", "quantity in kg"], "type": "number" }
+//         "quantity_kg": { "match": ["qty in kg", "quantity in kg"], "type": "number" },
+//         "total_value": { "match": ["total value"], "type": "number" }
 //       },
 //       "derive": {
-//         "total_quantity_kg": { "op": "sum", "column": "quantity_kg" }
+//         "total_quantity_kg": "SUM(quantity_kg)",
+//         "avg_rate_per_kg":   "ROUND(SUM(total_value) / SUM(quantity_kg), 2)"
 //       }
 //     }
 //   }
@@ -28,34 +30,31 @@ export type ExcelColumnSpec = {
   required?: boolean
 }
 
-export type ExcelDeriveSpec =
-  // SUM(column)
-  | { op: 'sum'; column: string }
-  // SUM(numerator) / SUM(denominator) — e.g. avg rate per kg is a
-  // quantity-weighted average, not the mean of the per-row rates.
-  | { op: 'ratio'; numerator: string; denominator: string; precision?: number }
-  // The value of `column` on the rows carrying the most `weightBy`; falls back
-  // to row count when weightBy is absent. Ties and genuine mixes are joined.
-  | { op: 'dominant'; column: string; weightBy?: string }
-  | { op: 'count' }
-
 export type ExcelSpec = {
   target: string
   columns: Record<string, ExcelColumnSpec>
-  derive?: Record<string, ExcelDeriveSpec>
+  // Sibling field -> Excel formula over the parsed columns. See excelFormula.ts
+  // for the addressing rules.
+  derive?: Record<string, string>
   // How far down the sheet to hunt for the header row before giving up.
   headerSearchRows?: number
   sheet?: number | string
 }
 
-export type ParsedExcelTable = {
+export type ParsedSheetRows = {
   rows: Record<string, unknown>[]
-  derived: Record<string, unknown>
   // Columns declared in the spec that no header in the sheet matched. Surfaced
   // to the trader so a renamed template column is visible rather than silently
   // producing blank cells.
   missingColumns: string[]
   skippedRows: number
+}
+
+export type ParsedExcelTable = ParsedSheetRows & {
+  derived: Record<string, unknown>
+  // Derived field -> why its formula produced no value. A formula that fails
+  // must say so; a silently empty total reads as "the sheet had none".
+  derivedErrors: Record<string, string>
 }
 
 const DEFAULT_HEADER_SEARCH_ROWS = 25
@@ -171,87 +170,48 @@ function findHeader(
   return { rowIndex: best.rowIndex, indexByField: best.indexByField }
 }
 
-// Returns undefined when no row carries a usable number for the column —
-// typically because the sheet omits it altogether. That is distinct from a
-// column whose values genuinely add up to zero, and the two must not collapse:
-// reporting 0 would present a missing column as a real figure.
-function sum(rows: Record<string, unknown>[], column: string): number | undefined {
-  let total = 0
-  let contributors = 0
-  for (const row of rows) {
-    const value = toNumber(row[column])
-    if (value === undefined) continue
-    total += value
-    contributors++
-  }
-  return contributors === 0 ? undefined : total
-}
-
-function round(value: number, precision: number): number {
-  const factor = 10 ** precision
-  return Math.round(value * factor) / factor
-}
-
-export function deriveValues(
-  rows: Record<string, unknown>[],
-  derive: Record<string, ExcelDeriveSpec> | undefined,
-): Record<string, unknown> {
+/**
+ * Evaluates every `derive` formula against the parsed rows.
+ *
+ * Split from parseSheetGrid because it is async — the formula engine is loaded
+ * on demand — and because the row parse is useful on its own.
+ */
+export async function evaluateDerived(
+  parsed: ParsedSheetRows,
+  spec: ExcelSpec,
+  rawGrid: unknown[][],
+): Promise<{ derived: Record<string, unknown>; derivedErrors: Record<string, string> }> {
   const derived: Record<string, unknown> = {}
-  if (!derive) return derived
+  const derivedErrors: Record<string, string> = {}
+  const entries = Object.entries(spec.derive ?? {})
+  if (entries.length === 0) return { derived, derivedErrors }
 
-  for (const [field, spec] of Object.entries(derive)) {
-    switch (spec.op) {
-      case 'sum': {
-        const total = sum(rows, spec.column)
-        derived[field] = total === undefined ? undefined : round(total, 2)
-        break
-      }
-      case 'ratio': {
-        const numerator = sum(rows, spec.numerator)
-        const denominator = sum(rows, spec.denominator)
-        // A missing column on either side, or an all-zero denominator, means
-        // the sheet cannot support a rate. Leave the field empty rather than
-        // publishing 0 or NaN as if it were the real figure.
-        derived[field] =
-          numerator === undefined || denominator === undefined || denominator === 0
-            ? undefined
-            : round(numerator / denominator, spec.precision ?? 2)
-        break
-      }
-      case 'dominant': {
-        const weights = new Map<string, number>()
-        for (const row of rows) {
-          const key = text(row[spec.column]).trim()
-          if (key === '') continue
-          const weight = spec.weightBy ? (toNumber(row[spec.weightBy]) ?? 0) : 1
-          weights.set(key, (weights.get(key) ?? 0) + weight)
-        }
-        if (weights.size === 0) {
-          derived[field] = undefined
-        } else {
-          const ranked = [...weights.entries()].sort((a, b) => b[1] - a[1])
-          const top = ranked[0][1]
-          // Everything sharing the top weight is reported, so a genuine
-          // multi-grade blend reads "BOP, BOP FANNINGS" instead of silently
-          // dropping half the consignment's grades.
-          derived[field] = ranked
-            .filter(([, weight]) => weight === top)
-            .map(([key]) => key)
-            .join(', ')
-        }
-        break
-      }
-      case 'count':
-        derived[field] = rows.length
-        break
+  const { createFormulaEvaluator } = await import('./excelFormula')
+  // The evaluator needs the declared field keys — including any the sheet did
+  // not carry — so column positions stay stable and absent columns can be
+  // reported rather than silently summing to zero.
+  const missingFields = Object.keys(spec.columns).filter((field) =>
+    parsed.rows.every((row) => row[field] === undefined),
+  )
+  const evaluator = await createFormulaEvaluator(Object.keys(spec.columns), parsed.rows, rawGrid, missingFields)
+
+  for (const [field, formula] of entries) {
+    if (typeof formula !== 'string') {
+      derivedErrors[field] = 'derive entries must be Excel formula strings'
+      continue
     }
+    const { value, error } = evaluator.evaluate(formula)
+    if (error !== undefined) derivedErrors[field] = error
+    derived[field] = value
   }
-  return derived
+
+  return { derived, derivedErrors }
 }
 
-// The parse proper, split from the file read so it can be exercised against a
-// grid from any source.
-export function parseSheetGrid(grid: unknown[][], spec: ExcelSpec): ParsedExcelTable {
+// The row parse proper, split from the file read so it can be exercised against
+// a grid from any source. Derived values are computed separately, by
+// evaluateDerived.
+export function parseSheetGrid(grid: unknown[][], spec: ExcelSpec): ParsedSheetRows {
   const header = findHeader(grid, spec.columns, spec.headerSearchRows ?? DEFAULT_HEADER_SEARCH_ROWS)
   if (!header) {
     const expected = Object.values(spec.columns)
@@ -295,14 +255,17 @@ export function parseSheetGrid(grid: unknown[][], spec: ExcelSpec): ParsedExcelT
     .filter(([field]) => header.indexByField[field] === undefined)
     .map(([, column]) => column.match[0])
 
-  return { rows, derived: deriveValues(rows, spec.derive), missingColumns, skippedRows }
+  return { rows, missingColumns, skippedRows }
 }
 
 export async function parseExcelTable(file: File, spec: ExcelSpec): Promise<ParsedExcelTable> {
-  // Imported on demand. The spreadsheet reader is a few hundred kilobytes and
-  // only forms that declare an x-excel field ever need it, so it must not sit
-  // in the entry chunk of every application that uses this renderer set.
+  // Imported on demand. The spreadsheet reader and the formula engine together
+  // run to a few hundred kilobytes, and only forms that declare an x-excel
+  // field ever need them, so they must not sit in the entry chunk of every
+  // application that uses this renderer set.
   const { readSheet } = await import('read-excel-file/browser')
   const grid = (await readSheet(file, spec.sheet ?? 1)) as unknown[][]
-  return parseSheetGrid(grid, spec)
+  const parsed = parseSheetGrid(grid, spec)
+  const { derived, derivedErrors } = await evaluateDerived(parsed, spec, grid)
+  return { ...parsed, derived, derivedErrors }
 }
