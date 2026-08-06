@@ -1,6 +1,6 @@
 {
   "name": "@opennsw/jsonforms-renderers",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "JSONForms renderer set for OpenNSW, built on Radix Themes and React 19.",
   "license": "Apache-2.0",
   "keywords": [
