@@ -11,6 +11,7 @@ import * as React from 'react'
 interface XSearchOptions {
   service: string
   loadOnOpen?: boolean
+  enableSearchInput?: boolean
 }
 
 type SearchSelectProps = ControlProps & {
@@ -32,6 +33,7 @@ const SearchSelectControl = ({
   const xSearch = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? { service: '' }
   const serviceName = xSearch.service ?? ''
   const loadOnOpen = xSearch.loadOnOpen ?? false
+  const enableSearchInput = xSearch.enableSearchInput ?? true
   const service = useSearchService(serviceName)
 
   const isEnabled = enabled !== false
@@ -52,6 +54,8 @@ const SearchSelectControl = ({
   const containerRef = useRef<HTMLDivElement>(null)
   // tracks which value has already been resolved so the effect doesn't re-run when selectedOption changes
   const lastResolvedRef = useRef<string | undefined>(undefined)
+  // when enableSearchInput is false, guards the single fetch-on-open so typing never triggers another one
+  const fetchedOnceRef = useRef(false)
 
   useEffect(() => {
     if (!data) {
@@ -145,11 +149,24 @@ const SearchSelectControl = ({
       setLoading(false)
       setLoadingMore(false)
       cursorRef.current = undefined
+      fetchedOnceRef.current = false
     }
   }, [open])
 
   useEffect(() => {
     if (!open) return
+
+    // when enableSearchInput is false, typing filters the already-loaded
+    // options instead of querying the service
+    if (!enableSearchInput) {
+      if (fetchedOnceRef.current) return
+      fetchedOnceRef.current = true
+      setOptions([])
+      setHasMore(false)
+      cursorRef.current = undefined
+      void runSearch('')
+      return
+    }
 
     if (!inputValue && !loadOnOpen) {
       setOptions([])
@@ -171,7 +188,7 @@ const SearchSelectControl = ({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [inputValue, open, loadOnOpen, runSearch])
+  }, [inputValue, open, loadOnOpen, enableSearchInput, runSearch])
 
   useClearWhenHidden(visible, path, handleChange, null)
 
@@ -206,6 +223,11 @@ const SearchSelectControl = ({
   }
 
   const placeholder = (uischema?.options?.placeholder as string | undefined) ?? 'Select an option'
+
+  // when enableSearchInput is false, typing filters the already-loaded options instead of querying the service
+  const visibleOptions = enableSearchInput
+    ? options
+    : options.filter((opt) => opt.name.toLowerCase().includes(inputValue.toLowerCase()))
 
   return (
     <Box mb="4">
@@ -292,15 +314,15 @@ const SearchSelectControl = ({
                       </Box>
                     )}
 
-                    {!loading && !error && options.length === 0 && (
+                    {!loading && !error && visibleOptions.length === 0 && (
                       <Box px="3" py="2">
                         <Text size="2" color="gray">
-                          {inputValue || loadOnOpen ? 'No results found.' : 'Type to search…'}
+                          {inputValue || loadOnOpen || !enableSearchInput ? 'No results found.' : 'Type to search…'}
                         </Text>
                       </Box>
                     )}
 
-                    {options.map((opt) => (
+                    {visibleOptions.map((opt) => (
                       <Box
                         key={opt.id}
                         px="3"
