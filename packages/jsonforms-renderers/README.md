@@ -72,13 +72,14 @@ import { SearchServiceProvider, type SearchServiceRegistry } from '@opennsw/json
 const services: SearchServiceRegistry = {
   countries: {
     async search({ query, cursor, signal }) {
-      const res = await fetch(`/api/countries?q=${query}&cursor=${cursor ?? ''}`, { signal })
+      const params = new URLSearchParams({ q: query, cursor: cursor ?? '' })
+      const res = await fetch(`/api/countries?${params}`, { signal })
       const { items, nextCursor } = await res.json()
       return { options: items.map((c) => ({ id: c.id, name: c.name })), nextCursor }
     },
     // optional — hydrates a saved value back into a label
     async resolve(id) {
-      const res = await fetch(`/api/countries/${id}`)
+      const res = await fetch(`/api/countries/${encodeURIComponent(id)}`)
       const c = await res.json()
       return { id: c.id, name: c.name }
     },
@@ -105,17 +106,17 @@ is no separate pagination flag, pagination is entirely driven by whether `nextCu
   "type": "string",
   "x-search": {
     "service": "countries", // required — name of a registered SearchService
-    "loadOnOpen": false, // fetch immediately when the dropdown opens, instead of waiting for input
+    "loadOnOpen": false, // false: wait for input before calling search() (true fetches as soon as the dropdown opens); ignored when enableSearchInput is false, which always fetches on open
     "enableSearchInput": true, // false: typing never calls search() again — filters the already-loaded options locally instead
   },
 }
 ```
 
-| Option              | Default | Effect                                                                                                   |
-| ------------------- | :-----: | -------------------------------------------------------------------------------------------------------- |
-| `service`           |    —    | Name of the `SearchService` to look up in the registry (required).                                       |
-| `loadOnOpen`        | `false` | Fetch as soon as the dropdown opens, before the user types anything.                                     |
-| `enableSearchInput` | `true`  | When `false`, typing filters the already-loaded options client-side instead of calling `search()` again. |
+| Option              | Default | Effect                                                                                                                                               |
+| ------------------- | :-----: | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `service`           |    —    | Name of the `SearchService` to look up in the registry (required).                                                                                   |
+| `loadOnOpen`        | `false` | Fetch as soon as the dropdown opens, before the user types anything. Ignored when `enableSearchInput` is `false` — that mode always fetches on open. |
+| `enableSearchInput` | `true`  | When `false`, typing filters the already-loaded options client-side instead of calling `search()` again.                                             |
 
 ### Common patterns
 

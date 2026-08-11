@@ -159,6 +159,7 @@ const SearchSelectControl = ({
     // when enableSearchInput is false, typing filters the already-loaded
     // options instead of querying the service
     if (!enableSearchInput) {
+      if (!service) return
       if (fetchedOnceRef.current) return
       fetchedOnceRef.current = true
       setOptions([])
@@ -347,7 +348,7 @@ const SearchSelectControl = ({
                           size="1"
                           style={{ width: '100%' }}
                           onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => void runSearch(inputValue, true)}
+                          onClick={() => void runSearch(enableSearchInput ? inputValue : '', true)}
                         >
                           Load more
                         </Button>
