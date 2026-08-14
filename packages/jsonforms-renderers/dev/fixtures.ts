@@ -92,15 +92,67 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
-    id: 'search-select',
-    name: 'Search Select',
+    id: 'search-select-small',
+    name: 'Search Select (Small list)',
     schema: {
       type: 'object',
       properties: {
         country: {
           type: 'string',
-          description: 'Type to search — cursor-paginated, 5 per page',
-          'x-search': { service: 'countries' },
+          description: 'Fetches once on open — click to pick, no typing, no pagination',
+          'x-search': { service: 'countries', mode: 'small-list' },
+        },
+      },
+      required: ['country'],
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/country',
+          options: { placeholder: 'Pick a country…' },
+        },
+      ],
+    } as UISchemaElement,
+    data: { country: 'au' },
+  },
+  {
+    id: 'search-select-searchable',
+    name: 'Search Select (Large searchable)',
+    schema: {
+      type: 'object',
+      properties: {
+        country: {
+          type: 'string',
+          description: 'Fetches on open, then debounce-searches as you type — no pagination',
+          'x-search': { service: 'countries', mode: 'large-searchable-list' },
+        },
+      },
+      required: ['country'],
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/country',
+          options: { placeholder: 'Search for a country…' },
+        },
+      ],
+    } as UISchemaElement,
+    data: { country: 'au' },
+  },
+  {
+    id: 'search-select-paginated',
+    name: 'Search Select (Large paginated)',
+    schema: {
+      type: 'object',
+      properties: {
+        country: {
+          type: 'string',
+          description: 'Nothing loads until you search — cursor-paginated, 5 per page',
+          'x-search': { service: 'countries', mode: 'large-paginated-list' },
         },
       },
       required: ['country'],

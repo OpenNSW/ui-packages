@@ -8,13 +8,22 @@ import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { getErrorMessage } from '../utils/error'
 import * as React from 'react'
 
+export type SearchSelectMode = 'small-list' | 'large-searchable-list' | 'large-paginated-list'
+
 interface XSearchOptions {
   service: string
-  loadOnOpen?: boolean
+  mode?: SearchSelectMode
 }
 
 type SearchSelectProps = ControlProps & {
   schema: JsonSchema & { 'x-search'?: XSearchOptions }
+}
+
+// The only three valid combinations of {fetch on open, typed search, "load more" pagination}.
+const MODE_CONFIG: Record<SearchSelectMode, { fetchOnOpen: boolean; searchable: boolean; paginated: boolean }> = {
+  'small-list': { fetchOnOpen: true, searchable: false, paginated: false },
+  'large-searchable-list': { fetchOnOpen: true, searchable: true, paginated: false },
+  'large-paginated-list': { fetchOnOpen: false, searchable: true, paginated: true },
 }
 
 const SearchSelectControl = ({
@@ -31,8 +40,19 @@ const SearchSelectControl = ({
 }: SearchSelectProps) => {
   const xSearch = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? { service: '' }
   const serviceName = xSearch.service ?? ''
-  const loadOnOpen = xSearch.loadOnOpen ?? false
+  // unconfigured mode defaults to the "search before fetching" lifecycle — the safest choice for an unknown data size
+  const mode = xSearch.mode ?? 'large-paginated-list'
+  const modeConfig = MODE_CONFIG[mode]
+  const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
   const service = useSearchService(serviceName)
+
+  const configError = !serviceName
+    ? 'Search not configured.'
+    : !service
+      ? `Search service "${serviceName}" is not registered.`
+      : !modeConfig
+        ? `Invalid x-search.mode "${mode}". Expected "small-list", "large-searchable-list", or "large-paginated-list".`
+        : null
 
   const isEnabled = enabled !== false
   const isValid = !errors || errors.length === 0
@@ -109,7 +129,7 @@ const SearchSelectControl = ({
         else setOptions(newItems)
 
         cursorRef.current = result.nextCursor
-        setHasMore(result.nextCursor != null)
+        setHasMore((modeConfig?.paginated ?? false) && result.nextCursor != null)
       } catch (e) {
         if (controller.signal.aborted) return
         setError('Failed to load results. Please try again.')
@@ -121,7 +141,7 @@ const SearchSelectControl = ({
         }
       }
     },
-    [service],
+    [service, modeConfig?.paginated],
   )
 
   useEffect(() => {
@@ -151,7 +171,7 @@ const SearchSelectControl = ({
   useEffect(() => {
     if (!open) return
 
-    if (!inputValue && !loadOnOpen) {
+    if (!inputValue && !fetchOnOpen) {
       setOptions([])
       setHasMore(false)
       setError(null)
@@ -171,7 +191,7 @@ const SearchSelectControl = ({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [inputValue, open, loadOnOpen, runSearch])
+  }, [inputValue, open, fetchOnOpen, runSearch])
 
   useClearWhenHidden(visible, path, handleChange, null)
 
@@ -218,10 +238,12 @@ const SearchSelectControl = ({
           <TextField.Root
             id={path}
             value={open ? inputValue : (selectedOption?.name ?? '')}
-            placeholder={open ? 'Search...' : placeholder}
+            placeholder={open && modeConfig?.searchable ? 'Search...' : placeholder}
             disabled={!isEnabled}
+            readOnly={open && !modeConfig?.searchable}
             style={!isValid ? { outline: '2px solid var(--red-7)', outlineOffset: '-1px' } : undefined}
             onChange={(e) => {
+              if (!modeConfig?.searchable) return
               setInputValue(e.target.value)
               if (!open) openDropdown()
             }}
@@ -269,10 +291,10 @@ const SearchSelectControl = ({
                 overflow: 'hidden',
               }}
             >
-              {!service ? (
+              {configError ? (
                 <Box p="3">
                   <Text size="2" color="gray">
-                    {serviceName ? `Search service "${serviceName}" is not registered.` : 'Search not configured.'}
+                    {configError}
                   </Text>
                 </Box>
               ) : (
@@ -295,7 +317,7 @@ const SearchSelectControl = ({
                     {!loading && !error && options.length === 0 && (
                       <Box px="3" py="2">
                         <Text size="2" color="gray">
-                          {inputValue || loadOnOpen ? 'No results found.' : 'Type to search…'}
+                          {inputValue || fetchOnOpen ? 'No results found.' : 'Type to search…'}
                         </Text>
                       </Box>
                     )}
@@ -318,7 +340,7 @@ const SearchSelectControl = ({
                       </Box>
                     ))}
 
-                    {hasMore && !loadingMore && (
+                    {modeConfig?.paginated && hasMore && !loadingMore && (
                       <Box px="3" py="2">
                         <Button
                           variant="ghost"
