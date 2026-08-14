@@ -11,14 +11,14 @@
     "forms",
     "opennsw"
   ],
-  "homepage": "https://github.com/opennsw/nsw-npm-packages/tree/main/packages/jsonforms-renderers#readme",
+  "homepage": "https://github.com/OpenNSW/ui-packages/tree/main/packages/jsonforms-renderers#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/opennsw/nsw-npm-packages.git",
+    "url": "git+https://github.com/OpenNSW/ui-packages.git",
     "directory": "packages/jsonforms-renderers"
   },
   "bugs": {
-    "url": "https://github.com/opennsw/nsw-npm-packages/issues"
+    "url": "https://github.com/OpenNSW/ui-packages/issues"
   },
   "publishConfig": {
     "access": "public"
