@@ -57,9 +57,11 @@ jobs:
           cache-dependency-path: './pnpm-lock.yaml'
 
       # Trusted Publishing / OIDC requires npm CLI >= 11.5.1. The npm bundled
-      # with Node 22.18 is older, so upgrade it before publishing.
+      # with Node 22.18 is older, so upgrade it before publishing. Pinned to
+      # the 11.x line (rather than @latest) because npm 12 requires Node
+      # >=22.22.2, newer than the Node 22.18.0 pinned above.
       - name: Upgrade npm (OIDC trusted publishing support)
-        run: npm install --global npm@latest
+        run: npm install --global npm@11
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
