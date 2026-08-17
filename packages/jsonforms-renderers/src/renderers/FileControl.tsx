@@ -5,6 +5,7 @@ import { UploadIcon, FileTextIcon, Cross2Icon, CheckCircledIcon, ExclamationTria
 import { useState, useRef, useEffect, useCallback, type ChangeEvent, type DragEvent } from 'react'
 import { useUpload } from '../contexts/UploadContext'
 import { getErrorMessage } from '../utils/error'
+import { formatBytes, formatAccept } from '../utils/format'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import * as React from 'react'
 
@@ -36,35 +37,6 @@ interface FileControlProps {
 function normalizeData(data: string | string[] | null): string[] {
   if (!data) return []
   return Array.isArray(data) ? data : [data]
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${bytes} B`
-}
-
-function formatAccept(accept: string): string {
-  return accept
-    .split(',')
-    .map((t) => {
-      t = t.trim()
-
-      // Handle wildcard types like image/*
-      if (t.endsWith('/*')) {
-        return t.split('/')[0].toUpperCase() + 'S'
-      }
-
-      // Handle extensions like .pdf
-      if (t.startsWith('.')) {
-        return t.slice(1).toUpperCase()
-      }
-
-      // Handle MIME types like application/pdf
-      const subtype = t.split('/')[1]
-      return subtype ? subtype.toUpperCase() : t
-    })
-    .join(', ')
 }
 
 const FileControl = ({

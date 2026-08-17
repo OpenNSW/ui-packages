@@ -19,6 +19,8 @@ import {
 } from './LayoutRenderers'
 import FileControl from './FileControl'
 import { FileControlTester } from './FileControlTester'
+import SpreadsheetControl from './SpreadsheetControl'
+import { SpreadsheetControlTester } from './SpreadsheetControlTester'
 import ArrayControl from './ArrayControl'
 import { ArrayControlTester } from './ArrayControlTester'
 import LabelRenderer, { LabelTester } from './LabelRenderer'
@@ -39,6 +41,7 @@ export const radixRenderers = [
   { tester: GroupLayoutTester, renderer: GroupLayoutRenderer },
   { tester: CategorizationLayoutTester, renderer: CategorizationLayoutRenderer },
   { tester: FileControlTester, renderer: FileControl },
+  { tester: SpreadsheetControlTester, renderer: SpreadsheetControl },
   { tester: ArrayControlTester, renderer: ArrayControl },
   { tester: PrimitiveArrayControlTester, renderer: ArrayControl },
   { tester: LabelTester, renderer: LabelRenderer },
@@ -54,6 +57,8 @@ export * from './LayoutRenderers'
 export type { CategorizationLayoutProps }
 export { default as FileControl } from './FileControl'
 export * from './FileControlTester'
+export { default as SpreadsheetControl } from './SpreadsheetControl'
+export * from './SpreadsheetControlTester'
 export { default as SearchSelectControl } from './SearchSelectControl'
 export * from './SearchSelectControlTester'
 export { default as ArrayControl } from './ArrayControl'

@@ -1,0 +1,391 @@
+import { withJsonFormsControlProps } from '@jsonforms/react'
+import type { ControlProps, JsonSchema } from '@jsonforms/core'
+import { Box, Card, Flex, IconButton, Spinner, Table, Text } from '@radix-ui/themes'
+import { UploadIcon, FileTextIcon, Cross2Icon, CheckCircledIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
+import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { getErrorMessage } from '../utils/error'
+import { formatBytes, formatAccept } from '../utils/format'
+import {
+  parseWorkbookToMatrix,
+  columnLetter,
+  evaluateExpressions,
+  SheetParseError,
+  type CellValue,
+  type FormulaConfigEntry,
+  type FormulaResult,
+} from '../utils/spreadsheet'
+
+interface XSpreadsheetOptions {
+  /** Accepted file types: comma-separated MIME types, wildcards (image/*), or extensions (.xlsx). */
+  accept?: string
+  /** Max upload size in bytes. */
+  maxSize?: number
+  /** Include the parsed sheet in the persisted value, so it survives a reload. Default true. */
+  persistSheet?: boolean
+  /** Use row 1's values as column labels instead of A/B/C. Default false. */
+  columnHeader?: boolean
+  /** Use column A's values as row labels instead of 1/2/3. Default false. */
+  rowHeader?: boolean
+  /** Render the grid preview at all. Default true — set false to show only computed values. */
+  showSheet?: boolean
+  /** Which sheet to read by name. Defaults to the workbook's first sheet if omitted. */
+  sheetName?: string
+}
+
+type SpreadsheetControlProps = ControlProps & {
+  schema: JsonSchema & { 'x-spreadsheet'?: XSpreadsheetOptions; 'x-evaluate'?: FormulaConfigEntry[] }
+}
+
+// Persisted value shape — the field's data is an object, not a string key.
+// No `fileName`: there's no storage service to name a retrievable file for.
+interface SpreadsheetValue {
+  sheet?: CellValue[][]
+  derivations: FormulaResult[]
+}
+
+type Status = 'empty' | 'parsing' | 'ready' | 'error'
+
+const DEFAULT_ACCEPT =
+  '.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv'
+const DEFAULT_MAX_SIZE = 10 * 1024 * 1024
+const MAX_PREVIEW_ROWS = 200
+const MAX_PREVIEW_COLS = 50
+const EMPTY_FORMULAS: FormulaConfigEntry[] = []
+
+function formatCell(cell: CellValue | undefined): string {
+  if (cell == null || cell === '') return ''
+  if (cell instanceof Date) return cell.toLocaleDateString()
+  return String(cell)
+}
+
+const SpreadsheetControl = ({
+  data,
+  handleChange,
+  path,
+  label,
+  required,
+  schema,
+  enabled,
+  errors,
+  visible = true,
+}: SpreadsheetControlProps) => {
+  useClearWhenHidden(visible, path, handleChange, null)
+
+  const isValid = !errors || errors.length === 0
+  const isEnabled = enabled !== false
+
+  const xSpreadsheet: XSpreadsheetOptions = schema?.['x-spreadsheet'] ?? {}
+  const xEvaluate: FormulaConfigEntry[] = schema?.['x-evaluate'] ?? EMPTY_FORMULAS
+
+  const accept = xSpreadsheet.accept ?? DEFAULT_ACCEPT
+  const maxSize = xSpreadsheet.maxSize ?? DEFAULT_MAX_SIZE
+  const persistSheet = xSpreadsheet.persistSheet !== false
+  const columnHeader = xSpreadsheet.columnHeader === true
+  const rowHeader = xSpreadsheet.rowHeader === true
+  const showSheet = xSpreadsheet.showSheet !== false
+  const sheetName = xSpreadsheet.sheetName
+
+  const value = (data ?? null) as SpreadsheetValue | null
+
+  const [status, setStatus] = useState<Status>(() =>
+    value?.sheet || (value?.derivations?.length ?? 0) > 0 ? 'ready' : 'empty',
+  )
+  const [error, setError] = useState<string | null>(null)
+  const [dragActive, setDragActive] = useState(false)
+  const [localMatrix, setLocalMatrix] = useState<CellValue[][] | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // The grid always renders from localMatrix first — so even with
+  // persistSheet: false, a fresh upload shows immediately this session, even
+  // though it won't survive a reload.
+  const matrix = localMatrix ?? value?.sheet ?? null
+  const derivations = value?.derivations ?? []
+  const hasValue = matrix != null || value != null
+
+  const processFile = useCallback(
+    async (file: File) => {
+      setError(null)
+
+      if (file.size > maxSize) {
+        setError(`File exceeds the ${formatBytes(maxSize)} limit.`)
+        return
+      }
+
+      const acceptedTypes = accept.split(',').map((t) => t.trim())
+      const typeOk = acceptedTypes.some((type) => {
+        if (type === '*' || type === '*/*') return true
+        if (type.endsWith('/*')) return file.type.startsWith(type.slice(0, -1))
+        if (type.startsWith('.')) return file.name.toLowerCase().endsWith(type.toLowerCase())
+        return file.type === type
+      })
+      if (!typeOk) {
+        setError(`Invalid type. Accepted: ${formatAccept(accept)}`)
+        return
+      }
+
+      setStatus('parsing')
+
+      let parsedMatrix: CellValue[][]
+      try {
+        const buffer = await file.arrayBuffer()
+        parsedMatrix = parseWorkbookToMatrix(buffer, sheetName).matrix
+      } catch (err) {
+        setStatus('error')
+        setError(
+          err instanceof SheetParseError
+            ? err.message
+            : "This doesn't look like a valid spreadsheet. Please check the file and try again.",
+        )
+        return
+      }
+
+      setLocalMatrix(parsedMatrix)
+      const newDerivations = await evaluateExpressions(parsedMatrix, xEvaluate)
+      handleChange(
+        path,
+        persistSheet ? { sheet: parsedMatrix, derivations: newDerivations } : { derivations: newDerivations },
+      )
+      setStatus('ready')
+    },
+    [accept, maxSize, persistSheet, sheetName, xEvaluate, path, handleChange],
+  )
+
+  if (visible === false) {
+    return null
+  }
+
+  if (!isEnabled && !hasValue) return null
+
+  const handleDrag = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isEnabled) return
+    setDragActive(e.type === 'dragenter' || e.type === 'dragover')
+  }
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    if (!isEnabled) return
+    if (e.dataTransfer.files?.[0]) void processFile(e.dataTransfer.files[0])
+  }
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      void processFile(e.target.files[0])
+      e.target.value = ''
+    }
+  }
+
+  const handleRemove = () => {
+    if (!isEnabled) return
+    setLocalMatrix(null)
+    setError(null)
+    setStatus('empty')
+    handleChange(path, null)
+  }
+
+  // columnHeader consumes row 0 as the header; rowHeader consumes column 0 as
+  // row labels — offset the body so the header row/column is never also
+  // rendered as a data row/column.
+  const rowOffset = columnHeader ? 1 : 0
+  const colOffset = rowHeader ? 1 : 0
+  const bodyRows = matrix ? matrix.slice(rowOffset) : []
+  const visibleRows = bodyRows.slice(0, MAX_PREVIEW_ROWS)
+  const colCount = Math.min(
+    MAX_PREVIEW_COLS,
+    Math.max(0, ...visibleRows.map((row) => Math.max(0, row.length - colOffset))),
+  )
+  const colIndices = Array.from({ length: colCount }, (_, i) => i + colOffset)
+  const showStoredNote = showSheet && matrix == null && value != null
+  const cornerLabel = columnHeader && rowHeader ? formatCell(matrix?.[0]?.[0]) : ''
+
+  return (
+    <Box mb="4">
+      {/* ── Header row ── */}
+      <Flex align="center" justify="between" mb="2">
+        <Text as="label" size="2" weight="bold">
+          {label}
+          {required && <Text color="red"> *</Text>}
+        </Text>
+        <Text size="1" color="gray">
+          {formatBytes(maxSize)} max · {formatAccept(accept)}
+        </Text>
+      </Flex>
+
+      {/* ── Current-file summary row ── */}
+      {hasValue && (
+        <Card size="2" variant="surface" mb="2">
+          <Flex align="center" gap="3">
+            <Box
+              style={{
+                background: 'var(--blue-3)',
+                padding: 8,
+                borderRadius: 6,
+                color: 'var(--blue-9)',
+                flexShrink: 0,
+              }}
+            >
+              <FileTextIcon width="20" height="20" />
+            </Box>
+            <Box style={{ flex: 1 }}>
+              <Text size="2" weight="bold">
+                Spreadsheet uploaded
+              </Text>
+            </Box>
+            <CheckCircledIcon style={{ color: 'var(--green-9)', width: 18, height: 18 }} />
+            {isEnabled && (
+              <IconButton variant="ghost" color="gray" onClick={handleRemove} aria-label="Remove spreadsheet">
+                <Cross2Icon />
+              </IconButton>
+            )}
+          </Flex>
+        </Card>
+      )}
+
+      {/* ── Drop zone — replaces the file, never edits it in place ── */}
+      {isEnabled && (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => inputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              inputRef.current?.click()
+            }
+          }}
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+          style={{ cursor: 'pointer' }}
+          className={[
+            'border-2 border-dashed rounded-lg p-6 text-center',
+            'transition-all duration-200 ease-in-out',
+            dragActive
+              ? 'border-blue-500 bg-blue-50'
+              : error
+                ? 'border-red-300 bg-red-50'
+                : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50',
+          ].join(' ')}
+        >
+          <input ref={inputRef} type="file" style={{ display: 'none' }} accept={accept} onChange={handleInputChange} />
+          <Flex direction="column" align="center" gap="2">
+            {status === 'parsing' ? (
+              <>
+                <Spinner size="3" />
+                <Text size="2" color="gray">
+                  Parsing spreadsheet…
+                </Text>
+              </>
+            ) : error ? (
+              <>
+                <ExclamationTriangleIcon style={{ width: 32, height: 32, color: 'var(--red-9)' }} />
+                <Text size="2" color="red" weight="medium">
+                  {error}
+                </Text>
+                <Text size="1" color="gray">
+                  Click to try again
+                </Text>
+              </>
+            ) : (
+              <>
+                <UploadIcon style={{ width: 32, height: 32, color: 'var(--gray-8)' }} />
+                <Text size="2" weight="medium">
+                  {hasValue ? 'Click to upload a replacement' : 'Click to upload or drag and drop'}
+                </Text>
+                <Text size="1" color="gray">
+                  {formatBytes(maxSize)} max · {formatAccept(accept)}
+                </Text>
+              </>
+            )}
+          </Flex>
+        </div>
+      )}
+
+      {/* ── Sheet preview grid, or a note when it wasn't persisted ── */}
+      {matrix && showSheet && (
+        <Box mt="3">
+          <Box style={{ overflow: 'auto', maxHeight: 420 }}>
+            <Table.Root variant="surface" size="1">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>{cornerLabel}</Table.ColumnHeaderCell>
+                  {colIndices.map((c) => (
+                    <Table.ColumnHeaderCell key={c}>
+                      {columnHeader ? formatCell(matrix[0]?.[c]) : columnLetter(c)}
+                    </Table.ColumnHeaderCell>
+                  ))}
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {visibleRows.map((row, r) => {
+                  const actualRow = rowOffset + r
+                  return (
+                    <Table.Row key={r}>
+                      <Table.RowHeaderCell>
+                        {rowHeader ? formatCell(matrix[actualRow]?.[0]) : actualRow + 1}
+                      </Table.RowHeaderCell>
+                      {colIndices.map((c) => (
+                        <Table.Cell key={c}>{formatCell(row[c])}</Table.Cell>
+                      ))}
+                    </Table.Row>
+                  )
+                })}
+              </Table.Body>
+            </Table.Root>
+          </Box>
+          {bodyRows.length > MAX_PREVIEW_ROWS && (
+            <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+              Showing first {MAX_PREVIEW_ROWS} of {bodyRows.length} rows
+            </Text>
+          )}
+        </Box>
+      )}
+      {showStoredNote && (
+        <Text size="2" color="gray" mt="3" style={{ display: 'block' }}>
+          Sheet preview not stored for this field — re-upload to view contents.
+        </Text>
+      )}
+
+      {/* ── Computed values panel — only when x-evaluate produced something ── */}
+      {derivations.length > 0 && (
+        <Box mt="3">
+          <Text size="2" weight="bold" as="div" mb="1">
+            Computed values
+          </Text>
+          <Flex direction="column" gap="1">
+            {derivations.map((d, i) => (
+              <Flex key={i} justify="between">
+                <Text size="2">{d.label}</Text>
+                {d.error ? (
+                  <Text size="2" color="red">
+                    {d.error}
+                  </Text>
+                ) : (
+                  // d.value is CellValue | null now (SUM/AVERAGE aren't the only
+                  // possible results anymore — INDEX/CONCATENATE can return a
+                  // string, a bare comparison can return a boolean, etc.), so
+                  // `.toLocaleString()` would throw for e.g. a boolean result.
+                  // Reuse the same formatCell used for the sheet-preview grid.
+                  <Text size="2">{formatCell(d.value)}</Text>
+                )}
+              </Flex>
+            ))}
+          </Flex>
+        </Box>
+      )}
+
+      {!isValid && (
+        <Text color="red" size="1" mt="2" style={{ display: 'block' }}>
+          {getErrorMessage(errors, label)}
+        </Text>
+      )}
+    </Box>
+  )
+}
+
+export default withJsonFormsControlProps(SpreadsheetControl)
