@@ -1,0 +1,122 @@
+name: Release - Bump package version
+
+# Manually triggered: bumps "version" in a package's package.json and opens a
+# PR against main, so cutting a release no longer needs a hand-written PR.
+#
+# How to cut a release with this workflow:
+#   1. Actions tab -> "Release - Bump package version" -> Run workflow.
+#      Fill in the package directory (e.g. jsonforms-renderers) and the new
+#      version (e.g. 0.4.1, no leading "v").
+#   2. Review and merge the PR it opens.
+#   3. Tag the merge commit on main and push the tag, e.g.:
+#        git tag jsonforms-renderers-v0.4.1
+#        git push origin jsonforms-renderers-v0.4.1
+#      That tag push triggers release.yml, which builds and publishes to npm.
+#
+# Note: this workflow pushes/opens its PR using the default GITHUB_TOKEN, so
+# packages-ci.yml will NOT run on the PR it creates (GitHub doesn't let the
+# default token trigger other workflows, to avoid recursive runs). That's
+# fine here since the PR only ever changes a version string — review the
+# diff by eye before merging.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package directory under packages/ to bump'
+        required: true
+        default: 'jsonforms-renderers'
+        type: string
+      version:
+        description: 'New version to set, semver without a leading "v" (e.g. 0.4.1)'
+        required: true
+        type: string
+
+concurrency:
+  group: version-bump-${{ inputs.package }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-version:
+    name: Open version bump PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Fail early with a clear message rather than partway through a git push.
+      - name: Validate inputs
+        id: pkg
+        run: |
+          PKG_DIR="${{ inputs.package }}"
+          VERSION="${{ inputs.version }}"
+          PKG_PATH="packages/$PKG_DIR"
+
+          if [ ! -f "$PKG_PATH/package.json" ]; then
+            echo "::error::No package.json found at $PKG_PATH."
+            exit 1
+          fi
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$VERSION' is not a valid semver (expected e.g. 1.2.3 or 1.2.3-beta.1)."
+            exit 1
+          fi
+
+          CURRENT_VERSION="$(node -p "require('./$PKG_PATH/package.json').version")"
+          if [ "$VERSION" == "$CURRENT_VERSION" ]; then
+            echo "::error::$PKG_PATH is already at version $VERSION."
+            exit 1
+          fi
+
+          PKG_NAME="$(node -p "require('./$PKG_PATH/package.json').name")"
+          BRANCH="release/$PKG_DIR-v$VERSION"
+
+          echo "Package path:    $PKG_PATH"
+          echo "Package name:    $PKG_NAME"
+          echo "Current version: $CURRENT_VERSION"
+          echo "New version:     $VERSION"
+
+          echo "path=$PKG_PATH" >> "$GITHUB_OUTPUT"
+          echo "name=$PKG_NAME" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version in package.json
+        working-directory: ${{ steps.pkg.outputs.path }}
+        run: npm pkg set version="${{ inputs.version }}"
+
+      - name: Commit and push branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${{ steps.pkg.outputs.branch }}"
+          git add "${{ steps.pkg.outputs.path }}/package.json"
+          git commit -m "chore(release): bump ${{ steps.pkg.outputs.name }} to v${{ inputs.version }}"
+          git push origin "${{ steps.pkg.outputs.branch }}"
+
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --title "chore(release): bump ${{ steps.pkg.outputs.name }} to v${{ inputs.version }}" \
+            --base main \
+            --head "${{ steps.pkg.outputs.branch }}" \
+            --body "$(cat <<EOF
+          Bumps \`${{ steps.pkg.outputs.name }}\` (\`${{ steps.pkg.outputs.path }}\`) to \`${{ inputs.version }}\`.
+
+          **After merging**, tag the merge commit on \`main\` and push the tag to publish:
+
+          \`\`\`
+          git tag ${{ inputs.package }}-v${{ inputs.version }}
+          git push origin ${{ inputs.package }}-v${{ inputs.version }}
+          \`\`\`
+
+          Pushing that tag triggers \`release.yml\`, which builds and publishes to npm.
+
+          _Opened by the \`version-bump.yml\` workflow._
+          EOF
+          )"
