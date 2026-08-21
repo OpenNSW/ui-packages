@@ -1,0 +1,218 @@
+import type { CellRef, FormulaError as LibFormulaErrorClass, RangeRef } from 'fast-formula-parser'
+import { assertAllowedFunctions, backfilledFunctions } from './formulaFunctions'
+import { FormulaError } from './reference'
+import type { CellValue, FormulaConfigEntry, FormulaErrorCode, FormulaResult, Matrix } from './types'
+
+// A thin integration layer over `fast-formula-parser` (parsing + evaluation),
+// backfilled by `@formulajs/formulajs` for functions the former only stubs
+// out or gets wrong for this app's data — see docs/spreadsheet-formulas.md
+// for the supported function list, the license rationale, and the known
+// IF/IFERROR short-circuiting limitation referenced in `onRange` below.
+//
+// This file owns: the allowlist pre-scan (formulaFunctions.ts) running before
+// a formula ever reaches the parser; bridging the library's `onCell`/
+// `onRange` hooks to this package's own `Matrix`; and normalizing however the
+// library reports an error (thrown exception vs. a computed error value) back
+// onto this package's own `FormulaErrorCode` union.
+
+// fast-formula-parser ships as CommonJS with no ESM entry, so a dynamic
+// `import()` of it can resolve to either `{ default: FormulaParser }` or the
+// constructor itself depending on the consumer's bundler/runtime — confirmed
+// empirically to differ between plain Node ESM interop and others, so both
+// shapes are handled rather than assumed. `FormulaError` is then read off the
+// *resolved* constructor's own static property (`FormulaParser.FormulaError`)
+// rather than off the module namespace, since that's the one place it's
+// guaranteed to exist regardless of interop shape.
+type FormulaParserCtor = new (options: {
+  onCell: (ref: CellRef) => unknown
+  onRange: (ref: RangeRef) => unknown[][]
+  functions: Record<string, (...args: unknown[]) => unknown>
+}) => { parse(formula: string, position: CellRef): unknown }
+
+type LibFormulaErrorCtor = typeof LibFormulaErrorClass
+
+const LIB_ERROR_TO_CODE: Record<string, FormulaErrorCode> = {
+  '#REF!': 'REF',
+  '#VALUE!': 'VALUE',
+  '#DIV/0!': 'DIV0',
+  '#NAME?': 'NAME',
+  '#N/A': 'NA',
+  '#NUM!': 'NUM',
+  '#NULL!': 'NULL',
+}
+
+function codeFromLibraryError(err: InstanceType<LibFormulaErrorCtor>): FormulaErrorCode {
+  return LIB_ERROR_TO_CODE[err.error] ?? 'ERROR'
+}
+
+// Normalizes anything `parser.parse()` might throw, or return as an error
+// value, onto this package's own FormulaError — preferring the most specific
+// code available over the library's generic `#ERROR!` wrapper.
+function toFormulaError(caught: unknown, LibFormulaError: LibFormulaErrorCtor): FormulaError {
+  if (caught instanceof FormulaError) return caught
+  if (caught instanceof LibFormulaError) {
+    const details: unknown = caught.details
+    if (details instanceof FormulaError) return details
+    if (details instanceof LibFormulaError) return new FormulaError(codeFromLibraryError(details), details.message)
+    return new FormulaError(codeFromLibraryError(caught), caught.message)
+  }
+  return new FormulaError('ERROR', caught instanceof Error ? caught.message : undefined)
+}
+
+function actualWidth(matrix: Matrix): number {
+  return Math.max(0, ...matrix.map((row) => (row as unknown[] | undefined)?.length ?? 0))
+}
+
+// 1-based `{row, col}` in, `matrix[row-1][col-1]` out. A blank cell (missing,
+// `null`, or `''`) resolves to `null`; anything genuinely out of the sheet's
+// bounds throws REF rather than silently reading as blank — an invalid
+// reference is a mistake worth surfacing, not a legitimate blank.
+function makeOnCell(matrix: Matrix) {
+  return (ref: CellRef): CellValue => {
+    const dataRow = matrix[ref.row - 1] as CellValue[] | undefined
+    if (ref.row < 1 || ref.col < 1 || dataRow == null || ref.col - 1 >= dataRow.length) {
+      throw new FormulaError('REF')
+    }
+    const cell = dataRow[ref.col - 1]
+    return cell == null || cell === '' ? null : cell
+  }
+}
+
+// 1-based range in, a clamped 2-D `CellValue[][]` out. Two safety properties
+// fast-formula-parser doesn't provide on its own: never build an array out to
+// the range's literal (possibly enormous) end — clamp to the matrix's actual
+// bounds first — and if the range's *start* row/column is entirely beyond the
+// sheet (not just sparse near the edges), throw REF instead of silently
+// resolving to an empty range (which would let e.g. SUM return a confident 0
+// for a typo'd column). See docs/spreadsheet-formulas.md for the resulting
+// IF/IFERROR short-circuiting limitation this throw causes.
+function makeOnRange(matrix: Matrix) {
+  return (ref: RangeRef): CellValue[][] => {
+    const startRow = Math.min(ref.from.row, ref.to.row)
+    const startCol = Math.min(ref.from.col, ref.to.col)
+    const endRowRaw = Math.max(ref.from.row, ref.to.row)
+    const endColRaw = Math.max(ref.from.col, ref.to.col)
+
+    const width = actualWidth(matrix)
+    if (startRow > matrix.length || startCol > width) {
+      throw new FormulaError('REF')
+    }
+
+    const endRow = Math.min(endRowRaw, matrix.length)
+    const out: CellValue[][] = []
+    for (let r = startRow; r <= endRow; r++) {
+      const dataRow = matrix[r - 1] as CellValue[] | undefined
+      const rowOut: CellValue[] = []
+      if (dataRow != null) {
+        const endCol = Math.min(endColRaw, dataRow.length)
+        for (let c = startCol; c <= endCol; c++) {
+          const cell = dataRow[c - 1]
+          rowOut.push(cell == null || cell === '' ? null : cell)
+        }
+      }
+      out.push(rowOut)
+    }
+    return out
+  }
+}
+
+function normalizeResult(result: unknown): CellValue {
+  if (result === undefined || result === null || result === '') return null
+  if (
+    typeof result === 'number' ||
+    typeof result === 'string' ||
+    typeof result === 'boolean' ||
+    result instanceof Date
+  ) {
+    return result
+  }
+  // The library's own top-level `checkFormulaResult` already collapses
+  // arrays/objects (or reports `#VALUE!`) before `parse()` ever returns a
+  // plain value, so this should be unreachable — kept as a defensive VALUE
+  // rather than a silent wrong answer.
+  throw new FormulaError('VALUE')
+}
+
+// Internal building block: strips the leading `=` (tolerating its absence),
+// runs the allowlist pre-scan, then delegates parsing and evaluation to
+// fast-formula-parser. Throws FormulaError on failure. Both libraries are
+// dynamically imported here (not as static top-level imports) so the
+// formula-evaluation code splits into an on-demand chunk only fetched when a
+// form actually has an `x-evaluate`-bearing field and a file gets uploaded —
+// consumers who never touch this control never pay for either dependency.
+export async function evaluateExpression(matrix: Matrix, expression: string): Promise<CellValue> {
+  if (typeof expression !== 'string') throw new FormulaError('ERROR')
+
+  const trimmed = expression.trim()
+  if (trimmed === '') throw new FormulaError('ERROR')
+
+  const body = trimmed.startsWith('=') ? trimmed.slice(1) : trimmed
+
+  // Runs before `body` ever reaches the parser — see formulaFunctions.ts.
+  assertAllowedFunctions(body)
+
+  const [ffpModule, fj] = await Promise.all([
+    import('fast-formula-parser') as unknown as Promise<{ default?: FormulaParserCtor } & Record<string, unknown>>,
+    import('@formulajs/formulajs'),
+  ])
+  const FormulaParser = (ffpModule.default ?? (ffpModule as unknown as FormulaParserCtor)) as FormulaParserCtor
+  const LibFormulaError = (FormulaParser as unknown as { FormulaError: LibFormulaErrorCtor }).FormulaError
+
+  const parser = new FormulaParser({
+    onCell: makeOnCell(matrix),
+    onRange: makeOnRange(matrix),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- formulajs's own types are all `any`-typed; formulaFunctions.ts narrows the surface it actually calls.
+    functions: backfilledFunctions(fj as any, LibFormulaError),
+  })
+
+  let result: unknown
+  try {
+    result = parser.parse(body, { row: 1, col: 1, sheet: 'Sheet1' })
+  } catch (caught) {
+    throw toFormulaError(caught, LibFormulaError)
+  }
+
+  if (result instanceof LibFormulaError) {
+    throw toFormulaError(result, LibFormulaError)
+  }
+
+  return normalizeResult(result)
+}
+
+const CODE_TO_STRING: Record<FormulaErrorCode, string> = {
+  REF: '#REF!',
+  VALUE: '#VALUE!',
+  DIV0: '#DIV/0!',
+  NAME: '#NAME?',
+  ERROR: '#ERROR!',
+  NA: '#N/A',
+  NUM: '#NUM!',
+  NULL: '#NULL!',
+}
+
+// The public entry point. Never throws — each {label, expression} entry is
+// evaluated independently (its own try/catch) so one bad formula can't blank
+// the others, matching the hand-rolled engine's own contract.
+export async function evaluateExpressions(matrix: Matrix, config: FormulaConfigEntry[]): Promise<FormulaResult[]> {
+  // A sheet that parsed to zero rows can't have meant any of these formulas —
+  // every reference would be out-of-bounds anyway, but SUM/AVERAGE etc. over
+  // an empty range would otherwise produce a confident-looking 0 instead of
+  // an error.
+  if (matrix.length === 0) {
+    return config.map((entry) => ({ label: entry?.label ?? '(unknown)', value: null, error: CODE_TO_STRING.ERROR }))
+  }
+
+  return Promise.all(
+    config.map(async (entry) => {
+      try {
+        if (!entry || typeof entry.label !== 'string' || typeof entry.expression !== 'string') {
+          throw new FormulaError('ERROR')
+        }
+        return { label: entry.label, value: await evaluateExpression(matrix, entry.expression) }
+      } catch (err) {
+        const code = err instanceof FormulaError ? err.code : 'ERROR'
+        return { label: entry?.label ?? '(unknown)', value: null, error: CODE_TO_STRING[code] }
+      }
+    }),
+  )
+}

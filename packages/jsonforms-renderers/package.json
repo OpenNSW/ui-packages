@@ -46,7 +46,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "type-check": "tsc -b --noEmit"
+    "type-check": "tsc -b --noEmit",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "@jsonforms/core": "^3.2.1",
@@ -65,9 +66,13 @@
     "tailwindcss": "^4.0.9",
     "typescript": "~5.7.2",
     "vite": "^6.2.0",
-    "vite-plugin-dts": "^4.5.0"
+    "vite-plugin-dts": "^4.5.0",
+    "vitest": "^3.2.7"
   },
   "dependencies": {
-    "dayjs": "^1.11.21"
+    "@e965/xlsx": "^0.20.3",
+    "@formulajs/formulajs": "^4.6.1",
+    "dayjs": "^1.11.21",
+    "fast-formula-parser": "^1.0.19"
   }
 }

@@ -213,6 +213,63 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'spreadsheet',
+    name: 'Spreadsheet',
+    schema: {
+      type: 'object',
+      properties: {
+        budget: {
+          type: 'object',
+          description:
+            "Upload dev/sample-files/spreadsheet-sample.xlsx (regenerate via generate-spreadsheet-sample.cjs) — a tea-auction report with data in rows 2-6, columns A (Date of Sale), B (Sale Code), C (BR Code), D (Lot No), E (Inv No), F (Garden Mark), G (Grade), H (Rate per KG), I (Qty in KG), J (Total Value Rs). The x-evaluate entries below exercise all 5 original functions (SUM/AVERAGE/MIN/MAX/COUNT) plus arithmetic, a nested function call, and multi-range pooling — the v2 additions (ROUND, IF, INDEX/MATCH, CONCATENATE) — and the fast-formula-parser + formulajs rewrite's expanded coverage: VLOOKUP, COUNTA, AND, and TEXTJOIN. Toggle x-spreadsheet.columnHeader/rowHeader to show row 1 / column A as headers instead of A/B/C, 1/2/3 — formulas still address raw cell coordinates either way. Set showSheet: false to hide the grid entirely and show only the computed values. Set sheetName to a sheet name to read a specific tab instead of the first one.",
+          'x-spreadsheet': {
+            accept: '.xlsx,.xls,.csv',
+            maxSize: 10485760,
+            persistSheet: true,
+            columnHeader: false,
+            rowHeader: false,
+            showSheet: true,
+          },
+          'x-evaluate': [
+            { label: 'Total Quantity (KG)', expression: '=SUM(I2:I6)' },
+            { label: 'Total Value (Rs)', expression: '=SUM(J2:J6)' },
+            { label: 'Average Rate per KG', expression: '=AVERAGE(H2:H6)' },
+            { label: 'Highest Rate per KG', expression: '=MAX(H2:H6)' },
+            { label: 'Lowest Rate per KG', expression: '=MIN(H2:H6)' },
+            { label: 'Number of Lots', expression: '=COUNT(I2:I6)' },
+            { label: 'Average Value per Lot', expression: '=SUM(J2:J6)/COUNT(J2:J6)' },
+            { label: 'Total Value incl. 5% Commission', expression: '=SUM(J2:J6)*1.05' },
+            { label: 'Rate Spread (Max-Min)', expression: '=MAX(H2:H6)-MIN(H2:H6)' },
+            { label: 'Quantity incl. Peak Lot Bonus (nested fn demo)', expression: '=SUM(I2:I6, MAX(I2:I6))' },
+            { label: 'Average Quantity (pooled ranges demo)', expression: '=AVERAGE(I2:I4, I5:I6)' },
+            { label: 'Average Rate per KG (rounded)', expression: '=ROUND(AVERAGE(H2:H6),2)' },
+            { label: 'Large Sale?', expression: '=IF(SUM(I2:I6)>20000,"Yes","No")' },
+            { label: 'Top Grade by Quantity', expression: '=INDEX(G2:G6,MATCH(MAX(I2:I6),I2:I6))' },
+            {
+              label: 'Summary',
+              expression: '=CONCATENATE("Total: ",SUM(I2:I6)," kg across ",COUNT(I2:I6)," lots")',
+            },
+            { label: 'Grade for Lot L332 (VLOOKUP demo)', expression: '=VLOOKUP("L332",D2:G6,4,FALSE)' },
+            { label: 'Gardens Recorded (COUNTA demo)', expression: '=COUNTA(F2:F6)' },
+            {
+              label: 'Full Auction? (AND demo)',
+              expression: '=IF(AND(COUNT(I2:I6)=5,MAX(H2:H6)>300),"All lots recorded, premium rate seen","Check data")',
+            },
+            { label: 'Gardens List (TEXTJOIN demo)', expression: '=TEXTJOIN(", ",TRUE,F2:F6)' },
+          ],
+          properties: {
+            sheet: { type: 'array' },
+            derivations: { type: 'array' },
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/budget' }],
+    } as UISchemaElement,
+  },
+  {
     id: 'array',
     name: 'Array (objects)',
     schema: {
