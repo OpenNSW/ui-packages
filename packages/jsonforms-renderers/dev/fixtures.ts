@@ -170,6 +170,40 @@ export const fixtures: Fixture[] = [
     data: { country: 'au' },
   },
   {
+    id: 'search-select-object',
+    name: 'Search Select (Object shape)',
+    schema: {
+      type: 'object',
+      properties: {
+        cha: {
+          type: 'object',
+          description:
+            'Object-shaped x-search (type: "object") — submits { value, label } together, so the label ' +
+            '("Australia" below) is already in the data and mount does not need to call resolve(). Clear and ' +
+            're-pick to see onSelect write both fields.',
+          'x-search': { service: 'countries', mode: 'large-searchable-list' },
+          properties: {
+            value: { type: 'string', minLength: 1 },
+            label: { type: 'string' },
+          },
+          required: ['value'],
+        },
+      },
+      required: ['cha'],
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/cha',
+          options: { placeholder: 'Search for a country…' },
+        },
+      ],
+    } as UISchemaElement,
+    data: { cha: { value: 'au', label: 'Australia' } },
+  },
+  {
     id: 'date',
     name: 'Date / Time',
     schema: {

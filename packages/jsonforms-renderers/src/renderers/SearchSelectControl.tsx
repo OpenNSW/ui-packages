@@ -15,6 +15,12 @@ interface XSearchOptions {
   mode?: SearchSelectMode
 }
 
+// shape of `data` for an object-typed `x-search` field (`type: "object"`); string-typed fields keep `data` as the raw id
+interface SearchSelectValue {
+  value: string
+  label?: string
+}
+
 type SearchSelectProps = ControlProps & {
   schema: JsonSchema & { 'x-search'?: XSearchOptions }
 }
@@ -46,6 +52,16 @@ const SearchSelectControl = ({
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
   const service = useSearchService(serviceName)
 
+  const isObjectMode = schema.type === 'object'
+  // legacy records may have a bare string in `data` if the field was migrated from `type: "string"` after being saved
+  const normalizedData: SearchSelectValue | undefined = isObjectMode
+    ? typeof data === 'string'
+      ? { value: data }
+      : ((data as SearchSelectValue | undefined) ?? undefined)
+    : undefined
+  const currentValue = isObjectMode ? normalizedData?.value : (data as string | undefined)
+  const currentLabel = normalizedData?.label
+
   const configError = !serviceName
     ? 'Search not configured.'
     : !service
@@ -74,20 +90,27 @@ const SearchSelectControl = ({
   const lastResolvedRef = useRef<string | undefined>(undefined)
 
   useEffect(() => {
-    if (!data) {
+    if (!currentValue) {
       setSelectedOption(undefined)
       lastResolvedRef.current = undefined
       return
     }
-    if (lastResolvedRef.current === data) return
+    if (lastResolvedRef.current === currentValue) return
     // mark as resolving immediately — prevents re-runs if resolve is absent, rejects, or returns undefined
-    lastResolvedRef.current = data as string
+    lastResolvedRef.current = currentValue
+
+    // object-shaped fields already carry the label from submission time — no need to re-resolve it
+    if (isObjectMode && currentLabel) {
+      setSelectedOption({ id: currentValue, name: currentLabel })
+      return
+    }
+
     // optimistic raw-value label first, so the field isn't blank while resolving
-    setSelectedOption({ id: data as string, name: data as string })
+    setSelectedOption({ id: currentValue, name: currentLabel ?? currentValue })
     if (!service?.resolve) return
     let cancelled = false
     void service
-      .resolve(data as string)
+      .resolve(currentValue)
       .then((opt) => {
         if (!cancelled && opt) setSelectedOption(opt)
       })
@@ -97,7 +120,7 @@ const SearchSelectControl = ({
     return () => {
       cancelled = true
     }
-  }, [data, service])
+  }, [currentValue, currentLabel, isObjectMode, service])
 
   const runSearch = useCallback(
     async (q: string, isLoadMore = false) => {
@@ -193,7 +216,7 @@ const SearchSelectControl = ({
     }
   }, [inputValue, open, fetchOnOpen, runSearch])
 
-  useClearWhenHidden(visible, path, handleChange, null)
+  useClearWhenHidden(visible, path, handleChange, isObjectMode ? undefined : null)
 
   if (visible === false) {
     return null
@@ -209,7 +232,7 @@ const SearchSelectControl = ({
   }
 
   const onSelect = (option: SearchOption) => {
-    handleChange(path, option.id)
+    handleChange(path, isObjectMode ? { value: option.id, label: option.name } : option.id)
     setSelectedOption(option)
     lastResolvedRef.current = option.id // prevent resolve effect from re-running for the just-selected value
     setOpen(false)
@@ -217,7 +240,7 @@ const SearchSelectControl = ({
 
   const onClear = (e: React.SyntheticEvent) => {
     e.stopPropagation()
-    handleChange(path, null)
+    handleChange(path, isObjectMode ? undefined : null)
     setSelectedOption(undefined)
   }
 
@@ -256,7 +279,7 @@ const SearchSelectControl = ({
           >
             <TextField.Slot side="right">
               <Flex align="center" gap="1">
-                {data && isEnabled && (
+                {currentValue && isEnabled && (
                   <span
                     role="button"
                     tabIndex={0}
@@ -332,7 +355,7 @@ const SearchSelectControl = ({
                         style={{
                           cursor: 'pointer',
                           borderRadius: 'var(--radius-2)',
-                          backgroundColor: opt.id === data ? 'var(--accent-3)' : undefined,
+                          backgroundColor: opt.id === currentValue ? 'var(--accent-3)' : undefined,
                         }}
                         className="hover:bg-(--gray-3)"
                       >
