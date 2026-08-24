@@ -175,7 +175,7 @@ export const fixtures: Fixture[] = [
     schema: {
       type: 'object',
       properties: {
-        cha: {
+        country: {
           type: 'object',
           description:
             'Object-shaped x-search (type: "object") — submits { value, label } together, so the label ' +
@@ -189,19 +189,19 @@ export const fixtures: Fixture[] = [
           required: ['value'],
         },
       },
-      required: ['cha'],
+      required: ['country'],
     } as unknown as JsonSchema,
     uischema: {
       type: 'VerticalLayout',
       elements: [
         {
           type: 'Control',
-          scope: '#/properties/cha',
+          scope: '#/properties/country',
           options: { placeholder: 'Search for a country…' },
         },
       ],
     } as UISchemaElement,
-    data: { cha: { value: 'au', label: 'Australia' } },
+    data: { country: { value: 'au', label: 'Australia' } },
   },
   {
     id: 'date',

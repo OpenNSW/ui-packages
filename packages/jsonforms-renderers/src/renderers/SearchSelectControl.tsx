@@ -86,8 +86,8 @@ const SearchSelectControl = ({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  // tracks which value has already been resolved so the effect doesn't re-run when selectedOption changes
-  const lastResolvedRef = useRef<string | undefined>(undefined)
+  // tracks which value+label has already been resolved so the effect doesn't re-run when selectedOption changes
+  const lastResolvedRef = useRef<{ value: string; label?: string } | undefined>(undefined)
 
   useEffect(() => {
     if (!currentValue) {
@@ -95,9 +95,9 @@ const SearchSelectControl = ({
       lastResolvedRef.current = undefined
       return
     }
-    if (lastResolvedRef.current === currentValue) return
+    if (lastResolvedRef.current?.value === currentValue && lastResolvedRef.current?.label === currentLabel) return
     // mark as resolving immediately — prevents re-runs if resolve is absent, rejects, or returns undefined
-    lastResolvedRef.current = currentValue
+    lastResolvedRef.current = { value: currentValue, label: currentLabel }
 
     // object-shaped fields already carry the label from submission time — no need to re-resolve it
     if (isObjectMode && currentLabel) {
@@ -234,7 +234,8 @@ const SearchSelectControl = ({
   const onSelect = (option: SearchOption) => {
     handleChange(path, isObjectMode ? { value: option.id, label: option.name } : option.id)
     setSelectedOption(option)
-    lastResolvedRef.current = option.id // prevent resolve effect from re-running for the just-selected value
+    // prevent resolve effect from re-running for the just-selected value
+    lastResolvedRef.current = { value: option.id, label: isObjectMode ? option.name : undefined }
     setOpen(false)
   }
 
