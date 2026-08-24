@@ -111,7 +111,8 @@ const withDependentSelectProps = (
     props: OwnPropsOfControl
   }) {
     const controlProps = ctxToControlProps(ctx, ownProps)
-    const dispatchProps = ctxDispatchToControlProps(ctx.dispatch)
+    // dispatch is always set once JsonForms has initialized — this control never renders before that
+    const dispatchProps = ctxDispatchToControlProps(ctx.dispatch!)
     return <Component {...ownProps} {...controlProps} {...dispatchProps} rootData={ctx.core?.data} />
   })
 
