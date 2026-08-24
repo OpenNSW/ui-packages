@@ -4,9 +4,10 @@ import { Theme, Flex, Box, Heading, Card, Text, Separator, TextArea, Badge } fro
 import '@radix-ui/themes/styles.css'
 import { JsonForms } from '@jsonforms/react'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
-import { radixRenderers } from '../src'
+import { radixRenderers, SearchServiceProvider } from '../src'
 import { ajv } from './ajv'
 import { fixtures, type Fixture } from './fixtures'
+import { searchServices } from './searchServices'
 
 // Parse JSON text, returning the parsed value or an error message — never throws.
 const parse = (text: string): { value?: unknown; error?: string } => {
@@ -178,7 +179,9 @@ function Playground() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Theme>
-      <Playground />
+      <SearchServiceProvider services={searchServices}>
+        <Playground />
+      </SearchServiceProvider>
     </Theme>
   </StrictMode>,
 )
