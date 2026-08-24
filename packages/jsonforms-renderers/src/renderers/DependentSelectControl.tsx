@@ -98,9 +98,7 @@ export const DependentSelectControl = ({
 
 // bypasses withJsonFormsControlProps, which narrows to this control's own data — we additionally need
 // the whole form's data (via ctx.core.data) to resolve a sibling field's current value
-const withDependentSelectProps = (
-  Component: typeof DependentSelectControl,
-): ComponentType<OwnPropsOfControl> =>
+const withDependentSelectProps = (Component: typeof DependentSelectControl): ComponentType<OwnPropsOfControl> =>
   // withJsonFormsContext calls the wrapped component with { ctx, props: ownProps } — own props are
   // nested under `props`, not spread onto the outer object
   withJsonFormsContext(function DependentSelectWithContext({
