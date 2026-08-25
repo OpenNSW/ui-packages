@@ -37,13 +37,16 @@ export const DependentSelectControl = ({
   const siblingPath = dependsOn ? (parentPath ? `${parentPath}.${dependsOn}` : dependsOn) : undefined
   const siblingValue = siblingPath ? (Resolve.data(rootData, siblingPath) as string | undefined) : undefined
 
+  // stable per-option UI token — distinguishes const values that collide under String() (1 vs "1", true vs "true")
+  const constToken = (value: unknown) => `${typeof value}:${String(value)}`
+
   const options = (schema.oneOf ?? [])
     .filter((o) => siblingValue !== undefined && (o as Record<string, unknown>)['x-group'] === siblingValue)
-    .map((o) => ({ value: String(o.const), label: o.title || String(o.const) }))
+    .map((o) => ({ token: constToken(o.const), const: o.const, label: o.title || String(o.const) }))
 
   useEffect(() => {
     // sibling changed (or was cleared) and the previously-selected option is no longer in the filtered list
-    if (data !== undefined && !options.some((o) => o.value === String(data))) {
+    if (data !== undefined && !options.some((o) => o.const === data)) {
       handleChange(path, undefined)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-check when the sibling value changes
@@ -54,7 +57,7 @@ export const DependentSelectControl = ({
   }
 
   const isValid = errors.length === 0
-  const value = data !== undefined ? String(data) : ''
+  const value = data !== undefined ? constToken(data) : ''
   const isDisabled = !enabled || siblingValue === undefined
 
   return (
@@ -63,7 +66,11 @@ export const DependentSelectControl = ({
         <Text as="label" size="2" weight="bold" htmlFor={path}>
           {label} {required && <Text color="red">*</Text>}
         </Text>
-        <Select.Root value={value} onValueChange={(val) => handleChange(path, val)} disabled={isDisabled}>
+        <Select.Root
+          value={value}
+          onValueChange={(token) => handleChange(path, options.find((o) => o.token === token)?.const)}
+          disabled={isDisabled}
+        >
           <Select.Trigger
             placeholder={
               siblingValue === undefined
@@ -75,7 +82,7 @@ export const DependentSelectControl = ({
           />
           <Select.Content>
             {options.map((opt) => (
-              <Select.Item key={opt.value} value={opt.value}>
+              <Select.Item key={opt.token} value={opt.token}>
                 {opt.label}
               </Select.Item>
             ))}
@@ -114,4 +121,6 @@ const withDependentSelectProps = (Component: typeof DependentSelectControl): Com
     return <Component {...ownProps} {...controlProps} {...dispatchProps} rootData={ctx.core?.data} />
   })
 
-export default withDependentSelectProps(DependentSelectControl)
+const DependentSelectRenderer = withDependentSelectProps(DependentSelectControl)
+
+export default DependentSelectRenderer
