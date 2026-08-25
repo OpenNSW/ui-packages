@@ -3,6 +3,9 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 export interface SearchOption {
   id: string
   name: string
+  // any other fields the service returns for this record — lets a consumer like AutoFillGroup
+  // fill sibling fields from the same payload the dropdown already fetched, no second lookup
+  [key: string]: unknown
 }
 
 export interface SearchResult {
