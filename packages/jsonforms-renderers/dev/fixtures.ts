@@ -204,6 +204,44 @@ export const fixtures: Fixture[] = [
     data: { country: { value: 'au', label: 'Australia' } },
   },
   {
+    id: 'auto-fill-group',
+    name: 'Auto-Fill Group',
+    schema: {
+      type: 'object',
+      properties: {
+        employeeId: {
+          type: 'object',
+          description: 'Pick an employee — firstName/lastName/department below fill automatically',
+          'x-search': { service: 'employees', mode: 'large-searchable-list' },
+          properties: {
+            value: { type: 'string', minLength: 1 },
+            label: { type: 'string' },
+          },
+          required: ['value'],
+        },
+        firstName: { type: 'string' },
+        lastName: { type: 'string' },
+        department: { type: 'string' },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'AutoFillGroup',
+      label: 'Employee lookup',
+      options: {
+        autoFill: {
+          trigger: 'employeeId',
+          fill: [{ path: 'department', from: 'department.name' }],
+        },
+      },
+      elements: [
+        { type: 'Control', scope: '#/properties/employeeId', options: { placeholder: 'Search employee…' } },
+        { type: 'Control', scope: '#/properties/firstName' },
+        { type: 'Control', scope: '#/properties/lastName' },
+        { type: 'Control', scope: '#/properties/department' },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'date',
     name: 'Date / Time',
     schema: {

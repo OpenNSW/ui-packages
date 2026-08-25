@@ -15,10 +15,13 @@ interface XSearchOptions {
   mode?: SearchSelectMode
 }
 
-// shape of `data` for an object-typed `x-search` field (`type: "object"`); string-typed fields keep `data` as the raw id
+// shape of `data` for an object-typed `x-search` field (`type: "object"`); string-typed fields keep `data` as the raw id.
+// `payload` carries the full selected SearchOption (beyond just id/name) — consumed by AutoFillGroup to
+// fill sibling fields, without a second lookup against the search service.
 interface SearchSelectValue {
   value: string
   label?: string
+  payload?: SearchOption
 }
 
 type SearchSelectProps = ControlProps & {
@@ -232,7 +235,7 @@ const SearchSelectControl = ({
   }
 
   const onSelect = (option: SearchOption) => {
-    handleChange(path, isObjectMode ? { value: option.id, label: option.name } : option.id)
+    handleChange(path, isObjectMode ? { value: option.id, label: option.name, payload: option } : option.id)
     setSelectedOption(option)
     // prevent resolve effect from re-running for the just-selected value
     lastResolvedRef.current = { value: option.id, label: isObjectMode ? option.name : undefined }
