@@ -10,22 +10,22 @@ const matrix: CellValue[][] = [
 
 describe('processMatrix', () => {
   it('includes the raw sheet by default (persistSheet omitted)', async () => {
-    const result = await processMatrix(matrix, [{ label: 'Total', expression: '=SUM(B2:B3)' }])
-    expect(result).toEqual({ sheet: matrix, derivations: [{ label: 'Total', value: 30 }] })
+    const result = await processMatrix(matrix, [{ id: 'total', label: 'Total', expression: '=SUM(B2:B3)' }])
+    expect(result).toEqual({ sheet: matrix, derivations: [{ id: 'total', label: 'Total', value: 30 }] })
   })
 
   it('includes the raw sheet when persistSheet is explicitly true', async () => {
-    const result = await processMatrix(matrix, [{ label: 'Total', expression: '=SUM(B2:B3)' }], {
+    const result = await processMatrix(matrix, [{ id: 'total', label: 'Total', expression: '=SUM(B2:B3)' }], {
       persistSheet: true,
     })
-    expect(result).toEqual({ sheet: matrix, derivations: [{ label: 'Total', value: 30 }] })
+    expect(result).toEqual({ sheet: matrix, derivations: [{ id: 'total', label: 'Total', value: 30 }] })
   })
 
   it('omits the raw sheet when persistSheet is false', async () => {
-    const result = await processMatrix(matrix, [{ label: 'Total', expression: '=SUM(B2:B3)' }], {
+    const result = await processMatrix(matrix, [{ id: 'total', label: 'Total', expression: '=SUM(B2:B3)' }], {
       persistSheet: false,
     })
-    expect(result).toEqual({ derivations: [{ label: 'Total', value: 30 }] })
+    expect(result).toEqual({ derivations: [{ id: 'total', label: 'Total', value: 30 }] })
     expect(result).not.toHaveProperty('sheet')
   })
 
@@ -36,12 +36,12 @@ describe('processMatrix', () => {
 
   it('surfaces an evaluateExpressions error entry unchanged, alongside a good one', async () => {
     const result = await processMatrix(matrix, [
-      { label: 'Good', expression: '=SUM(B2:B3)' },
-      { label: 'Bad', expression: '=FOO(B2)' },
+      { id: 'good', label: 'Good', expression: '=SUM(B2:B3)' },
+      { id: 'bad', label: 'Bad', expression: '=FOO(B2)' },
     ])
     expect(result.derivations).toEqual([
-      { label: 'Good', value: 30 },
-      { label: 'Bad', value: null, error: '#NAME?' },
+      { id: 'good', label: 'Good', value: 30 },
+      { id: 'bad', label: 'Bad', value: null, error: '#NAME?' },
     ])
   })
 })
