@@ -4,7 +4,7 @@
 
 ```json
 "x-evaluate": [
-  { "label": "Total Quantity", "expression": "=SUM(I2:I6)" }
+  { "id": "total_quantity", "label": "Total Quantity", "expression": "=SUM(I2:I6)" }
 ]
 ```
 

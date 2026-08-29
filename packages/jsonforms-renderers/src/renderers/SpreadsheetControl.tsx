@@ -377,8 +377,8 @@ const SpreadsheetControl = ({
             Computed values
           </Text>
           <Flex direction="column" gap="1">
-            {derivations.map((d, i) => (
-              <Flex key={i} justify="between">
+            {derivations.map((d) => (
+              <Flex key={d.id} justify="between">
                 <Text size="2">{d.label}</Text>
                 {d.error ? (
                   <Text size="2" color="red">
