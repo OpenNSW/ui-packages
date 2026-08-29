@@ -286,7 +286,7 @@ const SpreadsheetControl = ({
               <>
                 <UploadIcon style={{ width: 32, height: 32, color: 'var(--gray-8)' }} />
                 <Text size="2" weight="medium">
-                  {hasValue ? 'Click to upload a replacement' : 'Click to upload or drag and drop'}
+                  Click to upload or drag and drop
                 </Text>
                 <Text size="1" color="gray">
                   {formatBytes(maxSize)} max · {formatAccept(accept)}
