@@ -13,11 +13,13 @@ export interface ParsedSheet {
 }
 
 export interface FormulaConfigEntry {
+  id: string
   label: string
   expression: string
 }
 
 export interface FormulaResult {
+  id: string
   label: string
   value: CellValue | null
   error?: string
