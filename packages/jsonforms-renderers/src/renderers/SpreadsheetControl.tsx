@@ -1,7 +1,7 @@
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import type { ControlProps, JsonSchema } from '@jsonforms/core'
-import { Box, Card, Flex, IconButton, Spinner, Table, Text } from '@radix-ui/themes'
-import { UploadIcon, FileTextIcon, Cross2Icon, CheckCircledIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
+import { Box, Flex, IconButton, Spinner, Table, Text } from '@radix-ui/themes'
+import { UploadIcon, Cross2Icon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
 import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { getErrorMessage } from '../utils/error'
@@ -206,47 +206,39 @@ const SpreadsheetControl = ({
     <Box mb="4">
       {/* ── Header row ── */}
       <Flex align="center" justify="between" mb="2">
-        <Text as="label" size="2" weight="bold">
-          {label}
-          {required && <Text color="red"> *</Text>}
-        </Text>
+        <Flex align="center" gap="1">
+          <Text as="label" size="2" weight="bold">
+            {label}
+            {required && <Text color="red"> *</Text>}
+          </Text>
+          {hasValue && isEnabled && (
+            <>
+              <IconButton
+                variant="ghost"
+                size="1"
+                onClick={() => inputRef.current?.click()}
+                aria-label="Replace spreadsheet"
+              >
+                <UploadIcon />
+              </IconButton>
+              <IconButton variant="ghost" size="1" color="gray" onClick={handleRemove} aria-label="Remove spreadsheet">
+                <Cross2Icon />
+              </IconButton>
+            </>
+          )}
+        </Flex>
         <Text size="1" color="gray">
           {formatBytes(maxSize)} max · {formatAccept(accept)}
         </Text>
       </Flex>
 
-      {/* ── Current-file summary row ── */}
-      {hasValue && (
-        <Card size="2" variant="surface" mb="2">
-          <Flex align="center" gap="3">
-            <Box
-              style={{
-                background: 'var(--blue-3)',
-                padding: 8,
-                borderRadius: 6,
-                color: 'var(--blue-9)',
-                flexShrink: 0,
-              }}
-            >
-              <FileTextIcon width="20" height="20" />
-            </Box>
-            <Box style={{ flex: 1 }}>
-              <Text size="2" weight="bold">
-                Spreadsheet uploaded
-              </Text>
-            </Box>
-            <CheckCircledIcon style={{ color: 'var(--green-9)', width: 18, height: 18 }} />
-            {isEnabled && (
-              <IconButton variant="ghost" color="gray" onClick={handleRemove} aria-label="Remove spreadsheet">
-                <Cross2Icon />
-              </IconButton>
-            )}
-          </Flex>
-        </Card>
-      )}
+      {/* Hidden file input — triggered by the empty-state dropzone below and
+          by the compact "replace" button in the header once a file exists. */}
+      <input ref={inputRef} type="file" style={{ display: 'none' }} accept={accept} onChange={handleInputChange} />
 
-      {/* ── Drop zone — replaces the file, never edits it in place ── */}
-      {isEnabled && (
+      {/* ── Drop zone — empty state only; once a file exists, the compact
+          header controls above handle replace/remove instead ── */}
+      {isEnabled && !hasValue && (
         <div
           role="button"
           tabIndex={0}
@@ -272,7 +264,6 @@ const SpreadsheetControl = ({
                 : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50',
           ].join(' ')}
         >
-          <input ref={inputRef} type="file" style={{ display: 'none' }} accept={accept} onChange={handleInputChange} />
           <Flex direction="column" align="center" gap="2">
             {status === 'parsing' ? (
               <>
