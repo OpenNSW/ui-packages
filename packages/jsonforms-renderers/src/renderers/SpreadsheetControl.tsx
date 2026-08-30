@@ -232,6 +232,15 @@ const SpreadsheetControl = ({
         </Text>
       </Flex>
 
+      {/* A replacement upload's validation/parse error has nowhere else to
+          render once a file already exists — the dropzone (the only other
+          place `error` is shown) is hidden whenever `hasValue` is true. */}
+      {hasValue && error && (
+        <Text size="2" color="red" mb="2" style={{ display: 'block' }}>
+          {error}
+        </Text>
+      )}
+
       {/* Hidden file input — triggered by the empty-state dropzone below and
           by the compact "replace" button in the header once a file exists. */}
       <input ref={inputRef} type="file" style={{ display: 'none' }} accept={accept} onChange={handleInputChange} />
