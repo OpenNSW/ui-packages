@@ -452,6 +452,7 @@ export const fixtures: Fixture[] = [
       type: 'VerticalLayout',
       elements: [{ type: 'Control', scope: '#/properties/blendsheet_data' }],
     } as UISchemaElement,
+    data: { blendsheet_data: [{}] },
   },
   {
     id: 'array',
