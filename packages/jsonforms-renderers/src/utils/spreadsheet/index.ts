@@ -9,5 +9,6 @@ export type {
   FormulaConfigEntry,
   FormulaResult,
   FormulaErrorCode,
+  DerivationResult,
   SpreadsheetValue,
 } from './types'
