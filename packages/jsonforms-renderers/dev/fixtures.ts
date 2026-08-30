@@ -383,6 +383,123 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'blendsheet',
+    name: 'Blend Sheet (computed)',
+    schema: {
+      type: 'object',
+      properties: {
+        blendsheet_data: {
+          type: 'array',
+          title: 'Blend Sheet Data',
+          description:
+            'Upload dev/sample-files/blendsheet-sales-sample.xlsx, blendsheet-imported-sample.xlsx, and (optionally — it\'s "IF APPLICABLE") blendsheet-balances-sample.xlsx (regenerate via generate-blendsheet-samples.cjs). Demonstrates ComputedControl (x-computed): "total" sums three spreadsheet derivations by named input, defaulting the optional blend-balances one to 0 when that upload is skipped; "blend_balance" then chains off "total" (a sibling COMPUTED field, not a spreadsheet) minus the manually-entered "quality_to_be_exported".',
+          items: {
+            type: 'object',
+            properties: {
+              quality_to_be_exported: {
+                type: 'number',
+                title: 'Quantity to be Exported (Kg)',
+                description: 'Manually entered — not a computed field.',
+              },
+              sales: {
+                type: 'object',
+                title: 'Particulars of Sale',
+                description: 'Upload blendsheet-sales-sample.xlsx.',
+                'x-spreadsheet': {
+                  accept: '.xlsx,.xls,.csv',
+                  maxSize: 10485760,
+                  persistSheet: true,
+                  columnHeader: true,
+                  rowHeader: true,
+                },
+                'x-evaluate': [
+                  { id: 'total_sales_quantity', label: 'Total Sales Quantity (KG)', expression: '=SUM(I2:I4)' },
+                ],
+                properties: {
+                  sheet: { type: 'array' },
+                  derivations: { type: 'object' },
+                },
+              },
+              imported_tea: {
+                type: 'object',
+                title: 'Particulars of Imported Tea',
+                description: 'Upload blendsheet-imported-sample.xlsx.',
+                'x-spreadsheet': {
+                  accept: '.xlsx,.xls,.csv',
+                  maxSize: 10485760,
+                  persistSheet: true,
+                  columnHeader: true,
+                  rowHeader: true,
+                },
+                'x-evaluate': [
+                  { id: 'total_import_quantity', label: 'Total Import Quantity (KG)', expression: '=SUM(F2:F4)' },
+                ],
+                properties: {
+                  sheet: { type: 'array' },
+                  derivations: { type: 'object' },
+                },
+              },
+              blend_balances: {
+                type: 'object',
+                title: 'Particulars of Blend Balances Used (if applicable)',
+                description: 'Optional — upload blendsheet-balances-sample.xlsx, or leave empty to see the default-value fallback.',
+                'x-spreadsheet': {
+                  accept: '.xlsx,.xls,.csv',
+                  maxSize: 10485760,
+                  persistSheet: true,
+                  columnHeader: true,
+                  rowHeader: true,
+                },
+                'x-evaluate': [
+                  {
+                    id: 'total_blend_balance_quantity',
+                    label: 'Total Blend Balance Quantity (KG)',
+                    expression: '=SUM(F2:F3)',
+                  },
+                ],
+                properties: {
+                  sheet: { type: 'array' },
+                  derivations: { type: 'object' },
+                },
+              },
+              total: {
+                type: 'number',
+                title: 'Total',
+                description: 'total_sales + total_imported + total_blend_balance (defaults to 0 if not uploaded).',
+                'x-computed': {
+                  inputs: {
+                    total_sales: 'sales.derivations.total_sales_quantity.value',
+                    total_imported: 'imported_tea.derivations.total_import_quantity.value',
+                    total_blend_balance: {
+                      path: 'blend_balances.derivations.total_blend_balance_quantity.value',
+                      default: 0,
+                    },
+                  },
+                  formula: 'total_sales + total_imported + total_blend_balance',
+                  decimals: 2,
+                },
+              },
+              blend_balance: {
+                type: 'number',
+                title: 'Blend Balance',
+                description: 'total - quality_to_be_exported (total is the sibling computed field above).',
+                'x-computed': {
+                  inputs: { total: 'total', qty_export: 'quality_to_be_exported' },
+                  formula: 'total - qty_export',
+                  decimals: 2,
+                },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/blendsheet_data' }],
+    } as UISchemaElement,
+  },
+  {
     id: 'array',
     name: 'Array (objects)',
     schema: {
