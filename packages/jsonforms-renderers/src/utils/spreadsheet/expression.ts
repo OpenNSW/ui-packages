@@ -23,11 +23,20 @@ import type { CellValue, FormulaConfigEntry, FormulaErrorCode, FormulaResult, Ma
 // *resolved* constructor's own static property (`FormulaParser.FormulaError`)
 // rather than off the module namespace, since that's the one place it's
 // guaranteed to exist regardless of interop shape.
-type FormulaParserCtor = new (options: {
+type FormulaHooks = {
   onCell: (ref: CellRef) => unknown
   onRange: (ref: RangeRef) => unknown[][]
-  functions: Record<string, (...args: unknown[]) => unknown>
-}) => { parse(formula: string, position: CellRef): unknown }
+  // The library's own "defined name" mechanism — a bare identifier in a
+  // formula (not an A1-style cell address) resolves through this hook to a
+  // CellRef/RangeRef, which is then routed through onCell/onRange exactly
+  // like a real reference. Returning null makes the library itself report
+  // #NAME? for an unrecognized name, for free. See evaluateFormulaWithVariables.
+  onVariable?: (name: string, sheetName?: string, position?: CellRef) => CellRef | RangeRef | null
+}
+
+type FormulaParserCtor = new (
+  options: FormulaHooks & { functions: Record<string, (...args: unknown[]) => unknown> },
+) => { parse(formula: string, position: CellRef): unknown }
 
 type LibFormulaErrorCtor = typeof LibFormulaErrorClass
 
@@ -135,12 +144,14 @@ function normalizeResult(result: unknown): CellValue {
 
 // Internal building block: strips the leading `=` (tolerating its absence),
 // runs the allowlist pre-scan, then delegates parsing and evaluation to
-// fast-formula-parser. Throws FormulaError on failure. Both libraries are
-// dynamically imported here (not as static top-level imports) so the
-// formula-evaluation code splits into an on-demand chunk only fetched when a
-// form actually has an `x-evaluate`-bearing field and a file gets uploaded —
-// consumers who never touch this control never pay for either dependency.
-export async function evaluateExpression(matrix: Matrix, expression: string): Promise<CellValue> {
+// fast-formula-parser using whichever hooks the caller supplies (a real
+// matrix's onCell/onRange for evaluateExpression, or a variables-only set for
+// evaluateFormulaWithVariables — see below). Throws FormulaError on failure.
+// Both libraries are dynamically imported here (not as static top-level
+// imports) so the formula-evaluation code splits into an on-demand chunk only
+// fetched when a form actually needs it — consumers who never touch a
+// formula-bearing field never pay for either dependency.
+async function evaluateWithHooks(expression: string, hooks: FormulaHooks): Promise<CellValue> {
   if (typeof expression !== 'string') throw new FormulaError('ERROR')
 
   const trimmed = expression.trim()
@@ -159,8 +170,7 @@ export async function evaluateExpression(matrix: Matrix, expression: string): Pr
   const LibFormulaError = (FormulaParser as unknown as { FormulaError: LibFormulaErrorCtor }).FormulaError
 
   const parser = new FormulaParser({
-    onCell: makeOnCell(matrix),
-    onRange: makeOnRange(matrix),
+    ...hooks,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- formulajs's own types are all `any`-typed; formulaFunctions.ts narrows the surface it actually calls.
     functions: backfilledFunctions(fj as any, LibFormulaError),
   })
@@ -177,6 +187,57 @@ export async function evaluateExpression(matrix: Matrix, expression: string): Pr
   }
 
   return normalizeResult(result)
+}
+
+export async function evaluateExpression(matrix: Matrix, expression: string): Promise<CellValue> {
+  return evaluateWithHooks(expression, { onCell: makeOnCell(matrix), onRange: makeOnRange(matrix) })
+}
+
+// Sentinel row for a synthetic "variables row" — must be truthy (the
+// library's own `checkFormulaResult` treats a bare top-level dereference as
+// `result.ref.row && !result.ref.from`, so `row: 0` would silently fail that
+// check and produce a false #VALUE! for a formula that's just one bare
+// variable with no operator around it — verified empirically against the
+// installed library) and must never collide with a real, 1-based cell row.
+const VARIABLE_ROW = -1
+
+// Evaluates a formula written in terms of NAMED variables rather than
+// A1-style cell references — e.g. "total_sales + total_imported" — via
+// fast-formula-parser's own `onVariable` "defined name" hook, not a textual
+// substitution hack. No real matrix backs this: each variable's value is
+// served from the synthetic `VARIABLE_ROW` that no real cell reference can
+// ever address, so a stray `A1`-shaped token in the formula correctly falls
+// through to `#REF!` rather than silently resolving to a variable.
+//
+// Alias-naming constraints (inherited from the library's own grammar, not
+// enforced here — verified empirically): an alias must lex as a `Name`
+// token, which loses to a `Column`/`Cell` token match of EQUAL length. In
+// practice this means a 1-3 letter, all-alphabetic alias (`a`, `qty`) is
+// read as a spreadsheet column reference, not a variable — a longer alias, or
+// one containing a digit/underscore (`total_sales`, `qty1`), is unambiguous.
+// An alias also must not look like a full cell address (`A1`, `B12`) and must
+// not be `TRUE`/`FALSE` (reserved boolean literals) — see docs/computed-fields.md.
+export async function evaluateFormulaWithVariables(
+  variables: Record<string, CellValue>,
+  expression: string,
+): Promise<CellValue> {
+  const names = Object.keys(variables)
+  return evaluateWithHooks(expression, {
+    onVariable: (name) => {
+      const i = names.indexOf(name)
+      // Unknown name -> null -> the library itself reports #NAME?, for free.
+      return i === -1 ? null : { row: VARIABLE_ROW, col: i + 1 }
+    },
+    onCell: (ref) => {
+      if (ref.row === VARIABLE_ROW) return variables[names[ref.col - 1]] ?? null
+      // A real A1-style cell reference: nothing backs it in a variables-only formula.
+      throw new FormulaError('REF')
+    },
+    onRange: () => {
+      // Ranges over named scalars aren't meaningful here.
+      throw new FormulaError('REF')
+    },
+  })
 }
 
 const CODE_TO_STRING: Record<FormulaErrorCode, string> = {
