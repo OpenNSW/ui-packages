@@ -31,12 +31,23 @@ export interface FormulaResult {
 // (a syntax error, or a wrapped cause we don't otherwise recognize).
 export type FormulaErrorCode = 'REF' | 'VALUE' | 'DIV0' | 'NAME' | 'ERROR' | 'NA' | 'NUM' | 'NULL'
 
+// One x-evaluate entry's persisted result, without its id — the id is the
+// map key in SpreadsheetValue.derivations below, not duplicated in the value.
+export interface DerivationResult {
+  label: string
+  value: CellValue | null
+  error?: string
+}
+
 // Persisted value shape for SpreadsheetControl — the field's data is an
 // object, not a string key. No `fileName`: there's no storage service to
-// name a retrievable file for. Shared here (rather than kept private to
-// SpreadsheetControl.tsx) so sibling renderers, like ComputedControl, can
-// read a SpreadsheetControl's persisted `derivations` with the same type.
+// name a retrievable file for. `derivations` is keyed by each x-evaluate
+// entry's mandatory id (not an array) so a sibling field can address one
+// specific derivation's value directly via a plain data-tree path (e.g.
+// `sales.derivations.total_sales.value`), with no "find by id" step needed
+// anywhere. Shared here (rather than kept private to SpreadsheetControl.tsx)
+// so sibling renderers, like ComputedControl, can read it with the same type.
 export interface SpreadsheetValue {
   sheet?: CellValue[][]
-  derivations: FormulaResult[]
+  derivations: Record<string, DerivationResult>
 }
