@@ -30,3 +30,13 @@ export interface FormulaResult {
 // class; ERROR is our own catch-all for anything that doesn't map cleanly
 // (a syntax error, or a wrapped cause we don't otherwise recognize).
 export type FormulaErrorCode = 'REF' | 'VALUE' | 'DIV0' | 'NAME' | 'ERROR' | 'NA' | 'NUM' | 'NULL'
+
+// Persisted value shape for SpreadsheetControl — the field's data is an
+// object, not a string key. No `fileName`: there's no storage service to
+// name a retrievable file for. Shared here (rather than kept private to
+// SpreadsheetControl.tsx) so sibling renderers, like ComputedControl, can
+// read a SpreadsheetControl's persisted `derivations` with the same type.
+export interface SpreadsheetValue {
+  sheet?: CellValue[][]
+  derivations: FormulaResult[]
+}

@@ -9,11 +9,11 @@ import { formatBytes, formatAccept } from '../utils/format'
 import {
   parseWorkbookToMatrix,
   columnLetter,
-  evaluateExpressions,
+  processMatrix,
   SheetParseError,
   type CellValue,
   type FormulaConfigEntry,
-  type FormulaResult,
+  type SpreadsheetValue,
 } from '../utils/spreadsheet'
 
 interface XSpreadsheetOptions {
@@ -35,13 +35,6 @@ interface XSpreadsheetOptions {
 
 type SpreadsheetControlProps = ControlProps & {
   schema: JsonSchema & { 'x-spreadsheet'?: XSpreadsheetOptions; 'x-evaluate'?: FormulaConfigEntry[] }
-}
-
-// Persisted value shape — the field's data is an object, not a string key.
-// No `fileName`: there's no storage service to name a retrievable file for.
-interface SpreadsheetValue {
-  sheet?: CellValue[][]
-  derivations: FormulaResult[]
 }
 
 type Status = 'empty' | 'parsing' | 'ready' | 'error'
@@ -150,11 +143,8 @@ const SpreadsheetControl = ({
       }
 
       setLocalMatrix(parsedMatrix)
-      const newDerivations = await evaluateExpressions(parsedMatrix, xEvaluate)
-      handleChange(
-        path,
-        persistSheet ? { sheet: parsedMatrix, derivations: newDerivations } : { derivations: newDerivations },
-      )
+      const value = await processMatrix(parsedMatrix, xEvaluate, { persistSheet })
+      handleChange(path, value)
       setStatus('ready')
     },
     [accept, maxSize, persistSheet, sheetName, xEvaluate, path, handleChange],
