@@ -3,15 +3,15 @@
 `ComputedControl` reads one or more named values from anywhere in the form's data tree, evaluates a formula written in terms of those names, and persists/renders the result as a readonly `type: 'number'` field, configured via the schema's `x-computed` object:
 
 ```json
-"total": {
+"estimated_total": {
   "type": "number",
   "x-computed": {
     "inputs": {
-      "total_sales": "sales.derivations.total_sales_quantity.value",
-      "total_imported": "imported_tea.derivations.total_import_quantity.value",
-      "total_blend_balance": { "path": "blend_balances.derivations.total_blend_balance_quantity.value", "default": 0 }
+      "quantity": "sales_data.derivations.total_quantity.value",
+      "price": "unit_price",
+      "discount": { "path": "discount_amount", "default": 0 }
     },
-    "formula": "total_sales + total_imported + total_blend_balance",
+    "formula": "quantity * price - discount",
     "format": "{value}",
     "decimals": 2
   }
@@ -22,12 +22,12 @@
 
 Each entry maps an alias (the name used in `formula`) to a path — either a bare string, or `{ path, default }` when the value is legitimately optional.
 
-**Paths are not a syntax invented for this feature.** They're the same dot-joined data-path representation every JSONForms `ControlProps.path` already uses at runtime (`@jsonforms/core`'s own `Resolve.data`/`Paths.compose` — see the source, both just `.split('.')`/join with `.`). A path is resolved **relative to the computed field's own containing object** — e.g. a field at `blendsheet_data.0.total` resolves `"sales.derivations.total_sales_quantity.value"` against `blendsheet_data.0`, reaching `blendsheet_data.0.sales.derivations.total_sales_quantity.value` — the same array item, never a different one. There's currently no way to address an absolute/root path; every input is relative to the field's own parent.
+**Paths are not a syntax invented for this feature.** They're the same dot-joined data-path representation every JSONForms `ControlProps.path` already uses at runtime (`@jsonforms/core`'s own `Resolve.data`/`Paths.compose` — see the source, both just `.split('.')`/join with `.`). A path is resolved **relative to the computed field's own containing object** — e.g. a computed field that's an item inside an array (`items.0.estimated_total`) resolves `"sales_data.derivations.total_quantity.value"` against `items.0`, reaching `items.0.sales_data.derivations.total_quantity.value` — the same array item, never a different one. There's currently no way to address an absolute/root path; every input is relative to the field's own parent.
 
 An input can point at:
-- A plain, manually-entered sibling field (`"quality_to_be_exported"`).
-- One specific `SpreadsheetControl` derivation, via its map path (`"sales.derivations.<id>.value"` — derivations are persisted as a map keyed by each `x-evaluate` entry's `id`, not an array, specifically so they're addressable this way).
-- Another **computed** field's own persisted value (`"total"`) — computed fields chain through the same mechanism as any other field.
+- A plain, manually-entered sibling field (`"unit_price"`).
+- One specific `SpreadsheetControl` derivation, via its map path (`"sales_data.derivations.<id>.value"` — derivations are persisted as a map keyed by each `x-evaluate` entry's `id`, not an array, specifically so they're addressable this way).
+- Another **computed** field's own persisted value — computed fields chain through the same mechanism as any other field.
 
 ### `default`
 
