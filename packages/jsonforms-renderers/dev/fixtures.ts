@@ -337,8 +337,48 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
-    id: 'blendsheet',
-    name: 'Blend Sheet (computed)',
+    id: 'computed-control',
+    name: 'Computed Control',
+    schema: {
+      type: 'object',
+      properties: {
+        price_per_kg: { type: 'number', title: 'Price per KG' },
+        quantity_kg: { type: 'number', title: 'Quantity (KG)' },
+        discount: {
+          type: 'number',
+          title: 'Discount',
+          description: 'Manually entered, optional — x-computed defaults this to 0 when left blank.',
+        },
+        total_value: {
+          type: 'number',
+          title: 'Total Value',
+          description:
+            'price * quantity - discount, via x-computed reading three plain sibling fields (no spreadsheet involved). Note: aliases must not be 1-3 letter all-alphabetic names like "qty" — see docs/computed-fields.md, they collide with the formula engine\'s own spreadsheet-column tokens.',
+          'x-computed': {
+            inputs: {
+              price: 'price_per_kg',
+              quantity: 'quantity_kg',
+              discount_amount: { path: 'discount', default: 0 },
+            },
+            formula: 'price * quantity - discount_amount',
+            decimals: 2,
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/price_per_kg' },
+        { type: 'Control', scope: '#/properties/quantity_kg' },
+        { type: 'Control', scope: '#/properties/discount' },
+        { type: 'Control', scope: '#/properties/total_value' },
+      ],
+    } as UISchemaElement,
+  },
+  {
+    id: 'computed-control-with-spreadsheet',
+    name: 'Computed Control (with Spreadsheet)',
     schema: {
       type: 'object',
       properties: {

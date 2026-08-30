@@ -1,6 +1,6 @@
 import { withJsonFormsControlProps, useJsonForms } from '@jsonforms/react'
 import type { ControlProps, JsonSchema } from '@jsonforms/core'
-import { Box, Flex, Text } from '@radix-ui/themes'
+import { Box, Flex, Spinner, Text } from '@radix-ui/themes'
 import { useEffect, useState } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from '../utils/computed'
@@ -22,7 +22,7 @@ type ComputedControlProps = ControlProps & {
   schema: JsonSchema & { 'x-computed'?: XComputedOptions }
 }
 
-type Status = 'unavailable' | 'ok' | 'error'
+type Status = 'unavailable' | 'loading' | 'ok' | 'error'
 
 const DEFAULT_FORMAT = '{value}'
 const DEFAULT_DECIMALS = 2
@@ -66,6 +66,12 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
       return
     }
 
+    // Synchronous, before the async formula evaluation below — the engine's
+    // formula-parsing libraries are dynamically imported on first use (see
+    // evaluateExpression's own module comment), so the very first evaluation
+    // per page load can take noticeably longer than subsequent ones.
+    setStatus('loading')
+
     void evaluateComputedFormula(resolvedInputs, formula).then((result) => {
       if (cancelled) return
 
@@ -106,6 +112,13 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
           <Text size="2" color="gray">
             Not yet available.
           </Text>
+        ) : status === 'loading' ? (
+          <Flex align="center" gap="2">
+            <Spinner size="1" />
+            <Text size="2" color="gray">
+              Computing…
+            </Text>
+          </Flex>
         ) : status === 'error' ? (
           <Text size="2" color="red">
             {error}
