@@ -1,6 +1,6 @@
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import type { ControlProps, JsonSchema } from '@jsonforms/core'
-import { Box, Flex, IconButton, Spinner, Table, Text } from '@radix-ui/themes'
+import { Box, Flex, IconButton, Spinner, Table, Text, Tooltip } from '@radix-ui/themes'
 import { UploadIcon, Cross2Icon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
 import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
@@ -67,13 +67,22 @@ const SpreadsheetControl = ({
   required,
   schema,
   enabled,
+  readonly,
   errors,
   visible = true,
 }: SpreadsheetControlProps) => {
   useClearWhenHidden(visible, path, handleChange, null)
 
   const isValid = !errors || errors.length === 0
-  const isEnabled = enabled !== false
+  // `enabled` and `readonly` are independently computed by @jsonforms/core
+  // (see mapStateToControlProps) — `enabled` only happens to reflect a schema
+  // `readOnly: true` under this library's default `separateReadonlyFromDisabled:
+  // false` config, and never reflects a uischema READONLY *rule* in any config.
+  // Since this is a generic, reusable renderer whose consuming app may use
+  // either, check both explicitly rather than relying on that incidental fold-in.
+  // For this control, "disabled" and "readonly" mean the same thing: show
+  // whatever data exists, but don't allow uploading a replacement or removing it.
+  const canEdit = enabled !== false && readonly !== true
 
   const xSpreadsheet: XSpreadsheetOptions = schema?.['x-spreadsheet'] ?? {}
   const xEvaluate: FormulaConfigEntry[] = schema?.['x-evaluate'] ?? EMPTY_FORMULAS
@@ -155,12 +164,12 @@ const SpreadsheetControl = ({
     return null
   }
 
-  if (!isEnabled && !hasValue) return null
+  if (!canEdit && !hasValue) return null
 
   const handleDrag = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!isEnabled) return
+    if (!canEdit) return
     setDragActive(e.type === 'dragenter' || e.type === 'dragover')
   }
 
@@ -168,7 +177,7 @@ const SpreadsheetControl = ({
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-    if (!isEnabled) return
+    if (!canEdit) return
     if (e.dataTransfer.files?.[0]) void processFile(e.dataTransfer.files[0])
   }
 
@@ -180,7 +189,7 @@ const SpreadsheetControl = ({
   }
 
   const handleRemove = () => {
-    if (!isEnabled) return
+    if (!canEdit) return
     setLocalMatrix(null)
     setError(null)
     setStatus('empty')
@@ -211,19 +220,23 @@ const SpreadsheetControl = ({
             {label}
             {required && <Text color="red"> *</Text>}
           </Text>
-          {hasValue && isEnabled && (
+          {hasValue && canEdit && (
             <>
-              <IconButton
-                variant="ghost"
-                size="1"
-                onClick={() => inputRef.current?.click()}
-                aria-label="Replace spreadsheet"
-              >
-                <UploadIcon />
-              </IconButton>
-              <IconButton variant="ghost" size="1" color="gray" onClick={handleRemove} aria-label="Remove spreadsheet">
-                <Cross2Icon />
-              </IconButton>
+              <Tooltip content="Replace spreadsheet">
+                <IconButton
+                  variant="ghost"
+                  size="1"
+                  onClick={() => inputRef.current?.click()}
+                  aria-label="Replace spreadsheet"
+                >
+                  <UploadIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip content="Remove spreadsheet">
+                <IconButton variant="ghost" size="1" color="gray" onClick={handleRemove} aria-label="Remove spreadsheet">
+                  <Cross2Icon />
+                </IconButton>
+              </Tooltip>
             </>
           )}
         </Flex>
@@ -247,7 +260,7 @@ const SpreadsheetControl = ({
 
       {/* ── Drop zone — empty state only; once a file exists, the compact
           header controls above handle replace/remove instead ── */}
-      {isEnabled && !hasValue && (
+      {canEdit && !hasValue && (
         <div
           role="button"
           tabIndex={0}
