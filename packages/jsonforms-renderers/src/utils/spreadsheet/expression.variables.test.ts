@@ -27,10 +27,9 @@ describe('evaluateFormulaWithVariables', () => {
   })
 
   it('a function call works over variables the same as it would over cells', async () => {
-    expect(await evaluateFormulaWithVariables({ numerator: 10, denominator: 3 }, '=ROUND(numerator/denominator,2)')).toBeCloseTo(
-      3.33,
-      2,
-    )
+    expect(
+      await evaluateFormulaWithVariables({ numerator: 10, denominator: 3 }, '=ROUND(numerator/denominator,2)'),
+    ).toBeCloseTo(3.33, 2)
   })
 
   it('tolerates a missing leading =', async () => {

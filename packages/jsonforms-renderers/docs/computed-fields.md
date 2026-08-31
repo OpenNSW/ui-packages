@@ -25,6 +25,7 @@ Each entry maps an alias (the name used in `formula`) to a path — either a bar
 **Paths are not a syntax invented for this feature.** They're the same dot-joined data-path representation every JSONForms `ControlProps.path` already uses at runtime (`@jsonforms/core`'s own `Resolve.data`/`Paths.compose` — see the source, both just `.split('.')`/join with `.`). A path is resolved **relative to the computed field's own containing object** — e.g. a computed field that's an item inside an array (`items.0.estimated_total`) resolves `"sales_data.derivations.total_quantity.value"` against `items.0`, reaching `items.0.sales_data.derivations.total_quantity.value` — the same array item, never a different one. There's currently no way to address an absolute/root path; every input is relative to the field's own parent.
 
 An input can point at:
+
 - A plain, manually-entered sibling field (`"unit_price"`).
 - One specific `SpreadsheetControl` derivation, via its map path (`"sales_data.derivations.<id>.value"` — derivations are persisted as a map keyed by each `x-evaluate` entry's `id`, not an array, specifically so they're addressable this way).
 - Another **computed** field's own persisted value — computed fields chain through the same mechanism as any other field.
@@ -38,6 +39,7 @@ When a path resolves to `null`/`undefined` (an upload that hasn't happened yet, 
 Written in terms of the aliases above (not Excel-style cell references), evaluated by the same `fast-formula-parser`/`@formulajs/formulajs` engine `x-evaluate` uses (see [spreadsheet-formulas.md](./spreadsheet-formulas.md)) via the library's own named-variable ("defined name") mechanism — so the full function/operator set documented there (`ROUND`, `IF`, etc.) is available here too, not just `+ - * /`.
 
 **Alias-naming constraint**, inherited directly from the library's grammar (not enforced by this package): an alias must lex as an identifier, which loses to the library's spreadsheet-column token at **equal match length**. In practice:
+
 - A **1-3 letter, all-alphabetic** alias (`a`, `qty`) is read as a spreadsheet column reference, not a variable, and won't work.
 - A **longer** alias, or one containing a digit or underscore (`total_sales`, `qty1`, `qty_export`), is unambiguous.
 - An alias must not be shaped like a full cell address (`A1`, `B12`) or be `TRUE`/`FALSE` (reserved literals).

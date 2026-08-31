@@ -1,5 +1,10 @@
 export { parseWorkbookToMatrix, columnLetter, SheetParseError } from './parse'
-export { evaluateExpression, evaluateExpressions, evaluateFormulaWithVariables, describeFormulaError } from './expression'
+export {
+  evaluateExpression,
+  evaluateExpressions,
+  evaluateFormulaWithVariables,
+  describeFormulaError,
+} from './expression'
 export { processMatrix } from './process'
 export type { ProcessMatrixOptions } from './process'
 export type {
