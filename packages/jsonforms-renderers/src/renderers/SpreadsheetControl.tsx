@@ -4,6 +4,7 @@ import { Box, Flex, IconButton, Spinner, Table, Text, Tooltip } from '@radix-ui/
 import { UploadIcon, Cross2Icon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
 import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { isEditable } from '../utils/editable'
 import { getErrorMessage } from '../utils/error'
 import { formatBytes, formatAccept } from '../utils/format'
 import {
@@ -75,7 +76,7 @@ const SpreadsheetControl = ({
   // either, check both explicitly rather than relying on that incidental fold-in.
   // For this control, "disabled" and "readonly" mean the same thing: show
   // whatever data exists, but don't allow uploading a replacement or removing it.
-  const canEdit = enabled !== false && readonly !== true
+  const canEdit = isEditable(enabled, readonly)
 
   const xSpreadsheet: XSpreadsheetOptions = schema?.['x-spreadsheet'] ?? {}
   const xEvaluate: FormulaConfigEntry[] = schema?.['x-evaluate'] ?? EMPTY_FORMULAS
