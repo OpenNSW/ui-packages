@@ -15,9 +15,9 @@ describe('resolveComputedInputs', () => {
   }
 
   it('resolves a plain manually-entered sibling field', () => {
-    expect(
-      resolveComputedInputs(rootData, 'blendsheet_data.0', { qty: 'quality_to_be_exported' }),
-    ).toEqual({ qty: 16128 })
+    expect(resolveComputedInputs(rootData, 'blendsheet_data.0', { qty: 'quality_to_be_exported' })).toEqual({
+      qty: 16128,
+    })
   })
 
   it('resolves a nested spreadsheet-derivation value via its map path', () => {
@@ -84,7 +84,10 @@ describe('resolveComputedInputs', () => {
 
 describe('evaluateComputedFormula', () => {
   it('evaluates arithmetic over the resolved values', async () => {
-    const result = await evaluateComputedFormula({ total_sales: 27000, total_imported: 5000 }, 'total_sales + total_imported')
+    const result = await evaluateComputedFormula(
+      { total_sales: 27000, total_imported: 5000 },
+      'total_sales + total_imported',
+    )
     expect(result).toEqual({ status: 'ok', value: 32000 })
   })
 

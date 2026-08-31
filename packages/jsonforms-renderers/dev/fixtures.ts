@@ -385,7 +385,8 @@ export const fixtures: Fixture[] = [
         sales_data: {
           type: 'object',
           title: 'Sales Data',
-          description: 'Upload dev/sample-files/sales-data-sample.xlsx (regenerate via generate-sales-data-sample.cjs).',
+          description:
+            'Upload dev/sample-files/sales-data-sample.xlsx (regenerate via generate-sales-data-sample.cjs).',
           'x-spreadsheet': {
             accept: '.xlsx,.xls,.csv',
             maxSize: 10485760,
