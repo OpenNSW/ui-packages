@@ -233,7 +233,13 @@ const SpreadsheetControl = ({
                 </IconButton>
               </Tooltip>
               <Tooltip content="Remove spreadsheet">
-                <IconButton variant="ghost" size="1" color="gray" onClick={handleRemove} aria-label="Remove spreadsheet">
+                <IconButton
+                  variant="ghost"
+                  size="1"
+                  color="gray"
+                  onClick={handleRemove}
+                  aria-label="Remove spreadsheet"
+                >
                   <Cross2Icon />
                 </IconButton>
               </Tooltip>
