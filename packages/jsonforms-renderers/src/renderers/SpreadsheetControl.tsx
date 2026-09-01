@@ -240,6 +240,10 @@ const SpreadsheetControl = ({
   // columnHeader && rowHeader together is rejected above, so there's never a
   // meaningful corner cell to show here — the header row/column consumes it.
   const cornerLabel = ''
+  // rowHeader alone means every cell in the column-header row below is blank
+  // (see its own comment) — the whole row would just be dead space, so skip
+  // it entirely and lean on the row-label column's distinct styling instead.
+  const suppressColumnHeaderRow = rowHeader && !columnHeader
 
   // records-mode preview: no row/col "offset" concept (shapeSheet already
   // consumed the header row/column when building each record) — just the
@@ -371,23 +375,36 @@ const SpreadsheetControl = ({
         <Box mt="3">
           <Box style={{ overflow: 'auto', maxHeight: 420 }}>
             <Table.Root variant="surface" size="1">
-              <Table.Header>
-                <Table.Row>
-                  <Table.ColumnHeaderCell>{cornerLabel}</Table.ColumnHeaderCell>
-                  {colIndices.map((c) => (
-                    <Table.ColumnHeaderCell key={c}>
-                      {columnHeader ? formatCell(matrix[0]?.[c]) : columnLetter(c)}
-                    </Table.ColumnHeaderCell>
-                  ))}
-                </Table.Row>
-              </Table.Header>
+              {!suppressColumnHeaderRow && (
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell>{cornerLabel}</Table.ColumnHeaderCell>
+                    {colIndices.map((c) => (
+                      // This row only renders when rowHeader isn't the sole
+                      // flag set (see suppressColumnHeaderRow) — so reaching
+                      // here, either columnHeader is true (real labels) or
+                      // both are false (columnLetter fallback).
+                      <Table.ColumnHeaderCell key={c}>
+                        {columnHeader ? formatCell(matrix[0]?.[c]) : columnLetter(c)}
+                      </Table.ColumnHeaderCell>
+                    ))}
+                  </Table.Row>
+                </Table.Header>
+              )}
               <Table.Body>
                 {visibleRows.map((row, r) => {
                   const actualRow = rowOffset + r
                   return (
                     <Table.Row key={r}>
-                      <Table.RowHeaderCell>
-                        {rowHeader ? formatCell(matrix[actualRow]?.[0]) : actualRow + 1}
+                      <Table.RowHeaderCell
+                        style={rowHeader ? { fontWeight: 700, background: 'var(--gray-a3)' } : undefined}
+                      >
+                        {/* columnHeader alone means these are shaped into
+                            records keyed by row 1 — a 1/2/3 fallback number
+                            here isn't a real label, so it's suppressed (the
+                            column-header row above stays, since it's real
+                            labels there, not suppressed). */}
+                        {rowHeader ? formatCell(matrix[actualRow]?.[0]) : columnHeader ? '' : actualRow + 1}
                       </Table.RowHeaderCell>
                       {colIndices.map((c) => (
                         <Table.Cell key={c}>{formatCell(row[c])}</Table.Cell>
