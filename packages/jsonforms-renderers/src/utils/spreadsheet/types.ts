@@ -39,6 +39,13 @@ export interface DerivationResult {
   error?: string
 }
 
+// Either shape a persisted `sheet` can take: a raw, address-preserving
+// matrix (default), or an array of plain objects shaped by
+// utils/spreadsheet/process.ts's shapeSheet when x-spreadsheet.columnHeader
+// or .rowHeader is set at upload time. Told apart at read time, not via a
+// stored discriminant field — see process.ts's isRecordsSheet.
+export type SheetData = CellValue[][] | Record<string, CellValue>[]
+
 // Persisted value shape for SpreadsheetControl — the field's data is an
 // object, not a string key. No `fileName`: there's no storage service to
 // name a retrievable file for. `derivations` is keyed by each x-evaluate
@@ -48,6 +55,6 @@ export interface DerivationResult {
 // anywhere. Shared here (rather than kept private to SpreadsheetControl.tsx)
 // so sibling renderers, like ComputedControl, can read it with the same type.
 export interface SpreadsheetValue {
-  sheet?: CellValue[][]
+  sheet?: SheetData
   derivations: Record<string, DerivationResult>
 }
