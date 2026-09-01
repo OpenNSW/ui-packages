@@ -11,6 +11,7 @@ import {
   parseWorkbookToMatrix,
   columnLetter,
   processMatrix,
+  isRecordsSheet,
   SheetParseError,
   type CellValue,
   type FormulaConfigEntry,
@@ -24,9 +25,19 @@ interface XSpreadsheetOptions {
   maxSize?: number
   /** Include the parsed sheet in the persisted value, so it survives a reload. Default true. */
   persistSheet?: boolean
-  /** Use row 1's values as column labels instead of A/B/C. Default false. */
+  /**
+   * Use row 1's values as column labels in the preview, AND persist `sheet`
+   * as one record per data row, keyed by those labels, instead of a raw
+   * matrix. Default false. Cannot be combined with rowHeader — see
+   * docs/spreadsheet-value-shape.md.
+   */
   columnHeader?: boolean
-  /** Use column A's values as row labels instead of 1/2/3. Default false. */
+  /**
+   * Use column A's values as row labels in the preview, AND (only when
+   * columnHeader is not also set) persist `sheet` as one record per OTHER
+   * column, transposed, keyed by those labels. Default false. Cannot be
+   * combined with columnHeader — see docs/spreadsheet-value-shape.md.
+   */
   rowHeader?: boolean
   /** Render the grid preview at all. Default true — set false to show only computed values. */
   showSheet?: boolean
@@ -101,9 +112,18 @@ const SpreadsheetControl = ({
 
   // The grid always renders from localMatrix first — so even with
   // persistSheet: false, a fresh upload shows immediately this session, even
-  // though it won't survive a reload.
-  const matrix = localMatrix ?? value?.sheet ?? null
+  // though it won't survive a reload. localMatrix (this session's own
+  // freshly parsed upload) is always matrix-shaped — shaping only happens
+  // when building the PERSISTED value — so a fresh upload always renders via
+  // the matrix branch this session; only a reload (no localMatrix, reading
+  // the already-shaped persisted value back) can render via the records
+  // branch below. Told apart via isRecordsSheet, not a stored field.
+  const persistedSheet = value?.sheet ?? null
+  const matrix = localMatrix ?? (persistedSheet && !isRecordsSheet(persistedSheet) ? persistedSheet : null)
+  const records = localMatrix == null && persistedSheet && isRecordsSheet(persistedSheet) ? persistedSheet : null
   const derivations = value?.derivations ?? {}
+  // records != null always implies value != null (records is derived only
+  // from value?.sheet), so this already covers the records case too.
   const hasValue = matrix != null || value != null
 
   const processFile = useCallback(
@@ -144,15 +164,32 @@ const SpreadsheetControl = ({
       }
 
       setLocalMatrix(parsedMatrix)
-      const value = await processMatrix(parsedMatrix, xEvaluate, { persistSheet })
+      const value = await processMatrix(parsedMatrix, xEvaluate, { persistSheet, columnHeader, rowHeader })
       handleChange(path, value)
       setStatus('ready')
     },
-    [accept, maxSize, persistSheet, sheetName, xEvaluate, path, handleChange],
+    [accept, maxSize, persistSheet, columnHeader, rowHeader, sheetName, xEvaluate, path, handleChange],
   )
 
   if (visible === false) {
     return null
+  }
+
+  // columnHeader and rowHeader are independently meaningful for the persisted
+  // records shape (see shapeSheet in utils/spreadsheet/process.ts) — neither
+  // one is a safe default when both are set, so this is rejected outright
+  // rather than silently picking a winner.
+  if (columnHeader && rowHeader) {
+    return (
+      <Box mb="4">
+        <Text as="label" size="2" weight="bold">
+          {label}
+        </Text>
+        <Text size="2" color="red" style={{ display: 'block' }}>
+          Invalid x-spreadsheet config: columnHeader and rowHeader cannot both be true — pick one orientation.
+        </Text>
+      </Box>
+    )
   }
 
   if (!canEdit && !hasValue) return null
@@ -199,8 +236,21 @@ const SpreadsheetControl = ({
     Math.max(0, ...visibleRows.map((row) => Math.max(0, row.length - colOffset))),
   )
   const colIndices = Array.from({ length: colCount }, (_, i) => i + colOffset)
-  const showStoredNote = showSheet && matrix == null && value != null
-  const cornerLabel = columnHeader && rowHeader ? formatCell(matrix?.[0]?.[0]) : ''
+  const showStoredNote = showSheet && matrix == null && records == null && value != null
+  // columnHeader && rowHeader together is rejected above, so there's never a
+  // meaningful corner cell to show here — the header row/column consumes it.
+  const cornerLabel = ''
+
+  // records-mode preview: no row/col "offset" concept (shapeSheet already
+  // consumed the header row/column when building each record) — just the
+  // same MAX_PREVIEW_ROWS/COLS truncation the matrix branch above uses.
+  // Headers are the union of all VISIBLE records' own keys, not just the
+  // first record's — every record shapeSheet itself produces has an
+  // identical key set, so this only matters for a hand-supplied `data`
+  // value with non-uniform records (sheet crosses a serialization boundary
+  // — it isn't guaranteed to have been produced by shapeSheet).
+  const visibleRecords = records ? records.slice(0, MAX_PREVIEW_ROWS) : []
+  const recordHeaders = Array.from(new Set(visibleRecords.flatMap((r) => Object.keys(r)))).slice(0, MAX_PREVIEW_COLS)
 
   return (
     <Box mb="4">
@@ -351,6 +401,41 @@ const SpreadsheetControl = ({
           {bodyRows.length > MAX_PREVIEW_ROWS && (
             <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
               Showing first {MAX_PREVIEW_ROWS} of {bodyRows.length} rows
+            </Text>
+          )}
+        </Box>
+      )}
+
+      {/* ── Records-shaped sheet preview — reload of an already-persisted,
+          columnHeader/rowHeader-shaped value; mutually exclusive with the
+          matrix preview above ── */}
+      {records && showSheet && (
+        <Box mt="3">
+          <Box style={{ overflow: 'auto', maxHeight: 420 }}>
+            <Table.Root variant="surface" size="1">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell />
+                  {recordHeaders.map((key) => (
+                    <Table.ColumnHeaderCell key={key}>{key}</Table.ColumnHeaderCell>
+                  ))}
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {visibleRecords.map((record, r) => (
+                  <Table.Row key={r}>
+                    <Table.RowHeaderCell>{r + 1}</Table.RowHeaderCell>
+                    {recordHeaders.map((key) => (
+                      <Table.Cell key={key}>{formatCell(record[key])}</Table.Cell>
+                    ))}
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
+          </Box>
+          {records.length > MAX_PREVIEW_ROWS && (
+            <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+              Showing first {MAX_PREVIEW_ROWS} of {records.length} rows
             </Text>
           )}
         </Box>
