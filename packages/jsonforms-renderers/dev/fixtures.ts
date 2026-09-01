@@ -432,13 +432,13 @@ export const fixtures: Fixture[] = [
           type: 'object',
           title: 'Sales Data',
           description:
-            'Upload dev/sample-files/sales-data-sample.xlsx (regenerate via generate-sales-data-sample.cjs).',
+            "Upload dev/sample-files/sales-data-sample.xlsx (regenerate via generate-sales-data-sample.cjs). Since columnHeader is true, sales_data.sheet persists as one record per row (keyed by row 1's headers), not a raw matrix — see docs/spreadsheet-value-shape.md.",
           'x-spreadsheet': {
             accept: '.xlsx,.xls,.csv',
             maxSize: 10485760,
             persistSheet: true,
             columnHeader: true,
-            rowHeader: true,
+            rowHeader: false,
           },
           'x-evaluate': [{ id: 'total_quantity', label: 'Total Quantity', expression: '=SUM(D2:D4)' }],
           properties: {
@@ -485,6 +485,39 @@ export const fixtures: Fixture[] = [
         { type: 'Control', scope: '#/properties/unit_price' },
         { type: 'Control', scope: '#/properties/estimated_total' },
       ],
+    } as UISchemaElement,
+  },
+  {
+    id: 'spreadsheet-row-header',
+    name: 'Spreadsheet (rowHeader records)',
+    schema: {
+      type: 'object',
+      properties: {
+        quarterly_metrics: {
+          type: 'object',
+          title: 'Quarterly Metrics',
+          description:
+            "Upload dev/sample-files/quarterly-metrics-sample.xlsx (regenerate via generate-quarterly-metrics-sample.cjs) — column A holds each metric's name (row header), columns B-D hold one quarter each. With rowHeader: true and columnHeader: false, the persisted sheet is the TRANSPOSED records shape: each quarter becomes one record, keyed by column A's metric names — see docs/spreadsheet-value-shape.md. Contrast with 'Spreadsheet' and 'Computed Control (with Spreadsheet)', which both use columnHeader and persist one record per row instead.",
+          'x-spreadsheet': {
+            accept: '.xlsx,.xls,.csv',
+            maxSize: 10485760,
+            persistSheet: true,
+            columnHeader: false,
+            rowHeader: true,
+          },
+          'x-evaluate': [
+            { id: 'total_units_sold', label: 'Total Units Sold (all quarters)', expression: '=SUM(B2:D2)' },
+          ],
+          properties: {
+            sheet: { type: 'array' },
+            derivations: { type: 'object' },
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/quarterly_metrics' }],
     } as UISchemaElement,
   },
   {
