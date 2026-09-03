@@ -170,6 +170,40 @@ export const fixtures: Fixture[] = [
     data: { country: 'au' },
   },
   {
+    id: 'search-select-params',
+    name: 'Search Select (Fixed params)',
+    schema: {
+      type: 'object',
+      properties: {
+        asianCountry: {
+          type: 'string',
+          description: 'Same "countries" service as the other fixtures, scoped via x-search.params.continent',
+          'x-search': { service: 'countries', mode: 'large-searchable-list', params: { continent: 'asia' } },
+        },
+        europeanCountry: {
+          type: 'string',
+          description: 'Same service again, scoped to a different fixed continent',
+          'x-search': { service: 'countries', mode: 'large-searchable-list', params: { continent: 'europe' } },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/asianCountry',
+          options: { placeholder: 'Search an Asian country…' },
+        },
+        {
+          type: 'Control',
+          scope: '#/properties/europeanCountry',
+          options: { placeholder: 'Search a European country…' },
+        },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'search-select-object',
     name: 'Search Select (Object shape)',
     schema: {
