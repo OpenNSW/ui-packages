@@ -12,9 +12,15 @@ export interface SearchResult {
 
 export interface SearchService {
   // `signal` aborts when the query changes or the dropdown closes — must be honored to avoid stale results
-  search(args: { query: string; cursor?: unknown; signal: AbortSignal }): Promise<SearchResult>
+  // `params` carries the field's `x-search.params` (if any), letting one registered service back several fields that hit the same endpoint with different fixed filters
+  search(args: {
+    query: string
+    cursor?: unknown
+    signal: AbortSignal
+    params?: Record<string, unknown>
+  }): Promise<SearchResult>
   // `resolve` is optional — turns a single stored id to its display name for the selected option; if not provided, the control will use the raw id as the display name
-  resolve?(value: string): Promise<SearchOption | undefined>
+  resolve?(value: string, params?: Record<string, unknown>): Promise<SearchOption | undefined>
 }
 
 export type SearchServiceRegistry = Record<string, SearchService>

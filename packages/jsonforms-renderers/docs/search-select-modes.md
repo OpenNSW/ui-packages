@@ -19,6 +19,30 @@ below.
 service or a `mode` set to something other than one of the three values below renders as
 inline text in the dropdown instead of throwing.
 
+## Fixed extra arguments (`params`)
+
+One registered service can back several fields that hit the same endpoint with different
+fixed filters, via `x-search.params`:
+
+```jsonc
+{
+  "asianCountry": {
+    "type": "string",
+    "x-search": { "service": "countries", "mode": "large-searchable-list", "params": { "continent": "asia" } },
+  },
+  "europeanCountry": {
+    "type": "string",
+    "x-search": { "service": "countries", "mode": "large-searchable-list", "params": { "continent": "europe" } },
+  },
+}
+```
+
+`params` is forwarded as-is to both `search({ query, cursor, signal, params })` and
+`resolve(value, params)` — the service decides what to do with it (e.g. append it as a
+query filter). `params` is fixed per field: it comes from the schema, not from other
+fields' live values, so it can't express "filter this field by what was picked in that
+other field."
+
 ## The three modes
 
 | mode                    | fetch on open | typing          | pagination  |

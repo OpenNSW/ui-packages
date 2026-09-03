@@ -1,27 +1,31 @@
 import type { SearchOption, SearchServiceRegistry } from '../src'
 
 // Small fixed list so pagination (5/page) and search filtering are both easy to exercise by hand.
-const COUNTRIES: SearchOption[] = [
-  { id: 'au', name: 'Australia' },
-  { id: 'lk', name: 'Sri Lanka' },
-  { id: 'in', name: 'India' },
-  { id: 'mv', name: 'Maldives' },
-  { id: 'sg', name: 'Singapore' },
-  { id: 'my', name: 'Malaysia' },
-  { id: 'th', name: 'Thailand' },
-  { id: 'jp', name: 'Japan' },
-  { id: 'kr', name: 'South Korea' },
-  { id: 'cn', name: 'China' },
-  { id: 'us', name: 'United States' },
-  { id: 'gb', name: 'United Kingdom' },
+const COUNTRIES: (SearchOption & { continent: string })[] = [
+  { id: 'au', name: 'Australia', continent: 'oceania' },
+  { id: 'lk', name: 'Sri Lanka', continent: 'asia' },
+  { id: 'in', name: 'India', continent: 'asia' },
+  { id: 'mv', name: 'Maldives', continent: 'asia' },
+  { id: 'sg', name: 'Singapore', continent: 'asia' },
+  { id: 'my', name: 'Malaysia', continent: 'asia' },
+  { id: 'th', name: 'Thailand', continent: 'asia' },
+  { id: 'jp', name: 'Japan', continent: 'asia' },
+  { id: 'kr', name: 'South Korea', continent: 'asia' },
+  { id: 'cn', name: 'China', continent: 'asia' },
+  { id: 'us', name: 'United States', continent: 'north-america' },
+  { id: 'gb', name: 'United Kingdom', continent: 'europe' },
 ]
 
 const PAGE_SIZE = 5
 
 export const searchServices: SearchServiceRegistry = {
   countries: {
-    async search({ query, cursor }) {
-      const matches = query ? COUNTRIES.filter((c) => c.name.toLowerCase().includes(query.toLowerCase())) : COUNTRIES
+    // `params.continent`, when set, lets several fields reuse this one registered service to search the
+    // same endpoint scoped to different fixed subsets (e.g. an "Asian country" field vs a "European country" field).
+    async search({ query, cursor, params }) {
+      const continent = (params as { continent?: string } | undefined)?.continent
+      const scoped = continent ? COUNTRIES.filter((c) => c.continent === continent) : COUNTRIES
+      const matches = query ? scoped.filter((c) => c.name.toLowerCase().includes(query.toLowerCase())) : scoped
 
       // An empty query means "browse everything" — the only fetch small-list ever makes, and
       // large-searchable-list's initial one. Neither mode renders "Load more", so paging here would hide

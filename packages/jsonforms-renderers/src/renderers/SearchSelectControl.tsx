@@ -13,6 +13,9 @@ export type SearchSelectMode = 'small-list' | 'large-searchable-list' | 'large-p
 interface XSearchOptions {
   service: string
   mode?: SearchSelectMode
+  // fixed extra arguments forwarded to the service's search/resolve calls — lets one registered service back
+  // several fields hitting the same endpoint with different filters (e.g. category: 'books' vs category: 'movies')
+  params?: Record<string, unknown>
 }
 
 // shape of `data` for an object-typed `x-search` field (`type: "object"`); string-typed fields keep `data` as the raw id
@@ -50,6 +53,7 @@ const SearchSelectControl = ({
   const mode = xSearch.mode ?? 'large-paginated-list'
   const modeConfig = MODE_CONFIG[mode]
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
+  const searchParams = xSearch.params
   const service = useSearchService(serviceName)
 
   const isObjectMode = schema.type === 'object'
@@ -110,7 +114,7 @@ const SearchSelectControl = ({
     if (!service?.resolve) return
     let cancelled = false
     void service
-      .resolve(currentValue)
+      .resolve(currentValue, searchParams)
       .then((opt) => {
         if (!cancelled && opt) setSelectedOption(opt)
       })
@@ -120,7 +124,7 @@ const SearchSelectControl = ({
     return () => {
       cancelled = true
     }
-  }, [currentValue, currentLabel, isObjectMode, service])
+  }, [currentValue, currentLabel, isObjectMode, service, searchParams])
 
   const runSearch = useCallback(
     async (q: string, isLoadMore = false) => {
@@ -145,6 +149,7 @@ const SearchSelectControl = ({
           query: q,
           cursor: isLoadMore ? cursorRef.current : undefined,
           signal: controller.signal,
+          params: searchParams,
         })
 
         const newItems = result.options ?? []
@@ -164,7 +169,7 @@ const SearchSelectControl = ({
         }
       }
     },
-    [service, modeConfig?.paginated],
+    [service, modeConfig?.paginated, searchParams],
   )
 
   useEffect(() => {
