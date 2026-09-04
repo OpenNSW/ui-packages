@@ -5,6 +5,8 @@ import RadioControl, { RadioControlTester } from './RadioControl'
 import SelectControl, { SelectControlTester } from './SelectControl'
 import SearchSelectControl from './SearchSelectControl'
 import { SearchSelectControlTester } from './SearchSelectControlTester'
+import AutoFillGroupControl from './AutoFillGroupControl'
+import { AutoFillGroupControlTester } from './AutoFillGroupControlTester'
 import DateControl, { DateControlTester } from './DateControl'
 import {
   VerticalLayoutRenderer,
@@ -40,6 +42,7 @@ export const radixRenderers = [
   { tester: HorizontalLayoutTester, renderer: HorizontalLayoutRenderer },
   { tester: GroupLayoutTester, renderer: GroupLayoutRenderer },
   { tester: CategorizationLayoutTester, renderer: CategorizationLayoutRenderer },
+  { tester: AutoFillGroupControlTester, renderer: AutoFillGroupControl },
   { tester: FileControlTester, renderer: FileControl },
   { tester: SpreadsheetControlTester, renderer: SpreadsheetControl },
   { tester: ArrayControlTester, renderer: ArrayControl },
@@ -61,6 +64,8 @@ export { default as SpreadsheetControl } from './SpreadsheetControl'
 export * from './SpreadsheetControlTester'
 export { default as SearchSelectControl } from './SearchSelectControl'
 export * from './SearchSelectControlTester'
+export { default as AutoFillGroupControl } from './AutoFillGroupControl'
+export * from './AutoFillGroupControlTester'
 export { default as ArrayControl } from './ArrayControl'
 export * from './ArrayControlTester'
 export * from './LabelRenderer'
