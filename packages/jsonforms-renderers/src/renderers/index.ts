@@ -5,6 +5,8 @@ import RadioControl, { RadioControlTester } from './RadioControl'
 import SelectControl, { SelectControlTester } from './SelectControl'
 import SearchSelectControl from './SearchSelectControl'
 import { SearchSelectControlTester } from './SearchSelectControlTester'
+import DependentSelectControl from './DependentSelectControl'
+import { DependentSelectControlTester } from './DependentSelectControlTester'
 import DateControl, { DateControlTester } from './DateControl'
 import {
   VerticalLayoutRenderer,
@@ -34,6 +36,7 @@ export const radixRenderers = [
   { tester: BooleanControlTester, renderer: BooleanControl },
   { tester: RadioControlTester, renderer: RadioControl },
   { tester: SearchSelectControlTester, renderer: SearchSelectControl },
+  { tester: DependentSelectControlTester, renderer: DependentSelectControl },
   { tester: SelectControlTester, renderer: SelectControl },
   { tester: DateControlTester, renderer: DateControl },
   { tester: VerticalLayoutTester, renderer: VerticalLayoutRenderer },
@@ -61,6 +64,8 @@ export { default as SpreadsheetControl } from './SpreadsheetControl'
 export * from './SpreadsheetControlTester'
 export { default as SearchSelectControl } from './SearchSelectControl'
 export * from './SearchSelectControlTester'
+export { default as DependentSelectControl } from './DependentSelectControl'
+export * from './DependentSelectControlTester'
 export { default as ArrayControl } from './ArrayControl'
 export * from './ArrayControlTester'
 export * from './LabelRenderer'
