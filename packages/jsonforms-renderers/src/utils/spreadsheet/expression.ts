@@ -190,28 +190,50 @@ const CODE_TO_STRING: Record<FormulaErrorCode, string> = {
   NULL: '#NULL!',
 }
 
-// The public entry point. Never throws — each {label, expression} entry is
-// evaluated independently (its own try/catch) so one bad formula can't blank
-// the others, matching the hand-rolled engine's own contract.
+// Maps whatever evaluateExpression threw onto the Excel-style string shown in
+// the UI — the library's own FormulaError code when available, otherwise the
+// generic ERROR fallback.
+export function describeFormulaError(err: unknown): string {
+  const code = err instanceof FormulaError ? err.code : 'ERROR'
+  return CODE_TO_STRING[code]
+}
+
+// The public entry point. Never throws — each {id, label, expression} entry
+// is evaluated independently (its own try/catch) so one bad formula can't
+// blank the others, matching the hand-rolled engine's own contract.
 export async function evaluateExpressions(matrix: Matrix, config: FormulaConfigEntry[]): Promise<FormulaResult[]> {
   // A sheet that parsed to zero rows can't have meant any of these formulas —
   // every reference would be out-of-bounds anyway, but SUM/AVERAGE etc. over
   // an empty range would otherwise produce a confident-looking 0 instead of
   // an error.
   if (matrix.length === 0) {
-    return config.map((entry) => ({ label: entry?.label ?? '(unknown)', value: null, error: CODE_TO_STRING.ERROR }))
+    return config.map((entry) => ({
+      id: typeof entry?.id === 'string' ? entry.id : '(unknown)',
+      label: entry?.label ?? '(unknown)',
+      value: null,
+      error: CODE_TO_STRING.ERROR,
+    }))
   }
 
   return Promise.all(
     config.map(async (entry) => {
       try {
-        if (!entry || typeof entry.label !== 'string' || typeof entry.expression !== 'string') {
+        if (
+          !entry ||
+          typeof entry.label !== 'string' ||
+          typeof entry.expression !== 'string' ||
+          typeof entry.id !== 'string'
+        ) {
           throw new FormulaError('ERROR')
         }
-        return { label: entry.label, value: await evaluateExpression(matrix, entry.expression) }
+        return { id: entry.id, label: entry.label, value: await evaluateExpression(matrix, entry.expression) }
       } catch (err) {
-        const code = err instanceof FormulaError ? err.code : 'ERROR'
-        return { label: entry?.label ?? '(unknown)', value: null, error: CODE_TO_STRING[code] }
+        return {
+          id: typeof entry?.id === 'string' ? entry.id : '(unknown)',
+          label: entry?.label ?? '(unknown)',
+          value: null,
+          error: describeFormulaError(err),
+        }
       }
     }),
   )

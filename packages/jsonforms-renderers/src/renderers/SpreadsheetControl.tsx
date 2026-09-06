@@ -91,7 +91,7 @@ const SpreadsheetControl = ({
   const value = (data ?? null) as SpreadsheetValue | null
 
   const [status, setStatus] = useState<Status>(() =>
-    value?.sheet || (value?.derivations?.length ?? 0) > 0 ? 'ready' : 'empty',
+    value?.sheet || Object.keys(value?.derivations ?? {}).length > 0 ? 'ready' : 'empty',
   )
   const [error, setError] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -102,7 +102,7 @@ const SpreadsheetControl = ({
   // persistSheet: false, a fresh upload shows immediately this session, even
   // though it won't survive a reload.
   const matrix = localMatrix ?? value?.sheet ?? null
-  const derivations = value?.derivations ?? []
+  const derivations = value?.derivations ?? {}
   const hasValue = matrix != null || value != null
 
   const processFile = useCallback(
@@ -361,14 +361,14 @@ const SpreadsheetControl = ({
       )}
 
       {/* ── Computed values panel — only when x-evaluate produced something ── */}
-      {derivations.length > 0 && (
+      {Object.keys(derivations).length > 0 && (
         <Box mt="3">
           <Text size="2" weight="bold" as="div" mb="1">
             Computed values
           </Text>
           <Flex direction="column" gap="1">
-            {derivations.map((d, i) => (
-              <Flex key={i} justify="between">
+            {Object.entries(derivations).map(([id, d]) => (
+              <Flex key={id} justify="between">
                 <Text size="2">{d.label}</Text>
                 {d.error ? (
                   <Text size="2" color="red">

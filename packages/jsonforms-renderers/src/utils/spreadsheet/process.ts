@@ -1,5 +1,5 @@
 import { evaluateExpressions } from './expression'
-import type { CellValue, FormulaConfigEntry, SpreadsheetValue } from './types'
+import type { CellValue, DerivationResult, FormulaConfigEntry, SpreadsheetValue } from './types'
 
 export interface ProcessMatrixOptions {
   persistSheet?: boolean
@@ -13,6 +13,17 @@ export async function processMatrix(
   formulas: FormulaConfigEntry[],
   options: ProcessMatrixOptions = {},
 ): Promise<SpreadsheetValue> {
-  const derivations = await evaluateExpressions(matrix, formulas)
+  const results = await evaluateExpressions(matrix, formulas)
+  // Keyed by id (not an array) — a duplicate/malformed id collides
+  // last-write-wins here, where it previously got its own array slot;
+  // accepted for simplicity since ids are schema-author-controlled.
+  // Object.create(null), not {} — an id of "__proto__" would otherwise set
+  // the object's prototype instead of creating an enumerable own property,
+  // silently dropping that derivation from Object.keys/entries and from
+  // JSON serialization.
+  const derivations: Record<string, DerivationResult> = Object.create(null)
+  for (const { id, label, value, error } of results) {
+    derivations[id] = error === undefined ? { label, value } : { label, value, error }
+  }
   return options.persistSheet !== false ? { sheet: matrix, derivations } : { derivations }
 }

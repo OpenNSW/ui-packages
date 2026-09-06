@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { evaluateExpression, evaluateExpressions } from './expression'
 import { FormulaError } from './reference'
 import { parseWorkbookToMatrix } from './parse'
-import type { FormulaErrorCode, Matrix } from './types'
+import type { FormulaConfigEntry, FormulaErrorCode, Matrix } from './types'
 
 // evaluateExpression is async now (dynamic import of both libraries, plus the
 // library's own parse may itself be async) — every call site below must
@@ -507,37 +507,37 @@ describe('IFS', () => {
 describe('evaluateExpressions', () => {
   it('never throws and computes the exact spec example', async () => {
     const results = await evaluateExpressions(matrix, [
-      { label: 'Total Quantity', expression: '=SUM(B2:B5)' },
-      { label: 'Total Price', expression: '=SUM(B2:B5)*100' },
+      { id: 'total-quantity', label: 'Total Quantity', expression: '=SUM(B2:B5)' },
+      { id: 'total-price', label: 'Total Price', expression: '=SUM(B2:B5)*100' },
     ])
 
     expect(results).toEqual([
-      { label: 'Total Quantity', value: 50 },
-      { label: 'Total Price', value: 5000 },
+      { id: 'total-quantity', label: 'Total Quantity', value: 50 },
+      { id: 'total-price', label: 'Total Price', value: 5000 },
     ])
   })
 
   it('isolates a bad expression so it does not blank the others', async () => {
     const results = await evaluateExpressions(matrix, [
-      { label: 'Good 1', expression: '=SUM(B2:B5)' },
-      { label: 'Bad', expression: '=FOO(B2)' },
-      { label: 'Good 2', expression: '=SUM(B2:B5)*2' },
+      { id: 'good-1', label: 'Good 1', expression: '=SUM(B2:B5)' },
+      { id: 'bad', label: 'Bad', expression: '=FOO(B2)' },
+      { id: 'good-2', label: 'Good 2', expression: '=SUM(B2:B5)*2' },
     ])
 
-    expect(results[0]).toEqual({ label: 'Good 1', value: 50 })
+    expect(results[0]).toEqual({ id: 'good-1', label: 'Good 1', value: 50 })
     expect(results[1].value).toBeNull()
     expect(results[1].error).toBe('#NAME?')
-    expect(results[2]).toEqual({ label: 'Good 2', value: 100 })
+    expect(results[2]).toEqual({ id: 'good-2', label: 'Good 2', value: 100 })
   })
 
   it('maps each error code to its Excel-style string', async () => {
     const results = await evaluateExpressions(matrix, [
-      { label: 'ref', expression: '=B10' },
-      { label: 'value', expression: '=A2+1' },
-      { label: 'div0', expression: '=10/0' },
-      { label: 'name', expression: '=FOO(B2)' },
-      { label: 'error', expression: '=SUM(B2:B5' },
-      { label: 'na', expression: '=MATCH(999,B2:B5)' },
+      { id: 'ref', label: 'ref', expression: '=B10' },
+      { id: 'value', label: 'value', expression: '=A2+1' },
+      { id: 'div0', label: 'div0', expression: '=10/0' },
+      { id: 'name', label: 'name', expression: '=FOO(B2)' },
+      { id: 'error', label: 'error', expression: '=SUM(B2:B5' },
+      { id: 'na', label: 'na', expression: '=MATCH(999,B2:B5)' },
     ])
 
     expect(results.map((r) => r.error)).toEqual(['#REF!', '#VALUE!', '#DIV/0!', '#NAME?', '#ERROR!', '#N/A'])
@@ -551,40 +551,69 @@ describe('evaluateExpressions', () => {
   it('a zero-row matrix produces #ERROR! for every entry instead of a confident-looking 0', async () => {
     const emptyMatrix: Matrix = []
     const results = await evaluateExpressions(emptyMatrix, [
-      { label: 'Total', expression: '=SUM(A1:A5)' },
-      { label: 'Average', expression: '=AVERAGE(A1:A5)' },
+      { id: 'total', label: 'Total', expression: '=SUM(A1:A5)' },
+      { id: 'average', label: 'Average', expression: '=AVERAGE(A1:A5)' },
     ])
     expect(results).toEqual([
-      { label: 'Total', value: null, error: '#ERROR!' },
-      { label: 'Average', value: null, error: '#ERROR!' },
+      { id: 'total', label: 'Total', value: null, error: '#ERROR!' },
+      { id: 'average', label: 'Average', value: null, error: '#ERROR!' },
     ])
   })
 
   it('never throws even when individual entries are structurally malformed, not just when their expressions fail', async () => {
-    // Exercises the `!entry || typeof entry.label !== 'string' || typeof entry.expression !== 'string'`
-    // guard directly: null/undefined entries, entries missing fields, and wrong-typed fields must all
-    // degrade to an ERROR result for that slot without throwing or affecting neighboring good entries.
+    // Exercises the `!entry || typeof entry.label !== 'string' || typeof entry.expression !== 'string' ||
+    // typeof entry.id !== 'string'` guard directly: null/undefined entries, entries missing fields, and
+    // wrong-typed fields must all degrade to an ERROR result for that slot without throwing or affecting
+    // neighboring good entries.
     const config = [
-      { label: 'Good 1', expression: '=SUM(B2:B5)' },
+      { id: 'good-1', label: 'Good 1', expression: '=SUM(B2:B5)' },
       null,
       undefined,
       {},
-      { label: 123, expression: '=SUM(B2:B2)' },
-      { label: 'missing-expression' },
-      { expression: '=SUM(B2:B2)' },
-      { label: 'Good 2', expression: '=SUM(B2:B5)*2' },
-    ] as unknown as Array<{ label: string; expression: string }>
+      { id: 'bad-label', label: 123, expression: '=SUM(B2:B2)' },
+      { id: 'missing-expression', label: 'missing-expression' },
+      { id: 'missing-label', expression: '=SUM(B2:B2)' },
+      { id: 'good-2', label: 'Good 2', expression: '=SUM(B2:B5)*2' },
+    ] as unknown as FormulaConfigEntry[]
 
     const results = await evaluateExpressions(matrix, config)
 
     expect(results).toHaveLength(8)
-    expect(results[0]).toEqual({ label: 'Good 1', value: 50 })
-    expect(results[7]).toEqual({ label: 'Good 2', value: 100 })
+    expect(results[0]).toEqual({ id: 'good-1', label: 'Good 1', value: 50 })
+    expect(results[7]).toEqual({ id: 'good-2', label: 'Good 2', value: 100 })
     // Every malformed slot in between resolved to a well-formed ERROR result, not a crash.
     for (const bad of [results[1], results[2], results[3], results[4], results[5], results[6]]) {
       expect(bad.value).toBeNull()
       expect(bad.error).toBe('#ERROR!')
     }
+  })
+
+  it('passes id through into the result on the success path', async () => {
+    const results = await evaluateExpressions(matrix, [
+      { id: 'qty-total', label: 'Total Quantity', expression: '=SUM(B2:B5)' },
+    ])
+    expect(results).toEqual([{ id: 'qty-total', label: 'Total Quantity', value: 50 }])
+  })
+
+  it('passes id through on the error/catch path', async () => {
+    const results = await evaluateExpressions(matrix, [{ id: 'bad-formula', label: 'Bad', expression: '=FOO(B2)' }])
+    expect(results).toEqual([{ id: 'bad-formula', label: 'Bad', value: null, error: '#NAME?' }])
+  })
+
+  it('rejects an entry missing id with the same #ERROR! result a missing label/expression produces today', async () => {
+    const config = [{ label: 'No Id', expression: '=SUM(B2:B5)' }] as unknown as FormulaConfigEntry[]
+    const results = await evaluateExpressions(matrix, config)
+    expect(results).toEqual([{ id: '(unknown)', label: 'No Id', value: null, error: '#ERROR!' }])
+  })
+
+  it('falls back to "(unknown)" for a present but non-string id, on both the empty-matrix and catch paths', async () => {
+    const config = [{ id: 1, label: 'Numeric Id', expression: '=SUM(B2:B5)' }] as unknown as FormulaConfigEntry[]
+
+    const catchPathResults = await evaluateExpressions(matrix, config)
+    expect(catchPathResults).toEqual([{ id: '(unknown)', label: 'Numeric Id', value: null, error: '#ERROR!' }])
+
+    const emptyMatrixResults = await evaluateExpressions([] as Matrix, config)
+    expect(emptyMatrixResults).toEqual([{ id: '(unknown)', label: 'Numeric Id', value: null, error: '#ERROR!' }])
   })
 })
 

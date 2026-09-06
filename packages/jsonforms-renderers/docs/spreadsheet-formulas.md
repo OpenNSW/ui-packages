@@ -4,9 +4,24 @@
 
 ```json
 "x-evaluate": [
-  { "label": "Total Quantity", "expression": "=SUM(I2:I6)" }
+  { "id": "total_quantity", "label": "Total Quantity", "expression": "=SUM(I2:I6)" }
 ]
 ```
+
+Each entry's `id` is mandatory and doubles as the key `SpreadsheetControl` persists its result under — `derivations` is an object keyed by id (`Record<string, {label, value, error?}>`), not an array, so a sibling field can address one specific result directly (e.g. `budget.derivations.total_quantity.value`) instead of searching an array for a matching label. For the entry above, a successful upload persists:
+
+```json
+{
+  "sheet": [
+    /* the uploaded rows */
+  ],
+  "derivations": {
+    "total_quantity": { "label": "Total Quantity", "value": 27000 }
+  }
+}
+```
+
+Any schema describing this field's shape (see the `spreadsheet` fixture in `dev/fixtures.ts` for a full example) must declare `derivations` as `type: "object"`, not `"array"` — otherwise a successful, correctly-computed write fails AJV validation.
 
 Cell and range addressing is literal (`B2`, `I2:I6`), the same as in Excel — row 1 is always the sheet's first row, column A is always the sheet's first column, regardless of the control's `columnHeader`/`rowHeader` display options.
 
