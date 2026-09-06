@@ -357,7 +357,22 @@ export const fixtures: Fixture[] = [
           ],
           properties: {
             sheet: { type: 'array' },
-            derivations: { type: 'array' },
+            // Keyed by each x-evaluate entry's id (see SpreadsheetValue),
+            // not an array — must stay in lockstep with that type whenever
+            // the persist shape changes again, or AJV rejects an otherwise
+            // valid processMatrix write.
+            derivations: {
+              type: 'object',
+              additionalProperties: {
+                type: 'object',
+                properties: {
+                  label: { type: 'string' },
+                  value: {},
+                  error: { type: 'string' },
+                },
+                required: ['label', 'value'],
+              },
+            },
           },
         },
       },
