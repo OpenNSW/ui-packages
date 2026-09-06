@@ -443,7 +443,18 @@ export const fixtures: Fixture[] = [
           'x-evaluate': [{ id: 'total_quantity', label: 'Total Quantity', expression: '=SUM(D2:D4)' }],
           properties: {
             sheet: { type: 'array' },
-            derivations: { type: 'object' },
+            derivations: {
+              type: 'object',
+              additionalProperties: {
+                type: 'object',
+                properties: {
+                  label: { type: 'string' },
+                  value: {},
+                  error: { type: 'string' },
+                },
+                required: ['label', 'value'],
+              },
+            },
           },
         },
         unit_price: {
