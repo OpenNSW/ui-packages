@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from '../utils/computed'
 import type { ComputedInput } from '../utils/computed'
-import { isEditable } from '../utils/editable'
 import type { CellValue } from '../utils/spreadsheet'
 
 interface XComputedOptions {
@@ -29,16 +28,7 @@ const DEFAULT_FORMAT = '{value}'
 const DEFAULT_DECIMALS = 2
 const EMPTY_INPUTS: Record<string, ComputedInput> = {}
 
-const ComputedControl = ({
-  data,
-  handleChange,
-  path,
-  label,
-  schema,
-  visible = true,
-  enabled,
-  readonly,
-}: ComputedControlProps) => {
+const ComputedControl = ({ data, handleChange, path, label, schema, visible = true }: ComputedControlProps) => {
   useClearWhenHidden(visible, path, handleChange, null)
 
   const xComputed = schema?.['x-computed']
@@ -46,11 +36,6 @@ const ComputedControl = ({
   const formula = xComputed?.formula ?? ''
   const format = xComputed?.format ?? DEFAULT_FORMAT
   const decimals = xComputed?.decimals ?? DEFAULT_DECIMALS
-  // Not editable: there's nothing for this field to react to (no sibling
-  // edits can happen), so it must never recompute — just trust whatever's
-  // already persisted. Mirrors SpreadsheetControl, which never reprocesses
-  // an already-persisted value on render either.
-  const canEdit = isEditable(enabled, readonly)
 
   // Every render, not just inside the effect below — this is what lets the
   // effect correctly re-fire the moment a SIBLING's data changes (e.g. a
@@ -63,22 +48,29 @@ const ComputedControl = ({
   // fresh object every render even when its contents are unchanged.
   const inputsKey = resolvedInputs ? JSON.stringify(resolvedInputs) : null
 
-  // Lazy initializers so a readonly mount with an already-correct persisted
-  // value renders it immediately — no "Not yet available" -> "Computing…"
-  // flash while the (unnecessary, in this case) effect below would
-  // otherwise still be settling.
-  const [status, setStatus] = useState<Status>(() => (!canEdit && data != null ? 'ok' : 'unavailable'))
-  const [value, setValue] = useState<CellValue | null>(() => (!canEdit ? ((data as CellValue | null) ?? null) : null))
+  // No enabled/readonly awareness here, deliberately — x-computed's own
+  // presence on a field IS the complete signal that it's entirely
+  // calculated, not manually entered. There's no legitimate case where a
+  // schema author configures x-computed but wants recomputation skipped: a
+  // field's own `readOnly`/`enabled` (this field's, or the whole form's)
+  // means "the user can't type into this," never "stop calculating it" —
+  // this control has no editable input to disable in the first place. A
+  // schema author who wants a static, non-computed display value simply
+  // omits x-computed (falls to the plain NumberControl instead). Contrast
+  // with SpreadsheetControl, whose own-field `readOnly` genuinely means
+  // "don't accept a new upload" — a real interactive gate this control
+  // doesn't have an equivalent of.
+  //
+  // Lazy initializers so an already-persisted value renders immediately on
+  // mount — no "Not yet available" -> "Computing…" flash — regardless of
+  // whether this mount will end up recomputing (it always will, once inputs
+  // resolve; see the effect below for how it avoids re-flashing then too).
+  const [status, setStatus] = useState<Status>(() => (typeof data === 'number' ? 'ok' : 'unavailable'))
+  const [value, setValue] = useState<CellValue | null>(() => (typeof data === 'number' ? data : null))
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!canEdit) {
-      // Readonly: trust whatever's already persisted, never recompute.
-      setStatus(data != null ? 'ok' : 'unavailable')
-      setValue((data as CellValue | null) ?? null)
-      setError(null)
-      return
-    }
+    if (!visible) return // don't touch anything while hidden — useClearWhenHidden already cleared data
 
     let cancelled = false
 
@@ -93,24 +85,33 @@ const ComputedControl = ({
       return
     }
 
-    // Synchronous, before the async formula evaluation below — the engine's
-    // formula-parsing libraries are dynamically imported on first use (see
-    // evaluateExpression's own module comment), so the very first evaluation
-    // per page load can take noticeably longer than subsequent ones.
-    setStatus('loading')
+    // Only drop to the spinner when there's nothing already-good to keep
+    // showing in its place — a recompute of an already-persisted value
+    // settles silently instead of flashing "Computing…" every time a
+    // sibling changes. The functional updater reads the CURRENT status
+    // without needing it in the deps array (which would make this effect
+    // re-fire on its own state changes).
+    setStatus((current) => (current === 'ok' ? current : 'loading'))
 
     void evaluateComputedFormula(resolvedInputs, formula).then((result) => {
       if (cancelled) return
 
-      if (result.status === 'error') {
+      // ComputedControlTester only matches type: 'number' schemas, but the
+      // formula engine can still return a non-number (e.g. a CONCATENATE-
+      // style expression yields a string) — treat that as a computation
+      // error rather than persisting schema-invalid data.
+      const resolved = result.status === 'ok' && typeof result.value === 'number' ? result.value : null
+
+      if (resolved === null) {
         setStatus('error')
-        setError(result.error ?? 'Unable to compute value.')
+        setError(
+          result.status === 'error' ? (result.error ?? 'Unable to compute value.') : 'Computed value must be a number.',
+        )
         setValue(null)
         if (data !== null) handleChange(path, null)
         return
       }
 
-      const resolved = result.value ?? null
       setStatus('ok')
       setError(null)
       setValue(resolved)
@@ -120,14 +121,10 @@ const ComputedControl = ({
     return () => {
       cancelled = true
     }
-    // Deliberately keyed on the resolved inputs, formula, and canEdit only —
-    // not on `data`/`path`/`handleChange`, which this effect itself writes
-    // to. canEdit flipping true (readonly -> editable) re-fires this to
-    // resume reactive recomputation; flipping false (editable -> readonly)
-    // re-fires it into the early-return above, syncing state to whatever
-    // data was at that moment and settling there.
+    // Deliberately keyed on the resolved inputs, formula, and visible only —
+    // not on `data`/`path`/`handleChange`, which this effect itself writes to.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputsKey, formula, canEdit])
+  }, [inputsKey, formula, visible])
 
   if (visible === false) {
     return null
@@ -167,4 +164,5 @@ const ComputedControl = ({
   )
 }
 
-export default withJsonFormsControlProps(ComputedControl)
+const JsonFormsComputedControl = withJsonFormsControlProps(ComputedControl)
+export default JsonFormsComputedControl
