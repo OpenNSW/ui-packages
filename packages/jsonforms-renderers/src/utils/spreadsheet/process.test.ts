@@ -52,4 +52,14 @@ describe('processMatrix', () => {
     ])
     expect(result.derivations).toEqual({ dup: { label: 'Second', value: 10 } })
   })
+
+  it('an id of "__proto__" is stored as a real enumerable entry, not a prototype override', async () => {
+    const result = await processMatrix(matrix, [{ id: '__proto__', label: 'Reserved', expression: '=SUM(B2:B3)' }])
+    expect(Object.prototype.hasOwnProperty.call(result.derivations, '__proto__')).toBe(true)
+    expect(Object.keys(result.derivations)).toEqual(['__proto__'])
+    // A bare `__proto__:` key in object-literal syntax is itself special-cased
+    // by JS (sets the prototype instead of a data property) — a computed key
+    // sidesteps that so this assertion actually tests what it says.
+    expect(JSON.parse(JSON.stringify(result.derivations))).toEqual({ ['__proto__']: { label: 'Reserved', value: 30 } })
+  })
 })

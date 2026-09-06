@@ -17,7 +17,11 @@ export async function processMatrix(
   // Keyed by id (not an array) — a duplicate/malformed id collides
   // last-write-wins here, where it previously got its own array slot;
   // accepted for simplicity since ids are schema-author-controlled.
-  const derivations: Record<string, DerivationResult> = {}
+  // Object.create(null), not {} — an id of "__proto__" would otherwise set
+  // the object's prototype instead of creating an enumerable own property,
+  // silently dropping that derivation from Object.keys/entries and from
+  // JSON serialization.
+  const derivations: Record<string, DerivationResult> = Object.create(null)
   for (const { id, label, value, error } of results) {
     derivations[id] = error === undefined ? { label, value } : { label, value, error }
   }
