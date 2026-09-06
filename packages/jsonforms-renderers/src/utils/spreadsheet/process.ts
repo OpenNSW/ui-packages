@@ -1,8 +1,110 @@
 import { evaluateExpressions } from './expression'
-import type { CellValue, DerivationResult, FormulaConfigEntry, SpreadsheetValue } from './types'
+import type { CellValue, DerivationResult, FormulaConfigEntry, SheetData, SpreadsheetValue } from './types'
 
-export interface ProcessMatrixOptions {
+export interface ShapeSheetOptions {
+  columnHeader?: boolean
+  rowHeader?: boolean
+}
+
+export interface ProcessMatrixOptions extends ShapeSheetOptions {
   persistSheet?: boolean
+}
+
+// Shapes a raw matrix into what gets persisted as `sheet`. Never touches
+// formula evaluation — only ever called when building the PERSISTED value,
+// after derivations are already computed against the original, unshaped
+// matrix. Both flags true is a schema-authoring error, not a "pick a
+// winner" situation — each orientation is independently meaningful in real
+// usage, so silently guessing would silently discard the other.
+//
+// Same format-agnostic contract as processMatrix below (see its own
+// comment): this operates purely on the normalized CellValue[][] matrix,
+// never on the original file format. A future XML (or any other) upload
+// path only needs to produce that same matrix shape — with, if it wants
+// records-shaping, a real header row/column at position 0 in it, the same
+// convention columnHeader/rowHeader already use for the preview table
+// today — and this function works on it completely unchanged. Not adding
+// any further pluggability (e.g. an injectable key-extraction strategy)
+// ahead of that actually existing: the one real assumption here (keys come
+// from row/column 0 of the matrix) is already the existing convention, not
+// a new one, and speculatively generalizing further for a format that
+// doesn't exist yet isn't worth it until its actual needs are known.
+export function shapeSheet(matrix: CellValue[][], options: ShapeSheetOptions = {}): SheetData {
+  if (options.columnHeader && options.rowHeader) {
+    throw new Error(
+      'x-spreadsheet: columnHeader and rowHeader cannot both be true — pick one orientation for the persisted sheet shape.',
+    )
+  }
+  if (options.columnHeader) return rowsToRecords(matrix)
+  if (options.rowHeader) return columnsToRecords(matrix)
+  return matrix
+}
+
+// Fixed, timezone-independent stringification for a header/column-A cell.
+// String(date)/date.toString() renders in the LOCAL time zone, which would
+// make the persisted record's KEYS vary depending on which time zone the
+// uploading browser is in; date.toISOString() (fixed, UTC) doesn't. Only
+// display formatting (formatCell, SpreadsheetControl.tsx) is allowed to be
+// locale-aware — persisted keys must be deterministic.
+function cellKey(cell: CellValue): string | null {
+  if (cell == null || cell === '') return null
+  if (cell instanceof Date) return cell.toISOString()
+  return String(cell)
+}
+
+// columnHeader: row 1 = keys, every row after it = one record. A blank/null
+// header cell contributes no key (that column is absent from every record,
+// not present under a stringified "null"/""). A data row shorter than the
+// header fills missing trailing values with null; a row longer than the
+// header silently drops its unheaded trailing cells. A duplicate header
+// value collides last-write-wins (mirrors the existing duplicate x-evaluate
+// id precedent in processMatrix below).
+function rowsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
+  const [headerRow, ...bodyRows] = matrix
+  if (!headerRow) return []
+  const keys = headerRow.map(cellKey)
+  return bodyRows.map((row) => {
+    // Object.create(null), not {} — a header cell of "__proto__" would
+    // otherwise set the record's prototype instead of creating an
+    // enumerable own property, silently dropping that column from
+    // Object.keys/entries and JSON serialization. Same fix already applied
+    // to processMatrix's derivations accumulator below (#32) — worse here
+    // since these keys come from the uploaded file, not a schema-author-
+    // controlled x-evaluate id.
+    const record: Record<string, CellValue> = Object.create(null)
+    keys.forEach((key, i) => {
+      if (key == null) return
+      record[key] = row[i] ?? null
+    })
+    return record
+  })
+}
+
+// rowHeader: column A = keys (on every row), every OTHER column = one
+// record, transposed. Column A is fully consumed as the key source,
+// symmetric with how row 1 is fully consumed above. Same blank/duplicate
+// handling as rowsToRecords, transposed.
+function columnsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
+  const keys = matrix.map((row) => cellKey(row[0]))
+  const width = Math.max(0, ...matrix.map((row) => row.length))
+  const colCount = Math.max(0, width - 1)
+  return Array.from({ length: colCount }, (_, i) => {
+    const col = i + 1
+    const record: Record<string, CellValue> = Object.create(null)
+    keys.forEach((key, r) => {
+      if (key == null) return
+      record[key] = matrix[r][col] ?? null
+    })
+    return record
+  })
+}
+
+// Told apart at read time, not via a stored field: a matrix row is itself
+// an array; a record is a plain object. Array.isArray(undefined) is false,
+// so an empty persisted sheet ([]) reads as "records" — harmless, since
+// SpreadsheetControl renders zero rows for an empty sheet either way.
+export function isRecordsSheet(sheet: SheetData): sheet is Record<string, CellValue>[] {
+  return !Array.isArray(sheet[0])
 }
 
 // Matrix-in, persisted-value-out. Deliberately format-agnostic: doesn't care
@@ -25,5 +127,6 @@ export async function processMatrix(
   for (const { id, label, value, error } of results) {
     derivations[id] = error === undefined ? { label, value } : { label, value, error }
   }
-  return options.persistSheet !== false ? { sheet: matrix, derivations } : { derivations }
+  if (options.persistSheet === false) return { derivations }
+  return { sheet: shapeSheet(matrix, options), derivations }
 }
