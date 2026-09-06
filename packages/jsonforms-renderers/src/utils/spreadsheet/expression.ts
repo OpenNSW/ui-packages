@@ -208,7 +208,7 @@ export async function evaluateExpressions(matrix: Matrix, config: FormulaConfigE
   // an error.
   if (matrix.length === 0) {
     return config.map((entry) => ({
-      id: entry?.id ?? '(unknown)',
+      id: typeof entry?.id === 'string' ? entry.id : '(unknown)',
       label: entry?.label ?? '(unknown)',
       value: null,
       error: CODE_TO_STRING.ERROR,
@@ -229,7 +229,7 @@ export async function evaluateExpressions(matrix: Matrix, config: FormulaConfigE
         return { id: entry.id, label: entry.label, value: await evaluateExpression(matrix, entry.expression) }
       } catch (err) {
         return {
-          id: entry?.id ?? '(unknown)',
+          id: typeof entry?.id === 'string' ? entry.id : '(unknown)',
           label: entry?.label ?? '(unknown)',
           value: null,
           error: describeFormulaError(err),

@@ -605,6 +605,16 @@ describe('evaluateExpressions', () => {
     const results = await evaluateExpressions(matrix, config)
     expect(results).toEqual([{ id: '(unknown)', label: 'No Id', value: null, error: '#ERROR!' }])
   })
+
+  it('falls back to "(unknown)" for a present but non-string id, on both the empty-matrix and catch paths', async () => {
+    const config = [{ id: 1, label: 'Numeric Id', expression: '=SUM(B2:B5)' }] as unknown as FormulaConfigEntry[]
+
+    const catchPathResults = await evaluateExpressions(matrix, config)
+    expect(catchPathResults).toEqual([{ id: '(unknown)', label: 'Numeric Id', value: null, error: '#ERROR!' }])
+
+    const emptyMatrixResults = await evaluateExpressions([] as Matrix, config)
+    expect(emptyMatrixResults).toEqual([{ id: '(unknown)', label: 'Numeric Id', value: null, error: '#ERROR!' }])
+  })
 })
 
 // Reads the real dev/sample-files/spreadsheet-sample.xlsx fixture (the same
