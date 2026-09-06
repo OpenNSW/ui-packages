@@ -72,7 +72,14 @@ export async function evaluateComputedFormula(
 // String(); null/undefined -> ''.
 export function formatComputedValue(value: CellValue | null | undefined, decimals: number): string {
   if (value == null) return ''
-  if (typeof value === 'number') return value.toFixed(decimals)
+  if (typeof value === 'number') return value.toFixed(clampDecimals(decimals))
   if (value instanceof Date) return value.toLocaleDateString()
   return String(value)
+}
+
+// Number.prototype.toFixed throws outside [0, 100] and for non-finite input
+// — clamp rather than let a misconfigured x-computed.decimals crash rendering.
+function clampDecimals(decimals: number): number {
+  if (!Number.isFinite(decimals)) return 0
+  return Math.min(100, Math.max(0, Math.trunc(decimals)))
 }

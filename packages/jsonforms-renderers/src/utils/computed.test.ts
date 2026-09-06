@@ -128,4 +128,15 @@ describe('formatComputedValue', () => {
     expect(formatComputedValue(null, 2)).toBe('')
     expect(formatComputedValue(undefined, 2)).toBe('')
   })
+
+  it('clamps decimals to [0, 100] instead of letting toFixed throw', () => {
+    expect(formatComputedValue(1.25, -1)).toBe('1')
+    expect(formatComputedValue(1.25, 0)).toBe('1')
+    expect(formatComputedValue(1.25, 100)).toBe((1.25).toFixed(100))
+    expect(formatComputedValue(1.25, 101)).toBe((1.25).toFixed(100))
+  })
+
+  it('treats a non-finite decimals value as 0', () => {
+    expect(formatComputedValue(1.25, NaN)).toBe('1')
+  })
 })
