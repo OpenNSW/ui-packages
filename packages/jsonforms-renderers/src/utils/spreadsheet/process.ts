@@ -40,22 +40,38 @@ export function shapeSheet(matrix: CellValue[][], options: ShapeSheetOptions = {
   return matrix
 }
 
+// Fixed, timezone-independent stringification for a header/column-A cell.
+// String(date)/date.toString() renders in the LOCAL time zone, which would
+// make the persisted record's KEYS vary depending on which time zone the
+// uploading browser is in; date.toISOString() (fixed, UTC) doesn't. Only
+// display formatting (formatCell, SpreadsheetControl.tsx) is allowed to be
+// locale-aware — persisted keys must be deterministic.
+function cellKey(cell: CellValue): string | null {
+  if (cell == null || cell === '') return null
+  if (cell instanceof Date) return cell.toISOString()
+  return String(cell)
+}
+
 // columnHeader: row 1 = keys, every row after it = one record. A blank/null
 // header cell contributes no key (that column is absent from every record,
 // not present under a stringified "null"/""). A data row shorter than the
 // header fills missing trailing values with null; a row longer than the
 // header silently drops its unheaded trailing cells. A duplicate header
 // value collides last-write-wins (mirrors the existing duplicate x-evaluate
-// id precedent in processMatrix below). Keys use plain String(), not the
-// display-oriented formatCell (SpreadsheetControl.tsx) — formatCell's Date
-// handling is locale-dependent, which would make persisted KEYS vary by the
-// uploading browser's locale; only display formatting may be locale-aware.
+// id precedent in processMatrix below).
 function rowsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
   const [headerRow, ...bodyRows] = matrix
   if (!headerRow) return []
-  const keys = headerRow.map((cell) => (cell == null || cell === '' ? null : String(cell)))
+  const keys = headerRow.map(cellKey)
   return bodyRows.map((row) => {
-    const record: Record<string, CellValue> = {}
+    // Object.create(null), not {} — a header cell of "__proto__" would
+    // otherwise set the record's prototype instead of creating an
+    // enumerable own property, silently dropping that column from
+    // Object.keys/entries and JSON serialization. Same fix already applied
+    // to processMatrix's derivations accumulator below (#32) — worse here
+    // since these keys come from the uploaded file, not a schema-author-
+    // controlled x-evaluate id.
+    const record: Record<string, CellValue> = Object.create(null)
     keys.forEach((key, i) => {
       if (key == null) return
       record[key] = row[i] ?? null
@@ -69,12 +85,12 @@ function rowsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
 // symmetric with how row 1 is fully consumed above. Same blank/duplicate
 // handling as rowsToRecords, transposed.
 function columnsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
-  const keys = matrix.map((row) => (row[0] == null || row[0] === '' ? null : String(row[0])))
+  const keys = matrix.map((row) => cellKey(row[0]))
   const width = Math.max(0, ...matrix.map((row) => row.length))
   const colCount = Math.max(0, width - 1)
   return Array.from({ length: colCount }, (_, i) => {
     const col = i + 1
-    const record: Record<string, CellValue> = {}
+    const record: Record<string, CellValue> = Object.create(null)
     keys.forEach((key, r) => {
       if (key == null) return
       record[key] = matrix[r][col] ?? null
