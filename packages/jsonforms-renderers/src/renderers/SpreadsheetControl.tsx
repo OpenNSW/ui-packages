@@ -164,7 +164,15 @@ const SpreadsheetControl = ({
       }
 
       setLocalMatrix(parsedMatrix)
-      const value = await processMatrix(parsedMatrix, xEvaluate, { persistSheet, columnHeader, rowHeader })
+
+      let value: SpreadsheetValue
+      try {
+        value = await processMatrix(parsedMatrix, xEvaluate, { persistSheet, columnHeader, rowHeader })
+      } catch (err) {
+        setStatus('error')
+        setError(err instanceof Error ? err.message : 'Failed to process the uploaded spreadsheet.')
+        return
+      }
       handleChange(path, value)
       setStatus('ready')
     },
