@@ -71,6 +71,27 @@ describe('shapeSheet', () => {
       ]
       expect(shapeSheet(matrix, { columnHeader: true })).toEqual([{ '100': 'x', true: 'y' }])
     })
+
+    it('a header value of "__proto__" is a real, enumerable own key, not a prototype override', () => {
+      const matrix: CellValue[][] = [
+        ['__proto__', 'B'],
+        ['x', 'y'],
+      ]
+      const [record] = shapeSheet(matrix, { columnHeader: true }) as Record<string, CellValue>[]
+      expect(Object.prototype.hasOwnProperty.call(record, '__proto__')).toBe(true)
+      expect(Object.keys(record)).toEqual(['__proto__', 'B'])
+      expect(JSON.parse(JSON.stringify(record))).toEqual({ ['__proto__']: 'x', B: 'y' })
+    })
+
+    it('keys a Date header cell by its fixed ISO instant, not the locale-dependent String(date)', () => {
+      const date = new Date(Date.UTC(2026, 0, 15, 12, 30))
+      const matrix: CellValue[][] = [
+        [date, 'B'],
+        ['x', 'y'],
+      ]
+      const [record] = shapeSheet(matrix, { columnHeader: true }) as Record<string, CellValue>[]
+      expect(Object.keys(record)).toEqual([date.toISOString(), 'B'])
+    })
   })
 
   describe('rowHeader (columnHeader not set)', () => {
@@ -122,6 +143,27 @@ describe('shapeSheet', () => {
         ['Revenue', 200],
       ]
       expect(shapeSheet(matrix, { rowHeader: true })).toEqual([{ Metric: 'Q1', Revenue: 200 }])
+    })
+
+    it('a column-A value of "__proto__" is a real, enumerable own key, not a prototype override', () => {
+      const matrix: CellValue[][] = [
+        ['__proto__', 'Q1'],
+        ['Revenue', 100],
+      ]
+      const [record] = shapeSheet(matrix, { rowHeader: true }) as Record<string, CellValue>[]
+      expect(Object.prototype.hasOwnProperty.call(record, '__proto__')).toBe(true)
+      expect(Object.keys(record)).toEqual(['__proto__', 'Revenue'])
+      expect(JSON.parse(JSON.stringify(record))).toEqual({ ['__proto__']: 'Q1', Revenue: 100 })
+    })
+
+    it('keys a Date column-A cell by its fixed ISO instant, not the locale-dependent String(date)', () => {
+      const date = new Date(Date.UTC(2026, 0, 15, 12, 30))
+      const matrix: CellValue[][] = [
+        [date, 'Q1'],
+        ['Revenue', 100],
+      ]
+      const [record] = shapeSheet(matrix, { rowHeader: true }) as Record<string, CellValue>[]
+      expect(Object.keys(record)).toEqual([date.toISOString(), 'Revenue'])
     })
   })
 
