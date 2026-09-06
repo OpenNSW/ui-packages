@@ -1,7 +1,7 @@
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import type { ControlProps, JsonSchema } from '@jsonforms/core'
-import { Box, Card, Flex, IconButton, Spinner, Table, Text } from '@radix-ui/themes'
-import { UploadIcon, FileTextIcon, Cross2Icon, CheckCircledIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
+import { Box, Flex, IconButton, Spinner, Table, Text, Tooltip } from '@radix-ui/themes'
+import { UploadIcon, Cross2Icon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
 import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { getErrorMessage } from '../utils/error'
@@ -67,13 +67,22 @@ const SpreadsheetControl = ({
   required,
   schema,
   enabled,
+  readonly,
   errors,
   visible = true,
 }: SpreadsheetControlProps) => {
   useClearWhenHidden(visible, path, handleChange, null)
 
   const isValid = !errors || errors.length === 0
-  const isEnabled = enabled !== false
+  // `enabled` and `readonly` are independently computed by @jsonforms/core
+  // (see mapStateToControlProps) — `enabled` only happens to reflect a schema
+  // `readOnly: true` under this library's default `separateReadonlyFromDisabled:
+  // false` config, and never reflects a uischema READONLY *rule* in any config.
+  // Since this is a generic, reusable renderer whose consuming app may use
+  // either, check both explicitly rather than relying on that incidental fold-in.
+  // For this control, "disabled" and "readonly" mean the same thing: show
+  // whatever data exists, but don't allow uploading a replacement or removing it.
+  const canEdit = enabled !== false && readonly !== true
 
   const xSpreadsheet: XSpreadsheetOptions = schema?.['x-spreadsheet'] ?? {}
   const xEvaluate: FormulaConfigEntry[] = schema?.['x-evaluate'] ?? EMPTY_FORMULAS
@@ -155,12 +164,12 @@ const SpreadsheetControl = ({
     return null
   }
 
-  if (!isEnabled && !hasValue) return null
+  if (!canEdit && !hasValue) return null
 
   const handleDrag = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!isEnabled) return
+    if (!canEdit) return
     setDragActive(e.type === 'dragenter' || e.type === 'dragover')
   }
 
@@ -168,7 +177,7 @@ const SpreadsheetControl = ({
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-    if (!isEnabled) return
+    if (!canEdit) return
     if (e.dataTransfer.files?.[0]) void processFile(e.dataTransfer.files[0])
   }
 
@@ -180,7 +189,7 @@ const SpreadsheetControl = ({
   }
 
   const handleRemove = () => {
-    if (!isEnabled) return
+    if (!canEdit) return
     setLocalMatrix(null)
     setError(null)
     setStatus('empty')
@@ -206,47 +215,58 @@ const SpreadsheetControl = ({
     <Box mb="4">
       {/* ── Header row ── */}
       <Flex align="center" justify="between" mb="2">
-        <Text as="label" size="2" weight="bold">
-          {label}
-          {required && <Text color="red"> *</Text>}
-        </Text>
+        <Flex align="center" gap="1">
+          <Text as="label" size="2" weight="bold">
+            {label}
+            {required && <Text color="red"> *</Text>}
+          </Text>
+          {hasValue && canEdit && (
+            <>
+              <Tooltip content="Replace spreadsheet">
+                <IconButton
+                  variant="ghost"
+                  size="1"
+                  onClick={() => inputRef.current?.click()}
+                  aria-label="Replace spreadsheet"
+                >
+                  <UploadIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip content="Remove spreadsheet">
+                <IconButton
+                  variant="ghost"
+                  size="1"
+                  color="gray"
+                  onClick={handleRemove}
+                  aria-label="Remove spreadsheet"
+                >
+                  <Cross2Icon />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+        </Flex>
         <Text size="1" color="gray">
           {formatBytes(maxSize)} max · {formatAccept(accept)}
         </Text>
       </Flex>
 
-      {/* ── Current-file summary row ── */}
-      {hasValue && (
-        <Card size="2" variant="surface" mb="2">
-          <Flex align="center" gap="3">
-            <Box
-              style={{
-                background: 'var(--blue-3)',
-                padding: 8,
-                borderRadius: 6,
-                color: 'var(--blue-9)',
-                flexShrink: 0,
-              }}
-            >
-              <FileTextIcon width="20" height="20" />
-            </Box>
-            <Box style={{ flex: 1 }}>
-              <Text size="2" weight="bold">
-                Spreadsheet uploaded
-              </Text>
-            </Box>
-            <CheckCircledIcon style={{ color: 'var(--green-9)', width: 18, height: 18 }} />
-            {isEnabled && (
-              <IconButton variant="ghost" color="gray" onClick={handleRemove} aria-label="Remove spreadsheet">
-                <Cross2Icon />
-              </IconButton>
-            )}
-          </Flex>
-        </Card>
+      {/* A replacement upload's validation/parse error has nowhere else to
+          render once a file already exists — the dropzone (the only other
+          place `error` is shown) is hidden whenever `hasValue` is true. */}
+      {hasValue && error && (
+        <Text size="2" color="red" mb="2" style={{ display: 'block' }}>
+          {error}
+        </Text>
       )}
 
-      {/* ── Drop zone — replaces the file, never edits it in place ── */}
-      {isEnabled && (
+      {/* Hidden file input — triggered by the empty-state dropzone below and
+          by the compact "replace" button in the header once a file exists. */}
+      <input ref={inputRef} type="file" style={{ display: 'none' }} accept={accept} onChange={handleInputChange} />
+
+      {/* ── Drop zone — empty state only; once a file exists, the compact
+          header controls above handle replace/remove instead ── */}
+      {canEdit && !hasValue && (
         <div
           role="button"
           tabIndex={0}
@@ -272,7 +292,6 @@ const SpreadsheetControl = ({
                 : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50',
           ].join(' ')}
         >
-          <input ref={inputRef} type="file" style={{ display: 'none' }} accept={accept} onChange={handleInputChange} />
           <Flex direction="column" align="center" gap="2">
             {status === 'parsing' ? (
               <>
@@ -295,7 +314,7 @@ const SpreadsheetControl = ({
               <>
                 <UploadIcon style={{ width: 32, height: 32, color: 'var(--gray-8)' }} />
                 <Text size="2" weight="medium">
-                  {hasValue ? 'Click to upload a replacement' : 'Click to upload or drag and drop'}
+                  Click to upload or drag and drop
                 </Text>
                 <Text size="1" color="gray">
                   {formatBytes(maxSize)} max · {formatAccept(accept)}
