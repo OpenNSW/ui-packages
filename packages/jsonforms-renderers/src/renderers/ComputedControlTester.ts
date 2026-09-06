@@ -7,8 +7,11 @@ import type { JsonSchema } from '@jsonforms/core'
 // (10) and SearchSelectControlTester (3).
 export const ComputedControlTester = rankWith(
   5,
-  schemaMatches(
-    (schema: JsonSchema) =>
-      schema.type === 'number' && typeof (schema as Record<string, unknown>)['x-computed'] === 'object',
-  ),
+  schemaMatches((schema: JsonSchema) => {
+    // typeof null === 'object' in JS — exclude it explicitly, or
+    // "x-computed": null would match and evaluate an empty configuration
+    // instead of falling through to the normal number control.
+    const xComputed = (schema as Record<string, unknown>)['x-computed']
+    return schema.type === 'number' && typeof xComputed === 'object' && xComputed !== null
+  }),
 )
