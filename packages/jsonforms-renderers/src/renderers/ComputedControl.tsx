@@ -47,19 +47,29 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
   // Cheap, stable dependency key for the effect below — resolvedInputs is a
   // fresh object every render even when its contents are unchanged.
   const inputsKey = resolvedInputs ? JSON.stringify(resolvedInputs) : null
+  // The WHOLE FORM's own readonly flag (whatever the consuming app passed to
+  // <JsonForms readonly={...}>) — not this field's own enabled/readonly,
+  // which never gates anything here (see the note below). Gates PERSISTING
+  // only, not computing: while genuinely read-only (e.g. viewing a
+  // previously-submitted record), writing a freshly recomputed value back
+  // risks silently rewriting history if the formula/inputs have since
+  // changed, and can trigger an unwanted autosave in a host app whose
+  // onChange wiring is shared between edit and view screens.
+  const formReadonly = ctx.readonly === true
 
-  // No enabled/readonly awareness here, deliberately — x-computed's own
-  // presence on a field IS the complete signal that it's entirely
-  // calculated, not manually entered. There's no legitimate case where a
-  // schema author configures x-computed but wants recomputation skipped: a
-  // field's own `readOnly`/`enabled` (this field's, or the whole form's)
-  // means "the user can't type into this," never "stop calculating it" —
-  // this control has no editable input to disable in the first place. A
-  // schema author who wants a static, non-computed display value simply
-  // omits x-computed (falls to the plain NumberControl instead). Contrast
-  // with SpreadsheetControl, whose own-field `readOnly` genuinely means
-  // "don't accept a new upload" — a real interactive gate this control
-  // doesn't have an equivalent of.
+  // No THIS FIELD's own enabled/readonly awareness here, deliberately —
+  // x-computed's own presence on a field IS the complete signal that it's
+  // entirely calculated, not manually entered. There's no legitimate case
+  // where a schema author configures x-computed but wants recomputation
+  // skipped: a field's own `readOnly`/`enabled` means "the user can't type
+  // into this," never "stop calculating it" — this control has no editable
+  // input to disable in the first place. A schema author who wants a
+  // static, non-computed display value simply omits x-computed (falls to
+  // the plain NumberControl instead). Contrast with SpreadsheetControl,
+  // whose own-field `readOnly` genuinely means "don't accept a new upload"
+  // — a real interactive gate this control doesn't have an equivalent of.
+  // (The WHOLE FORM's readonly — `formReadonly` above — is a different,
+  // legitimate signal; see the effect below.)
   //
   // Lazy initializers so an already-persisted value renders immediately on
   // mount — no "Not yet available" -> "Computing…" flash — regardless of
@@ -74,14 +84,28 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
 
     let cancelled = false
 
+    // Always resolve/compute regardless of readonly — x-computed's presence
+    // is itself the complete "always calculate" signal (see the comment
+    // block above). PERSISTING that result is a different question: while
+    // the whole form is genuinely read-only (formReadonly — not this
+    // field's own schema readOnly, which stays irrelevant here), writing a
+    // freshly recomputed value back risks silently rewriting a historical
+    // record if the formula/inputs have since changed, and can trigger an
+    // unwanted autosave in a host app that reacts to onChange. Render the
+    // computed number and leave data alone instead.
+    const persist = (next: CellValue | null) => {
+      if (formReadonly) return
+      // Loop-safety guard: this control only ever writes to its own path, so
+      // a sibling's data (which this effect otherwise depends on) doesn't
+      // change from that write — but guard anyway.
+      if (next !== (data ?? null)) handleChange(path, next)
+    }
+
     if (resolvedInputs === undefined) {
       setStatus('unavailable')
       setError(null)
       setValue(null)
-      // Loop-safety guard: this control only ever writes to its own path, so
-      // a sibling's data (which this effect otherwise depends on) doesn't
-      // change from that write — but guard anyway.
-      if (data !== null) handleChange(path, null)
+      persist(null)
       return
     }
 
@@ -98,9 +122,13 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
 
       // ComputedControlTester only matches type: 'number' schemas, but the
       // formula engine can still return a non-number (e.g. a CONCATENATE-
-      // style expression yields a string) — treat that as a computation
-      // error rather than persisting schema-invalid data.
-      const resolved = result.status === 'ok' && typeof result.value === 'number' ? result.value : null
+      // style expression yields a string) or a non-finite number (NaN,
+      // Infinity — e.g. a malformed expression) — treat both as a
+      // computation error rather than persisting schema-invalid data.
+      const resolved =
+        result.status === 'ok' && typeof result.value === 'number' && Number.isFinite(result.value)
+          ? result.value
+          : null
 
       if (resolved === null) {
         setStatus('error')
@@ -108,23 +136,24 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
           result.status === 'error' ? (result.error ?? 'Unable to compute value.') : 'Computed value must be a number.',
         )
         setValue(null)
-        if (data !== null) handleChange(path, null)
+        persist(null)
         return
       }
 
       setStatus('ok')
       setError(null)
       setValue(resolved)
-      if (resolved !== (data ?? null)) handleChange(path, resolved)
+      persist(resolved)
     })
 
     return () => {
       cancelled = true
     }
-    // Deliberately keyed on the resolved inputs, formula, and visible only —
-    // not on `data`/`path`/`handleChange`, which this effect itself writes to.
+    // Deliberately keyed on the resolved inputs, formula, visible, and
+    // formReadonly only — not on `data`/`path`/`handleChange`, which this
+    // effect itself writes to.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputsKey, formula, visible])
+  }, [inputsKey, formula, visible, formReadonly])
 
   if (visible === false) {
     return null
