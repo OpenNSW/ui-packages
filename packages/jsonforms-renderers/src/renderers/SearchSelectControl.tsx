@@ -221,7 +221,11 @@ const SearchSelectControl = ({
     }
   }, [inputValue, open, fetchOnOpen, runSearch])
 
-  useClearWhenHidden(visible, path, handleChange, isObjectMode ? undefined : null)
+  // `undefined` in both modes — the scalar branch used to clear with `null`,
+  // but the underlying schema is `type: 'string'` there, which null doesn't
+  // satisfy, so a hidden-then-shown field would be stuck on "must be string".
+  // undefined restores the pristine "nothing selected" state in either mode.
+  useClearWhenHidden(visible, path, handleChange)
 
   if (visible === false) {
     return null
@@ -246,7 +250,10 @@ const SearchSelectControl = ({
 
   const onClear = (e: React.SyntheticEvent) => {
     e.stopPropagation()
-    handleChange(path, isObjectMode ? undefined : null)
+    // `undefined` in both modes, same reason as the clear-when-hidden call
+    // above: `null` doesn't satisfy the scalar branch's `type: 'string'`, so
+    // clearing a selection would leave the field failing validation.
+    handleChange(path, undefined)
     setSelectedOption(undefined)
   }
 
