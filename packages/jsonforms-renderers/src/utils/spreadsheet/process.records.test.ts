@@ -56,12 +56,12 @@ describe('shapeSheet', () => {
       expect(shapeSheet(matrix, { columnHeader: true })).toEqual([{ A: 'x', B: 'y' }])
     })
 
-    it('a duplicate header value collides last-write-wins', () => {
+    it('rejects a duplicate header value instead of silently colliding', () => {
       const matrix: CellValue[][] = [
         ['A', 'A'],
         ['1', '2'],
       ]
-      expect(shapeSheet(matrix, { columnHeader: true })).toEqual([{ A: '2' }])
+      expect(() => shapeSheet(matrix, { columnHeader: true })).toThrow(/duplicate columnHeader value "A"/)
     })
 
     it('stringifies a non-string header cell with plain String(), not locale-aware formatting', () => {
@@ -136,13 +136,13 @@ describe('shapeSheet', () => {
       ])
     })
 
-    it('a duplicate column-A value collides last-write-wins', () => {
+    it('rejects a duplicate column-A value instead of silently colliding', () => {
       const matrix: CellValue[][] = [
         ['Metric', 'Q1'],
         ['Revenue', 100],
         ['Revenue', 200],
       ]
-      expect(shapeSheet(matrix, { rowHeader: true })).toEqual([{ Metric: 'Q1', Revenue: 200 }])
+      expect(() => shapeSheet(matrix, { rowHeader: true })).toThrow(/duplicate rowHeader value "Revenue"/)
     })
 
     it('a column-A value of "__proto__" is a real, enumerable own key, not a prototype override', () => {

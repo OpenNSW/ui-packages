@@ -52,17 +52,35 @@ function cellKey(cell: CellValue): string | null {
   return String(cell)
 }
 
+// Unlike processMatrix's `derivations` id (schema-author-controlled, so a
+// collision is a config mistake it's reasonable to resolve leniently), these
+// keys come straight from the uploaded file — a collision there means the
+// file itself doesn't actually identify a column/row uniquely, so silently
+// picking a winner would silently drop real data. Reject instead.
+function assertUniqueKeys(keys: (string | null)[], option: 'columnHeader' | 'rowHeader'): void {
+  const seen = new Set<string>()
+  for (const key of keys) {
+    if (key == null) continue
+    if (seen.has(key)) {
+      throw new Error(
+        `x-spreadsheet: duplicate ${option} value "${key}" — every ${option === 'columnHeader' ? 'column header' : 'column-A value'} must be unique to shape as records.`,
+      )
+    }
+    seen.add(key)
+  }
+}
+
 // columnHeader: row 1 = keys, every row after it = one record. A blank/null
 // header cell contributes no key (that column is absent from every record,
 // not present under a stringified "null"/""). A data row shorter than the
 // header fills missing trailing values with null; a row longer than the
 // header silently drops its unheaded trailing cells. A duplicate header
-// value collides last-write-wins (mirrors the existing duplicate x-evaluate
-// id precedent in processMatrix below).
+// value is rejected outright (see assertUniqueKeys above).
 function rowsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
   const [headerRow, ...bodyRows] = matrix
   if (!headerRow) return []
   const keys = headerRow.map(cellKey)
+  assertUniqueKeys(keys, 'columnHeader')
   return bodyRows.map((row) => {
     // Object.create(null), not {} — a header cell of "__proto__" would
     // otherwise set the record's prototype instead of creating an
@@ -86,6 +104,7 @@ function rowsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
 // handling as rowsToRecords, transposed.
 function columnsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
   const keys = matrix.map((row) => cellKey(row[0]))
+  assertUniqueKeys(keys, 'rowHeader')
   const width = Math.max(0, ...matrix.map((row) => row.length))
   const colCount = Math.max(0, width - 1)
   return Array.from({ length: colCount }, (_, i) => {

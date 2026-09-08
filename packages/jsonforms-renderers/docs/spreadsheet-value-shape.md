@@ -31,7 +31,7 @@ There's no stored discriminant field. Told apart at read time the same way `Spre
 
 ## Duplicate keys
 
-A duplicate header value (`columnHeader`) or duplicate column-A value (`rowHeader`) collides last-write-wins in every affected record — the same convention already used for a duplicate `x-evaluate` id colliding in the `derivations` map. Not flagged as an error either place; ids/headers are schema-author-controlled.
+A duplicate header value (`columnHeader`) or duplicate column-A value (`rowHeader`) is rejected outright — `shapeSheet` throws (caught the same way `SpreadsheetControl` already catches a parse failure, surfacing a configuration-error message instead of rendering anything). This is unlike a duplicate `x-evaluate` id in the `derivations` map, which collides last-write-wins: an `x-evaluate` id is schema-author-controlled, so a collision there is a config mistake reasonable to resolve leniently, but a header/column-A value comes from whatever's in the uploaded file — a collision there means the file itself doesn't actually identify a column/row uniquely, so silently picking a winner would silently drop real data instead.
 
 A blank/null header (or column-A) cell contributes no key at all, rather than a stringified `"null"`/`""` — that column (or row, for `rowHeader`) is simply absent from every record.
 
