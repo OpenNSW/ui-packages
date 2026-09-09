@@ -31,6 +31,9 @@ export const ArrayControl = ({
 
   const items = Array.isArray(data) ? data : []
   const title = actualArraySchema.title || 'Array Items'
+  const options = (uischema.options ?? {}) as { addable?: boolean; removable?: boolean }
+  const canAdd = enabled && options.addable !== false
+  const canRemove = enabled && options.removable !== false
 
   const handleAddItem = () => {
     const newItem = createDefaultValue(validItemsSchema, rootSchema)
@@ -68,7 +71,7 @@ export const ArrayControl = ({
                   <Text size="3" weight="bold">
                     Item {index + 1}
                   </Text>
-                  {enabled && (
+                  {canRemove && (
                     <Button
                       type="button"
                       color="red"
@@ -111,7 +114,7 @@ export const ArrayControl = ({
           )
         })}
 
-        {enabled && (
+        {canAdd && (
           <Box mt="2">
             <Button type="button" variant="surface" onClick={handleAddItem}>
               <PlusIcon />
