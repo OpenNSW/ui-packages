@@ -550,6 +550,79 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'xml-spreadsheet',
+    name: 'XML + Spreadsheet',
+    schema: {
+      type: 'object',
+      properties: {
+        sales_document: {
+          type: 'object',
+          title: 'Sales Data Document',
+          description:
+            'Upload dev/sample-files/sales-data-sample.xml. This field only PARSES — its value is the parsed document itself, and it computes nothing.',
+          'x-xml': {
+            accept: '.xml,text/xml,application/xml',
+            maxSize: 5242880,
+            arrayPaths: ['salesData.sale'],
+          },
+        },
+        sales_totals: {
+          type: 'object',
+          title: 'Sales Totals',
+          description:
+            "Formulas over the array the field above parsed, reached by sourcePath — no upload of its own. The source can be ANY 2-D array or array of objects in form data, not just an XML document: an ArrayControl's items or another spreadsheet's `sheet` work identically. Records are flattened to a header row plus one row per record, so field names are row 1 and the data starts at row 2 — A=Date, B=Item, C=Category, D=Quantity. Things to try: (1) before uploading, this reads \"No data available yet\" and writes nothing to form data; (2) after uploading, note the live data holds the parsed document under the field above and only `derivations` here — the rows are never copied; (3) the 'broken' entry reports #REF! while every other entry still computes; (4) point sourcePath at something that isn't rows, e.g. sales_document.salesData, to see the invalid-source message.",
+          'x-spreadsheet': {
+            sourcePath: 'sales_document.salesData.sale',
+          },
+          'x-evaluate': [
+            { id: 'total_quantity', label: 'Total Quantity', expression: '=SUM(D2:D4)' },
+            { id: 'average_quantity', label: 'Average Quantity', expression: '=AVERAGE(D2:D4)' },
+            { id: 'line_count', label: 'Line Count', expression: '=COUNTA(B2:B4)' },
+            { id: 'categories', label: 'Categories', expression: '=TEXTJOIN(", ",TRUE,C2:C4)' },
+            { id: 'broken', label: 'Broken Reference (expects #REF!)', expression: '=SUM(Z2:Z4)' },
+          ],
+          // Source mode persists derivations only — no `sheet`, since the rows
+          // already live under sales_document.
+          properties: {
+            derivations: {
+              type: 'object',
+              additionalProperties: {
+                type: 'object',
+                properties: {
+                  label: { type: 'string' },
+                  // Empty schema on purpose: a result may be a number, string,
+                  // boolean, or null when the entry errored.
+                  value: {},
+                  error: { type: 'string' },
+                },
+                required: ['label', 'value'],
+              },
+            },
+          },
+        },
+        estimated_total: {
+          type: 'number',
+          title: 'Estimated Total',
+          description:
+            'x-computed reading a derivation from the field above — total_quantity * 2. Demonstrates the full decoupled chain: XmlControl parses, SpreadsheetControl evaluates, ComputedControl consumes.',
+          'x-computed': {
+            inputs: { quantity: 'sales_totals.derivations.total_quantity.value' },
+            formula: 'quantity * 2',
+            decimals: 2,
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/sales_document' },
+        { type: 'Control', scope: '#/properties/sales_totals' },
+        { type: 'Control', scope: '#/properties/estimated_total' },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'array',
     name: 'Array (objects)',
     schema: {
