@@ -177,9 +177,9 @@ function sameValue(a: CellValue | null | undefined, b: CellValue | null | undefi
 // key order in a stored map need not match the x-evaluate iteration order that
 // produced it, and a Date needs the normalization above.
 //
-// Used as the write guard in SpreadsheetControl's source mode, where the value
-// is an object rebuilt on every evaluation — so a reference check would always
-// report a change and dirty the form merely by opening a saved record.
+// Used as the write guard when SpreadsheetControl reads from a path, where the
+// value is an object rebuilt on every evaluation — so a reference check would
+// always report a change and dirty the form merely by opening a saved record.
 export function sameDerivations(
   a: Record<string, DerivationResult> | undefined,
   b: Record<string, DerivationResult> | undefined,
@@ -194,4 +194,43 @@ export function sameDerivations(
     const y = right[key]
     return x.label === y.label && x.error === y.error && sameValue(x.value, y.value)
   })
+}
+
+// One row of either SheetData shape: a matrix row is an array of cells, a
+// records row is a plain object. A shape mismatch is a difference, not a
+// coercion — the two are never interchangeable.
+function sameSheetRow(a: unknown, b: unknown): boolean {
+  if (a == null || b == null) return a === b
+  const isMatrixRow = Array.isArray(a)
+  if (isMatrixRow !== Array.isArray(b)) return false
+
+  if (isMatrixRow) {
+    const left = a as CellValue[]
+    const right = b as CellValue[]
+    return left.length === right.length && left.every((cell, i) => sameValue(cell, right[i]))
+  }
+
+  const left = a as Record<string, CellValue>
+  const right = b as Record<string, CellValue>
+  const keys = Object.keys(left)
+  if (keys.length !== Object.keys(right).length) return false
+  return keys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && sameValue(left[key], right[key]))
+}
+
+// Structural equality for two persisted sheets, on the same terms as
+// sameDerivations above: never JSON.stringify, and a Date has to compare equal
+// to the ISO string it round-trips to through JSON storage.
+//
+// Used as the write guard when persistSheet is set for a path source, where the
+// sheet is rebuilt from the resolved value on every evaluation. Without it,
+// opening a saved form would rewrite an identical sheet and mark it dirty on
+// mount. Comparing whole sheets is affordable because the effect it guards runs
+// only when the resolved source's reference changes, not on every keystroke.
+export function sameSheetData(a: SheetData | undefined, b: SheetData | undefined): boolean {
+  if (a === b) return true
+  if (a == null || b == null) return false
+  const left = a as unknown[]
+  const right = b as unknown[]
+  if (left.length !== right.length) return false
+  return left.every((row, i) => sameSheetRow(row, right[i]))
 }
