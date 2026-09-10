@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateExpressions } from './spreadsheet'
-import { recordsToMatrix, selectSheetSource, type DataRecord } from './records'
+import { evaluateExpressions, shapeSheet, type CellValue } from './spreadsheet'
+import { recordsToMatrix, selectSheetSource, transpose, type DataRecord } from './records'
 
 describe('selectSheetSource', () => {
   it('reports nothing at the path as missing', () => {
@@ -173,5 +173,54 @@ describe('recordsToMatrix', () => {
       ])
       expect(result.value).toBe(12)
     })
+  })
+})
+
+describe('transpose', () => {
+  it('swaps rows and columns', () => {
+    expect(
+      transpose([
+        ['Metric', 'Q1', 'Q2'],
+        ['Units', 100, 150],
+      ]),
+    ).toEqual([
+      ['Metric', 'Units'],
+      ['Q1', 100],
+      ['Q2', 150],
+    ])
+  })
+
+  it('pads a short row with null so the result is rectangular', () => {
+    expect(transpose([['a', 'b', 'c'], ['d']])).toEqual([
+      ['a', 'd'],
+      ['b', null],
+      ['c', null],
+    ])
+  })
+
+  it('is its own inverse for a rectangular matrix', () => {
+    const matrix = [
+      ['Metric', 'Q1', 'Q2'],
+      ['Units', 100, 150],
+      ['Revenue', 40, 55],
+    ]
+    expect(transpose(transpose(matrix))).toEqual(matrix)
+  })
+
+  it('round-trips a rowHeader sheet back to the matrix it was shaped from', () => {
+    // The reason this exists: shapeSheet's rowHeader branch builds one record
+    // per original COLUMN, so reading that back needs the quarter turn or the
+    // labels come out along row 1 instead of down column A.
+    const original = [
+      ['Metric', 'Q1', 'Q2'],
+      ['Units', 100, 150],
+      ['Revenue', 40, 55],
+    ]
+    const asRecords = shapeSheet(original, { rowHeader: true }) as Record<string, CellValue>[]
+    expect(transpose(recordsToMatrix(asRecords))).toEqual(original)
+  })
+
+  it('returns an empty matrix for no rows', () => {
+    expect(transpose([])).toEqual([])
   })
 })

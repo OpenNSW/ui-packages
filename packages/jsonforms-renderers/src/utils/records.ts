@@ -124,3 +124,21 @@ export function recordsToMatrix(records: DataRecord[]): CellValue[][] {
 
   return [header, ...rows]
 }
+
+// Swaps rows and columns, padding short rows with null so the result is
+// rectangular.
+//
+// recordsToMatrix always puts the keys in ROW 0, which is the layout
+// x-spreadsheet.columnHeader describes. rowHeader describes the other
+// orientation — keys down COLUMN A — so a records array being rendered or
+// addressed under rowHeader has to be turned a quarter turn first.
+//
+// That makes the two shapes round-trip. shapeSheet's columnsToRecords builds
+// one record per original COLUMN, keyed by column A; feeding those back through
+// recordsToMatrix and then transposing reproduces the matrix they came from,
+// which is what lets a reloaded rowHeader sheet render exactly as the uploaded
+// one did.
+export function transpose(matrix: CellValue[][]): CellValue[][] {
+  const width = Math.max(0, ...matrix.map((row) => row.length))
+  return Array.from({ length: width }, (_, col) => matrix.map((row) => row[col] ?? null))
+}
