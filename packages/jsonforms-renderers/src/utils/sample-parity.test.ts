@@ -19,7 +19,7 @@ const sampleFile = (name: string) => fileURLToPath(new URL(`../../dev/sample-fil
 // unrelated trailing bytes. Slice to this file's own view.
 function readArrayBuffer(name: string): ArrayBuffer {
   const buffer = readFileSync(sampleFile(name))
-  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
 }
 
 // The x-evaluate config both fixtures share, mirrored from dev/fixtures.ts.
@@ -32,7 +32,12 @@ const SALES_EVALUATE = [
 ]
 
 async function xlsxMatrix(): Promise<CellValue[][]> {
-  return (await parseWorkbookToMatrix(readArrayBuffer('sales-data-sample.xlsx'))).matrix
+  // Promise.resolve, not a bare await: parseWorkbookToMatrix is synchronous on
+  // this branch and asynchronous once the lazy-xlsx change (#47) lands. This
+  // accepts either, so whichever of the two merges first, the other doesn't
+  // silently start reading `.matrix` off a Promise.
+  const parsed = await Promise.resolve(parseWorkbookToMatrix(readArrayBuffer('sales-data-sample.xlsx')))
+  return parsed.matrix
 }
 
 // The same journey the control makes for a path source: parse, resolve the

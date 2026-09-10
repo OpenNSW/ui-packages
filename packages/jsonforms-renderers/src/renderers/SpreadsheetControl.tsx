@@ -427,25 +427,30 @@ const SpreadsheetControl = ({
       return
     }
 
-    // shapeSheet applies columnHeader/rowHeader exactly as it does for an
-    // upload, so the persisted shape doesn't depend on where the rows came
-    // from. It throws on duplicate keys, which in an effect has to land in the
-    // error state rather than propagate.
-    let sheet: SheetData | undefined
-    if (persistSheet) {
-      try {
-        sheet = shapeSheet(formulaMatrix, { columnHeader, rowHeader })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to shape the source data.')
-        return
-      }
-    }
-    setError(null)
-
     void evaluateExpressions(formulaMatrix, xEvaluate).then((results) => {
       // A source change landing mid-evaluation could otherwise let an older
       // result overwrite a newer one.
       if (cancelled) return
+
+      // shapeSheet applies columnHeader/rowHeader exactly as it does for an
+      // upload, so the persisted shape doesn't depend on where the rows came
+      // from. It throws on duplicate keys, which here has to land in the error
+      // state rather than propagate.
+      //
+      // Shaping happens in this callback rather than in the effect body so no
+      // setState runs synchronously during the effect, which would trigger a
+      // second render pass on every evaluation.
+      let sheet: SheetData | undefined
+      if (persistSheet) {
+        try {
+          sheet = shapeSheet(formulaMatrix, { columnHeader, rowHeader })
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to shape the source data.')
+          return
+        }
+      }
+      setError(null)
+
       const derivations = buildDerivations(results)
       persist(sheet === undefined ? { derivations } : { sheet, derivations })
     })
