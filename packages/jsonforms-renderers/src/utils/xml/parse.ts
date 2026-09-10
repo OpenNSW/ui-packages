@@ -18,7 +18,14 @@ export const MAX_XML_CHARS = 5_000_000
 // Only the XML prolog is scanned for an encoding declaration — it must precede
 // the root element, so a bounded prefix is always sufficient.
 const PROLOG_SCAN_CHARS = 1024
-const ENCODING_DECLARATION = /<\?xml[^>]*\bencoding\s*=\s*["']([^"']+)["']/i
+// Anchored, and requiring whitespace after `xml`, so this matches ONLY the
+// declaration. Without both, `<?xml-stylesheet ... encoding="..."?>` — a
+// processing instruction, not a declaration — matches too, and a perfectly
+// valid UTF-8 document gets rejected for an encoding it never declared.
+// Anchoring is safe: a declaration preceded by anything, whitespace included,
+// is not a declaration, and the validator rejects that case with a more
+// accurate message than this check could give.
+const ENCODING_DECLARATION = /^<\?xml\s+[^>]*\bencoding\s*=\s*["']([^"']+)["']/i
 
 // Every option affecting the parsed shape is set explicitly, including those
 // matching the library's current default: this object is the persisted-shape

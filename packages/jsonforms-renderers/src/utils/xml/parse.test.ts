@@ -235,5 +235,29 @@ describe('parseXmlToDocument', () => {
         r: { a: 1 },
       })
     })
+
+    it('ignores an encoding pseudo-attribute on a processing instruction', async () => {
+      // <?xml-stylesheet?> is a PI, not the declaration, and says nothing about
+      // how the bytes are encoded. An unanchored scan for /<\?xml.*encoding=/
+      // matches it anyway and rejects a perfectly valid UTF-8 document.
+      await expect(
+        parseXmlToDocument(
+          '<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet encoding="windows-1252"?><r><a>1</a></r>',
+        ),
+      ).resolves.toEqual({ r: { a: 1 } })
+      // Same PI with no declaration at all in front of it.
+      await expect(parseXmlToDocument('<?xml-stylesheet encoding="windows-1252"?><r><a>1</a></r>')).resolves.toEqual({
+        r: { a: 1 },
+      })
+    })
+
+    it('leaves a misplaced declaration to the validator, which explains it better', async () => {
+      // Anchoring the encoding scan means a declaration preceded by whitespace
+      // is not treated as one. That is not a hole: it isn't a declaration per
+      // the spec, and the validator rejects it by name.
+      await expect(
+        parseXmlToDocument('\n  <?xml version="1.0" encoding="windows-1252"?><r><a>1</a></r>'),
+      ).rejects.toThrow(/XML declaration allowed only at the start/)
+    })
   })
 })

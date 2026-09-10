@@ -77,11 +77,17 @@ const XmlControl = ({
   const [error, setError] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Bumped on every upload attempt and on removal. processFile awaits twice
+  // before committing, so without this a slow parse can land after a faster
+  // one started later and overwrite it — or land after the user pressed
+  // remove and restore the document they just discarded.
+  const uploadSequence = useRef(0)
 
   const hasValue = value != null
 
   const processFile = useCallback(
     async (file: File) => {
+      const sequence = ++uploadSequence.current
       setError(null)
 
       if (file.size > maxSize) {
@@ -108,6 +114,9 @@ const XmlControl = ({
         const text = await file.text()
         parsed = await parseXmlToDocument(text, { arrayPaths, removeNamespaces })
       } catch (err) {
+        // A superseded attempt must not report its failure over whatever
+        // replaced it, any more than it may report success below.
+        if (sequence !== uploadSequence.current) return
         setStatus('error')
         // Every rejection parseXmlToDocument makes is already phrased for an end
         // user, so its message renders directly; the fallback only covers a
@@ -120,6 +129,7 @@ const XmlControl = ({
         return
       }
 
+      if (sequence !== uploadSequence.current) return
       handleChange(path, parsed)
       setStatus('ready')
     },
@@ -156,6 +166,9 @@ const XmlControl = ({
 
   const handleRemove = () => {
     if (!canEdit) return
+    // Supersedes any parse still in flight, so it can't restore what's being
+    // removed here.
+    ++uploadSequence.current
     setError(null)
     setStatus('empty')
     // `undefined`, not `null` — see the useClearWhenHidden note above.
