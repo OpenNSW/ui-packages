@@ -73,6 +73,7 @@
     "@e965/xlsx": "^0.20.3",
     "@formulajs/formulajs": "^4.6.1",
     "dayjs": "^1.11.21",
-    "fast-formula-parser": "^1.0.19"
+    "fast-formula-parser": "^1.0.19",
+    "fast-xml-parser": "^5.11.1"
   }
 }
