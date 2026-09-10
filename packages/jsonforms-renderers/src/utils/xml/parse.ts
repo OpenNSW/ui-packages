@@ -99,9 +99,12 @@ function makeIsArray(arrayPaths: string[]): (tagName: string, jPath: string | Ma
 
 // The library throws plain Errors from several internal guards. Each is a
 // legitimate rejection, but none is phrased for an end user — and one leads
-// with "[SECURITY]", which must never reach a form field. The dependency is
-// pinned ^5.11.1 because these guards are recent, and parse.test.ts covers each
-// one so a bump that drops one fails CI.
+// with "[SECURITY]", which must never reach a form field. These guards are
+// recent, hence the >=5.11.1 floor; the range stays a caret rather than an
+// exact version, because what protects the persisted shape across a minor
+// bump is PARSER_OPTIONS setting every shape-affecting option explicitly,
+// backed by parse.test.ts pinning each guard so a bump that drops one fails
+// CI.
 function describeParserFailure(err: unknown): string {
   const message = err instanceof Error ? err.message : ''
   if (message.startsWith('[SECURITY] Invalid name:')) {
