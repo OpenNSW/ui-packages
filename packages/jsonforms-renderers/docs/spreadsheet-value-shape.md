@@ -44,9 +44,9 @@ Unlike a schema-author-controlled `x-evaluate` id, a header/column-A value comes
 
 ## See also
 
-`XmlControl` uploads and parses XML documents, persisting `{ document }`. Pair it with a source-mode field to compute over what it parsed. See [xml-control.md](./xml-control.md).
+`XmlControl` uploads and parses XML documents. Pair it with a `sourcePath` field to compute over what it parsed. See [xml-control.md](./xml-control.md).
 
-## Source mode (`x-spreadsheet.sourcePath`)
+## Reading from another field (`x-spreadsheet.sourcePath`)
 
 Set `sourcePath` and the control takes its data from elsewhere in the form instead of from an upload — a dotted path, relative to the field's own parent object, exactly as [`x-computed.inputs`](./computed-fields.md) paths are. There is no upload, replace or remove.
 
@@ -55,13 +55,24 @@ Set `sourcePath` and the control takes its data from elsewhere in the form inste
 "x-evaluate": [{ "id": "total_quantity", "label": "Total Quantity", "expression": "=SUM(D2:D4)" }]
 ```
 
-**The persisted value is `{ derivations }` — never `sheet`.** The rows already live at the source path in the same submission, so a second copy would be redundant on write and stale on read the moment the source changed while this field couldn't write to it. A field with no `x-evaluate` therefore persists nothing at all, which makes source mode usable as a plain "render this array" field that can't dirty a form.
-
-So the sub-schema shrinks to:
+**By default the persisted value is `{ derivations }`, with no `sheet`** — so the sub-schema shrinks to:
 
 ```json
 "properties": { "derivations": { "type": "object", "additionalProperties": { "$ref": "#/$defs/result" } } }
 ```
+
+That is a _default_, not a restriction: `persistSheet` works here exactly as it does for an upload, and setting it to `true` stores a shaped `sheet` alongside `derivations`, keyed by `columnHeader`/`rowHeader` in the usual way.
+
+What differs is which default avoids the obvious mistake, and that follows **who owns the rows**:
+
+| Source       | `persistSheet` default | Why                                                                                                          |
+| ------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| upload       | `true`                 | This field holds the only copy. Omitting it loses the data.                                                  |
+| `sourcePath` | `false`                | The rows already live at the source path in the same submission. Persisting them again writes a second copy. |
+
+Turning it on for a path source is worth it when the copy is a **transformation** rather than a duplicate — a 2-D source with `columnHeader: true` persists records, a shape that exists nowhere else in the document — or when you deliberately want a snapshot of what the derivations were computed from.
+
+Note the snapshot is of the _current_ source: if the source becomes unavailable, the field clears completely rather than keeping a sheet that no longer matches anything. A field with neither `x-evaluate` nor `persistSheet` writes nothing at all, which makes it usable as a plain "render this array" display that can't dirty a form.
 
 **The source can be either shape**, told apart exactly as a persisted `sheet` is:
 
@@ -70,11 +81,13 @@ So the sub-schema shrinks to:
 
 It need not come from XML. An `ArrayControl`'s items, or another spreadsheet field's records-shaped `sheet`, work identically.
 
-`columnHeader`, `rowHeader` and `showSheet` still apply — they describe how to render the data, and a 2-D source means for them exactly what an uploaded sheet does. `accept`, `maxSize`, `sheetName` and `persistSheet` are inert, and ignored rather than rejected, since they are usually leftovers from a field converted out of upload mode.
+Only `accept`, `maxSize` and `sheetName` are inert here — they describe how to read a _file_, so there is nothing for them to do. They are ignored rather than rejected, since they are usually leftovers from a converted field.
+
+Everything else means exactly what it means for an upload. `columnHeader`, `rowHeader`, `showSheet`, `persistSheet` and `x-evaluate` all describe what to do with the rows once they arrive, and none of them has any business caring where they came from.
 
 ### Host requirement: don't feed `onChange` back into `data`
 
-Source mode persists from an **effect**, when the data it watches changes — not from a user event. That makes it sensitive to how the host wires `JsonForms`.
+A `sourcePath` field persists from an **effect**, when the data it watches changes — not from a user event. That makes it sensitive to how the host wires `JsonForms`.
 
 `JsonForms` replaces its internal state whenever its `data` **prop** changes. So the common-looking round-trip
 
