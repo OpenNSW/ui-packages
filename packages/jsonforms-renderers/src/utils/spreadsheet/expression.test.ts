@@ -627,7 +627,7 @@ describe('evaluateExpressions', () => {
 describe('regression: the original 11 x-evaluate entries against the real sample file', () => {
   it('produces byte-identical values to the pre-rewrite hand-rolled engine', async () => {
     const buffer = readFileSync(path.resolve(__dirname, '../../../dev/sample-files/spreadsheet-sample.xlsx'))
-    const { matrix: sampleMatrix } = parseWorkbookToMatrix(
+    const { matrix: sampleMatrix } = await parseWorkbookToMatrix(
       buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer,
     )
 
