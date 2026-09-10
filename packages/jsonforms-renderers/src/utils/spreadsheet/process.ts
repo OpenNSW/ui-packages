@@ -147,7 +147,7 @@ export async function processMatrix(
 }
 
 // Folds evaluation results into the persisted map. Shared by processMatrix and
-// by SpreadsheetControl's source mode, which builds the same map without any
+// by SpreadsheetControl's path source, which builds the same map without any
 // sheet to go with it.
 //
 // Keyed by id (not an array) so a sibling field can address one derivation

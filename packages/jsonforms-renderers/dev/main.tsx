@@ -60,7 +60,7 @@ function Playground() {
   // They are deliberately separate. JsonForms replaces its internal state
   // whenever the `data` prop changes (see its updateCore effect), so feeding
   // every onChange straight back into that prop loses writes: a control that
-  // persists from an effect — SpreadsheetControl in source mode, ComputedControl
+  // persists from an effect — SpreadsheetControl with a sourcePath, ComputedControl
   // — can advance the internal state past the prop, and the next prop sync then
   // reverts it. The seed is therefore only re-set deliberately, on a fixture
   // load or a schema edit.

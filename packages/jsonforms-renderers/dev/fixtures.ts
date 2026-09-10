@@ -581,7 +581,7 @@ export const fixtures: Fixture[] = [
             { id: 'categories', label: 'Categories', expression: '=TEXTJOIN(", ",TRUE,C2:C4)' },
             { id: 'broken', label: 'Broken Reference (expects #REF!)', expression: '=SUM(Z2:Z4)' },
           ],
-          // Source mode persists derivations only — no `sheet`, since the rows
+          // A path source persists derivations only by default — no `sheet`, since the rows
           // already live under sales_document.
           properties: {
             derivations: {
