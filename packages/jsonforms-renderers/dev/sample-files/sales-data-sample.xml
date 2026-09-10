@@ -1,24 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Sample document for the 'xml' fixture in dev/fixtures.ts.
+  Sample document for the 'xml' fixture in dev/fixtures.ts: a plain records
+  array, one <sale> per row, flat scalar children.
 
-  A plain records array — one <sale> per row, flat scalar children, no
-  attributes or nesting.
+  Carries the same figures as sales-data-sample.xlsx, but the two are
+  independent — nothing keeps them in sync, so don't rely on them matching.
+  Edit this file directly; unlike an .xlsx it needs no generator script.
 
-  Carries the same figures as sales-data-sample.xlsx for convenience, but the
-  two files are INDEPENDENT: there is no generator, and nothing checks that they
-  agree, so don't rely on them matching.
-
-  Worth noticing in the parsed output: <Quantity> becomes a NUMBER while <Date>
-  stays a STRING (it isn't numeric) — see the coercion table in
-  docs/xml-control.md. And because there are three <sale> children they parse as
-  an array on their own, so x-xml.arrayPaths is belt and braces here; it is
-  load-bearing only when a repeated element happens to appear exactly once.
-
-  Unlike the .xlsx samples in this folder there is no generator script: an
-  .xlsx is a ZIP of XML parts, unreadable in a diff and un-editable without
-  Excel, so there the generator is the reviewable source of truth. XML is
-  already its own source of truth — edit this file directly.
+  In the parsed output <Quantity> is a NUMBER while <Date> stays a STRING, and
+  the three <sale> children parse as an array on their own — x-xml.arrayPaths
+  is belt and braces here, load-bearing only when a repeated element appears
+  exactly once.
 -->
 <salesData>
   <sale>

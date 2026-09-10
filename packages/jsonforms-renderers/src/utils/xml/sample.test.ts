@@ -5,22 +5,15 @@ import { createAjv } from '@jsonforms/core'
 import { parseXmlToDocument } from './parse'
 
 // End-to-end check over the document the dev playground ships, using the same
-// x-xml configuration as the 'xml' fixture in dev/fixtures.ts. It exists for two
-// reasons no unit test covers:
-//
-//  1. docs/xml-control.md documents this file's parsed output, so this is what
-//     keeps the documentation honest.
-//  2. It validates the persisted value against the same JSON Schema the fixture
-//     declares, guarding the trap where a perfectly correct write fails AJV
-//     because the schema and the value shape drifted apart — the same lockstep
-//     hazard already called out for SpreadsheetValue in dev/fixtures.ts.
+// x-xml configuration as its 'xml' fixture. docs/xml-control.md documents this
+// file's parsed output, so this is what keeps that documentation honest — and
+// it confirms the value AJV receives validates against the schema a consuming
+// app would write.
 const samplePath = fileURLToPath(new URL('../../../dev/sample-files/sales-data-sample.xml', import.meta.url))
 const sampleXml = readFileSync(samplePath, 'utf8')
 
 const arrayPaths = ['salesData.sale']
 
-// Mirrors the fixture's sub-schema. Kept literal rather than imported so a
-// change to either side has to be made deliberately on both.
 // The field's value is the parsed document itself, so `type: 'object'` is the
 // whole schema a consuming app needs.
 const fieldSchema = { type: 'object' } as const

@@ -2,28 +2,17 @@ import type { MatcherView, X2jOptions } from 'fast-xml-parser'
 import type { XmlDocument } from './types'
 
 // Thin integration layer over `fast-xml-parser` (validation + parsing), turning
-// an XML string into a plain, JSON-serializable object. See
-// docs/xml-control.md for the resulting shape, the value-coercion rules and
-// the documented limits.
-//
-// This file owns three things the library does not give us for free:
-// translating however it reports a failure into wording safe to show in a form
-// field; pinning every option that affects the persisted shape; and the
-// `arrayPaths` mechanism that stops a document's shape depending on how many
-// rows the uploaded file happened to have.
+// an XML string into a plain, JSON-serializable object. See docs/xml-control.md
+// for the resulting shape, the coercion rules and the documented limits.
 
-// Thrown for every rejection this module makes — a malformed document, an
-// unsupported encoding, a size/nesting limit, or one of the library's own
-// internal guards. Mirrors utils/spreadsheet/parse.ts's SheetParseError, except
-// that here EVERY message is already user-facing (see describeParserFailure),
-// so a caller can render `err.message` directly instead of choosing between it
-// and a generic fallback.
+// Thrown for every rejection this module makes. Every message is already
+// phrased for an end user (see describeParserFailure), so a caller can render
+// `err.message` directly.
 export class XmlParseError extends Error {}
 
-// Bounds the in-memory object graph, which is far larger than the source text
-// (every element becomes an object with a string key). Paired with, not
-// replaced by, x-xml.maxSize: a caller checks bytes before reading the file,
-// this checks characters after decoding it.
+// Bounds the in-memory object graph, which is far larger than the source text.
+// Complements x-xml.maxSize: that checks bytes before the file is read, this
+// checks characters after decoding.
 export const MAX_XML_CHARS = 5_000_000
 
 // Only the XML prolog is scanned for an encoding declaration — it must precede
@@ -31,119 +20,87 @@ export const MAX_XML_CHARS = 5_000_000
 const PROLOG_SCAN_CHARS = 1024
 const ENCODING_DECLARATION = /<\?xml[^>]*\bencoding\s*=\s*["']([^"']+)["']/i
 
-// Every option that affects the parsed shape is spelled out below, INCLUDING
-// the ones that happen to match the library's current default. This object is
-// the persisted-shape contract for every document this control ever writes, so
-// a default changing under a dependency bump has to show up as a diff here
-// rather than as a silent change in production data. Typed as X2jOptions so a
-// misspelled option name is a compile error instead of a silently ignored key.
+// Every option affecting the parsed shape is set explicitly, including those
+// matching the library's current default: this object is the persisted-shape
+// contract, so a default changing under a dependency bump shows up as a diff
+// here rather than as a silent change in production data. Comments below cover
+// only the values chosen against the library's default, or against a hazard.
 const PARSER_OPTIONS: X2jOptions = {
-  // NOT the library default (true). Attributes are real data — <price
-  // currency="AUD">, <line id="3"> — and dropping them silently would lose
-  // most of the payload in formats that lean on them.
+  // Default is true, which would silently drop what in many formats is most of
+  // the payload.
   ignoreAttributes: false,
-  // Non-empty prefix, deliberately: it namespaces attributes away from element
-  // names, so `@_id` and a sibling <id> element can coexist on one node
-  // without either clobbering the other.
+  // Non-empty, so `@_id` and a sibling <id> element can coexist on one node.
   attributeNamePrefix: '@_',
   textNodeName: '#text',
   parseTagValue: true,
-  // NOT the library default (false). Symmetry: <line qty="10"/> and
-  // <line><qty>10</qty></line> must yield the same JS type, or a consumer has
-  // to remember which spelling the source file used before comparing values.
+  // Default is false, which would make <line qty="10"/> a string while
+  // <line><qty>10</qty></line> is a number.
   parseAttributeValue: true,
-  // NOT the library defaults (hex: true, leadingZeros: true). Leading-zero
-  // identifiers — SKUs, postcodes, invoice and account refs — are everywhere in
-  // real XML, and "00742" -> 742 is silent, irreversible data corruption that
-  // only surfaces far downstream. eNotation stays on: "1.5e3" in a numeric
-  // field really does mean 1500.
+  // Defaults are hex: true, leadingZeros: true, which turn "00742" into 742 and
+  // "0x1A" into 26 — silent, irreversible corruption of the zero-padded SKUs,
+  // postcodes and invoice refs that fill real XML.
   numberParseOptions: { hex: false, leadingZeros: false, eNotation: true },
   trimValues: true,
-  // false = CDATA merges into the node's ordinary text value. Someone asking
-  // "what is the description?" shouldn't have to care that the author happened
-  // to wrap it in CDATA; a separate key would leak an encoding detail into the
-  // persisted shape.
+  // CDATA merges into the node's ordinary text value: whether an author wrapped
+  // a value in CDATA is an encoding detail, not content.
   cdataPropName: false,
   commentPropName: false,
-  // Left enabled so `&amp;` and DOCTYPE-declared entities resolve. Safe by
-  // default in v5, verified against 5.11.1 and pinned in parse.test.ts: the
-  // library refuses external and parameter entities outright, caps declarations
-  // (maxEntityCount 1000, maxEntitySize 10_000), and — the part that actually
-  // makes billion-laughs impossible rather than merely bounded — does not
-  // expand an entity whose own value references another entity, leaving it
-  // literal instead. So no XXE or amplification guard of our own is needed.
+  // Enabled so `&amp;` and DOCTYPE-declared entities resolve. Verified against
+  // 5.11.1 and pinned in parse.test.ts: the library refuses external and
+  // parameter entities, caps declarations, and leaves a nested entity reference
+  // literal rather than expanding it — so no XXE or amplification guard of our
+  // own is needed.
   processEntities: true,
-  // NOT the library default (false). Despite the option's name, this is what
-  // decodes NUMERIC character references — `&#233;`, `&#x00E9;` — which are
-  // core XML, not an HTML extension: left off, an accented character written
-  // that way persists as the literal text "&#233;". Decoding the HTML named
-  // set (`&nbsp;` and friends) comes along with it, which is a harmless
-  // superset — those appear in plenty of real-world XML and resolve to
-  // ordinary characters.
+  // Default is false. Despite the name, this is what decodes NUMERIC character
+  // references (`&#233;`), which are core XML — left off they persist as
+  // literal text. The HTML named set comes along as a harmless superset.
   htmlEntities: true,
-  // NOT the library defaults (both false). With ignoreAttributes off, leaving
-  // these on injects a `?xml: { '@_version': '1.0', ... }` key into the
-  // document root — transport metadata masquerading as content, which would
-  // then show up in the preview and in every path a schema author reads.
+  // Defaults are both false, which injects a `?xml` key of transport metadata
+  // into the document root.
   ignoreDeclaration: true,
   ignorePiTags: true,
-  // false = a leaf with no attributes collapses to its bare value, so
-  // <qty>10</qty> is `10`, not `{ '#text': 10 }`. Only genuinely mixed nodes
-  // get a '#text' key. Keeps the common case addressable without a suffix.
+  // A leaf with no attributes collapses to its bare value, so <qty>10</qty> is
+  // `10`. Only genuinely mixed nodes get a '#text' key.
   alwaysCreateTextNode: false,
-  // true would restructure the output into an array of single-key objects,
-  // which no dotted path could address.
   preserveOrder: false,
-  // Namespace prefixes are preserved by default so <a:Name> and <b:Name> stay
-  // distinguishable; x-xml.removeNamespaces opts out per field. See
-  // docs/xml-control.md for why stripping is lossy.
+  // Prefixes are kept so <a:Name> and <b:Name> stay distinguishable;
+  // x-xml.removeNamespaces opts out per field, lossily — see docs.
   removeNSPrefix: false,
-  // Library defaults, restated: a nesting-depth bound (which is what stops a
-  // deeply-nested document overflowing the stack, in the library and in every
-  // recursive consumer downstream), and a hard reject for a tag named after a
-  // reserved output key.
+  // Library defaults, restated because they are load-bearing: the depth bound
+  // is what stops a deeply-nested document overflowing the stack here and in
+  // every recursive consumer downstream.
   maxNestedTags: 100,
   strictReservedNames: true,
 }
 
-// THE central XML footgun: <contacts><contact/></contacts> parses to an OBJECT
+// The central XML footgun: <contacts><contact/></contacts> parses to an OBJECT
 // at `invoice.contacts.contact`, while a second <contact/> makes the same path
-// an ARRAY. Left alone, the shape of the persisted data would depend on how
-// many rows the uploader's file happened to contain, so anything written
-// against one file breaks on the next. arrayPaths forces the array shape
-// unconditionally, moving that decision to the schema author.
+// an ARRAY — so the persisted shape would depend on how many rows the uploaded
+// file happened to contain. arrayPaths forces the array shape, moving that
+// decision to the schema author.
 //
-// The library's jPath is a dotted path with no array indices, and it INCLUDES
-// the root element ("invoice.contacts.contact"), so an entry stays stable
-// however many siblings exist. A bare tag name is accepted as a shorthand
-// matching that element at any depth.
+// Matching is against the library's jPath: dotted, no array indices, and it
+// INCLUDES the root element. A bare tag name matches that element at any depth.
 function makeIsArray(arrayPaths: string[]): (tagName: string, jPath: string | MatcherView) => boolean {
   const configured = new Set(arrayPaths)
   if (configured.size === 0) return () => false
   return (tagName, jPath) =>
-    // The library hands over a string while its own `jPath` option is true (the
-    // default) and a live matcher object otherwise; both stringify to the same
-    // dotted path, so normalize rather than depend on that default staying put.
+    // A string while the library's own `jPath` option is true (the default) and
+    // a matcher object otherwise; both stringify to the same dotted path.
     configured.has(typeof jPath === 'string' ? jPath : jPath.toString()) || configured.has(tagName)
 }
 
 // The library throws plain Errors from several internal guards. Each is a
-// legitimate rejection, but none is phrased for an end user — and one of them
-// leads with "[SECURITY]", which must never surface in a form field. Verified
-// against fast-xml-parser 5.11.1 (src/xmlparser/OrderedObjParser.js's
-// sanitizeName, src/util.js's criticalProperties, src/xmlparser/DocTypeReader.js);
-// the dependency is pinned ^5.11.1 rather than ^5 because these guards are
-// recent, and parse.test.ts pins each one so a bump that drops one fails CI
-// instead of silently regressing.
+// legitimate rejection, but none is phrased for an end user — and one leads
+// with "[SECURITY]", which must never reach a form field. The dependency is
+// pinned ^5.11.1 because these guards are recent, and parse.test.ts covers each
+// one so a bump that drops one fails CI.
 function describeParserFailure(err: unknown): string {
   const message = err instanceof Error ? err.message : ''
   if (message.startsWith('[SECURITY] Invalid name:')) {
-    // A tag or attribute named __proto__, constructor or prototype. The
-    // library builds every node as a plain `{}`, so assigning such a key would
-    // hit an inherited setter and mutate the node's prototype instead of
-    // creating an enumerable own property — silently dropping that element from
-    // Object.keys/entries and from JSON.stringify. It rejects outright; we only
-    // have to say so readably.
+    // A tag or attribute named __proto__, constructor or prototype. Nodes are
+    // plain `{}`, so such a key would mutate the prototype rather than become
+    // an own property, dropping that element from JSON.stringify entirely.
     return 'This document uses a reserved JavaScript name (__proto__, constructor or prototype) as an element or attribute name, which cannot be represented safely.'
   }
   if (message === 'External entities are not supported' || message === 'Parameter entities are not supported') {
@@ -165,13 +122,11 @@ export interface ParseXmlOptions {
   removeNamespaces?: boolean
 }
 
-// The public entry point: XML text in, plain object out. Throws XmlParseError,
-// whose message is always safe to render, for every rejection.
+// XML text in, plain object out. Throws XmlParseError, whose message is always
+// safe to render, for every rejection.
 //
-// The libraries are imported dynamically (not as a static top-level import) so
-// the XML code splits into an on-demand chunk, matching the rationale in
-// utils/spreadsheet/expression.ts: a consuming app whose forms never contain an
-// x-xml field should never pay to download the parser. Unlike
+// The library is imported dynamically so it splits into an on-demand chunk: an
+// app whose forms contain no XML field never pays to download it. Unlike
 // fast-formula-parser, this package ships a real dual exports map with named
 // ESM exports, so no `.default ?? module` interop branch and no hand-written
 // ambient .d.ts are needed.
