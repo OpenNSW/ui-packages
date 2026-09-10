@@ -1,5 +1,12 @@
 import { evaluateExpressions } from './expression'
-import type { CellValue, DerivationResult, FormulaConfigEntry, SheetData, SpreadsheetValue } from './types'
+import type {
+  CellValue,
+  DerivationResult,
+  FormulaConfigEntry,
+  FormulaResult,
+  SheetData,
+  SpreadsheetValue,
+} from './types'
 
 export interface ShapeSheetOptions {
   columnHeader?: boolean
@@ -134,18 +141,57 @@ export async function processMatrix(
   formulas: FormulaConfigEntry[],
   options: ProcessMatrixOptions = {},
 ): Promise<SpreadsheetValue> {
-  const results = await evaluateExpressions(matrix, formulas)
-  // Keyed by id (not an array) — a duplicate/malformed id collides
-  // last-write-wins here, where it previously got its own array slot;
-  // accepted for simplicity since ids are schema-author-controlled.
-  // Object.create(null), not {} — an id of "__proto__" would otherwise set
-  // the object's prototype instead of creating an enumerable own property,
-  // silently dropping that derivation from Object.keys/entries and from
-  // JSON serialization.
+  const derivations = buildDerivations(await evaluateExpressions(matrix, formulas))
+  if (options.persistSheet === false) return { derivations }
+  return { sheet: shapeSheet(matrix, options), derivations }
+}
+
+// Folds evaluation results into the persisted map. Shared by processMatrix and
+// by SpreadsheetControl's source mode, which builds the same map without any
+// sheet to go with it.
+//
+// Keyed by id (not an array) so a sibling field can address one derivation
+// directly via a plain data path, with no "find by id" step. A duplicate or
+// malformed id collides last-write-wins — accepted for simplicity, since ids are
+// schema-author-controlled. Object.create(null), not {}, because an id of
+// "__proto__" would otherwise set the object's prototype instead of creating an
+// enumerable own property, silently dropping that derivation from
+// Object.keys/entries and from JSON serialization.
+export function buildDerivations(results: FormulaResult[]): Record<string, DerivationResult> {
   const derivations: Record<string, DerivationResult> = Object.create(null)
   for (const { id, label, value, error } of results) {
     derivations[id] = error === undefined ? { label, value } : { label, value, error }
   }
-  if (options.persistSheet === false) return { derivations }
-  return { sheet: shapeSheet(matrix, options), derivations }
+  return derivations
+}
+
+// Normalizes one derivation value for comparison. A Date has to compare equal to
+// the ISO string it round-trips to through JSON storage — otherwise a TODAY()
+// formula reports a change on every mount and marks a saved form dirty.
+function sameValue(a: CellValue | null | undefined, b: CellValue | null | undefined): boolean {
+  const normalize = (v: CellValue | null | undefined) => (v instanceof Date ? v.toISOString() : (v ?? null))
+  return normalize(a) === normalize(b)
+}
+
+// Structural equality for two derivation maps, deliberately not JSON.stringify:
+// key order in a stored map need not match the x-evaluate iteration order that
+// produced it, and a Date needs the normalization above.
+//
+// Used as the write guard in SpreadsheetControl's source mode, where the value
+// is an object rebuilt on every evaluation — so a reference check would always
+// report a change and dirty the form merely by opening a saved record.
+export function sameDerivations(
+  a: Record<string, DerivationResult> | undefined,
+  b: Record<string, DerivationResult> | undefined,
+): boolean {
+  const left = a ?? {}
+  const right = b ?? {}
+  const keys = Object.keys(left)
+  if (keys.length !== Object.keys(right).length) return false
+  return keys.every((key) => {
+    if (!Object.prototype.hasOwnProperty.call(right, key)) return false
+    const x = left[key]
+    const y = right[key]
+    return x.label === y.label && x.error === y.error && sameValue(x.value, y.value)
+  })
 }
