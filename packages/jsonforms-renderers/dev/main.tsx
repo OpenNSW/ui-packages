@@ -54,7 +54,18 @@ function Playground() {
   // Editable JSON text for schema + uischema. Data is live read-only output.
   const [schemaText, setSchemaText] = useState(() => JSON.stringify(fixtures[0].schema, null, 2))
   const [uiText, setUiText] = useState(() => JSON.stringify(fixtures[0].uischema, null, 2))
+  // `data` is the SEED handed to JsonForms, not a mirror of its live state, and
+  // `liveData` is what the form has actually produced.
+  //
+  // They are deliberately separate. JsonForms replaces its internal state
+  // whenever the `data` prop changes (see its updateCore effect), so feeding
+  // every onChange straight back into that prop loses writes: a control that
+  // persists from an effect — SpreadsheetControl in source mode, ComputedControl
+  // — can advance the internal state past the prop, and the next prop sync then
+  // reverts it. The seed is therefore only re-set deliberately, on a fixture
+  // load or a schema edit.
   const [data, setData] = useState<Record<string, unknown>>(() => fixtures[0].data ?? {})
+  const [liveData, setLiveData] = useState<Record<string, unknown>>(() => fixtures[0].data ?? {})
 
   // Last successfully parsed schema/uischema drive the form; a bad edit keeps
   // the previous good render and just surfaces the parse error.
@@ -70,6 +81,7 @@ function Playground() {
     setSchema(f.schema)
     setUischema(f.uischema)
     setData(f.data ?? {})
+    setLiveData(f.data ?? {})
     setSchemaError(undefined)
     setUiError(undefined)
   }
@@ -80,6 +92,10 @@ function Playground() {
     if (error) setSchemaError(error)
     else {
       setSchema(value as JsonSchema)
+      // Re-seed with what the form currently holds: the schema change triggers
+      // JsonForms' own prop sync either way, so handing it the live data is what
+      // keeps an upload alive across a schema edit.
+      setData(liveData)
       setSchemaError(undefined)
     }
   }
@@ -90,6 +106,7 @@ function Playground() {
     if (error) setUiError(error)
     else {
       setUischema(value as UISchemaElement)
+      setData(liveData)
       setUiError(undefined)
     }
   }
@@ -153,7 +170,7 @@ function Playground() {
                 data={data}
                 renderers={radixRenderers}
                 ajv={ajv}
-                onChange={({ data }) => setData(data as Record<string, unknown>)}
+                onChange={({ data }) => setLiveData(data as Record<string, unknown>)}
                 validationMode="ValidateAndShow"
               />
             </Card>
@@ -161,7 +178,7 @@ function Playground() {
               <Text size="2" weight="bold" as="div">
                 Live data
               </Text>
-              <pre style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap' }}>{JSON.stringify(data, null, 2)}</pre>
+              <pre style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap' }}>{JSON.stringify(liveData, null, 2)}</pre>
             </Card>
           </Flex>
 

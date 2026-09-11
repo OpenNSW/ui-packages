@@ -22,7 +22,9 @@
 
 Each entry maps an alias (the name used in `formula`) to a path — either a bare string, or `{ path, default }` when the value is legitimately optional.
 
-**Paths are not a syntax invented for this feature.** They're the same dot-joined data-path representation every JSONForms `ControlProps.path` already uses at runtime (`@jsonforms/core`'s own `Resolve.data`/`Paths.compose` — see the source, both just `.split('.')`/join with `.`). A path is resolved **relative to the computed field's own containing object** — e.g. a computed field that's an item inside an array (`items.0.estimated_total`) resolves `"sales_data.derivations.total_quantity.value"` against `items.0`, reaching `items.0.sales_data.derivations.total_quantity.value` — the same array item, never a different one. There's currently no way to address an absolute/root path; every input is relative to the field's own parent.
+**Paths are not a syntax invented for this feature.** They're the same dot-joined data-path representation every JSONForms `ControlProps.path` already uses at runtime (`@jsonforms/core`'s own `Resolve.data`/`Paths.compose` — see the source, both just `.split('.')`/join with `.`). A path is resolved **relative to the computed field's own containing object** — e.g. a computed field that's an item inside an array (`items.0.estimated_total`) resolves `"sales_data.derivations.total_quantity.value"` against `items.0`, reaching `items.0.sales_data.derivations.total_quantity.value` — the same array item, never a different one. There's currently no way to address an absolute/root path; every input is relative to the field's own parent. `x-spreadsheet.sourcePath` (see [spreadsheet-value-shape.md](./spreadsheet-value-shape.md#source-mode-x-spreadsheetsourcepath)) uses this identical convention.
+
+Both persist from an effect rather than a user event, so both need the host to treat `JsonForms`' `data` prop as a seed rather than feeding `onChange` back into it — see [that section](./spreadsheet-value-shape.md#host-requirement-dont-feed-onchange-back-into-data).
 
 An input can point at:
 

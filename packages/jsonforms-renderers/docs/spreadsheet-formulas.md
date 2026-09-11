@@ -1,6 +1,6 @@
 # Spreadsheet formulas (`x-evaluate`)
 
-`SpreadsheetControl` evaluates Excel-style formulas against an uploaded sheet, configured via the schema's `x-evaluate` array:
+`SpreadsheetControl` evaluates Excel-style formulas against an uploaded sheet — or, with [`x-spreadsheet.sourcePath`](./spreadsheet-value-shape.md#source-mode-x-spreadsheetsourcepath), against tabular data elsewhere in the form — configured via the schema's `x-evaluate` array:
 
 ```json
 "x-evaluate": [
@@ -22,6 +22,8 @@ Each entry's `id` is mandatory and doubles as the key `SpreadsheetControl` persi
 ```
 
 Any schema describing this field's shape (see the `spreadsheet` fixture in `dev/fixtures.ts` for a full example) must declare `derivations` as `type: "object"`, not `"array"` — otherwise a successful, correctly-computed write fails AJV validation.
+
+In **source mode** the addressing depends on the source's shape: a 2-D array is addressed literally, exactly as an uploaded sheet is, while an array of objects gains a header row of field names at row 1 — so its first record is row **2**, and `=SUM(D2:D4)` totals the fourth field of three records.
 
 Cell and range addressing is literal (`B2`, `I2:I6`), the same as in Excel — row 1 is always the sheet's first row, column A is always the sheet's first column, regardless of the control's `columnHeader`/`rowHeader` display options. Those same two options also control what shape the persisted `sheet` itself ends up in (raw matrix vs. an array of records) — see [spreadsheet-value-shape.md](./spreadsheet-value-shape.md).
 

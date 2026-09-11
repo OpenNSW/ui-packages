@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { processMatrix } from './process'
+import { buildDerivations, processMatrix, sameDerivations } from './process'
 import type { CellValue } from './types'
 
 const matrix: CellValue[][] = [
@@ -61,5 +61,67 @@ describe('processMatrix', () => {
     // by JS (sets the prototype instead of a data property) — a computed key
     // sidesteps that so this assertion actually tests what it says.
     expect(JSON.parse(JSON.stringify(result.derivations))).toEqual({ ['__proto__']: { label: 'Reserved', value: 30 } })
+  })
+})
+
+describe('buildDerivations', () => {
+  it('keys results by id and omits `error` on success', () => {
+    expect(
+      buildDerivations([
+        { id: 'total', label: 'Total', value: 30 },
+        { id: 'broken', label: 'Broken', value: null, error: '#REF!' },
+      ]),
+    ).toEqual({
+      total: { label: 'Total', value: 30 },
+      broken: { label: 'Broken', value: null, error: '#REF!' },
+    })
+  })
+
+  it('resolves a duplicate id last-write-wins', () => {
+    const result = buildDerivations([
+      { id: 'dup', label: 'First', value: 1 },
+      { id: 'dup', label: 'Second', value: 2 },
+    ])
+    expect(result).toEqual({ dup: { label: 'Second', value: 2 } })
+  })
+
+  it('keeps a "__proto__" id as an enumerable own property', () => {
+    const result = buildDerivations([{ id: '__proto__', label: 'Reserved', value: 30 }])
+    // A bare __proto__ key in object-literal syntax is special-cased by JS, so
+    // compare through a JSON round trip to prove this is a real own property.
+    expect(JSON.parse(JSON.stringify(result))).toEqual({ ['__proto__']: { label: 'Reserved', value: 30 } })
+  })
+})
+
+describe('sameDerivations', () => {
+  const base = { total: { label: 'Total', value: 30 } }
+
+  it('treats two empty or absent maps as equal', () => {
+    expect(sameDerivations(undefined, {})).toBe(true)
+    expect(sameDerivations({}, {})).toBe(true)
+  })
+
+  it('ignores key order', () => {
+    const a = { one: { label: 'One', value: 1 }, two: { label: 'Two', value: 2 } }
+    const b = { two: { label: 'Two', value: 2 }, one: { label: 'One', value: 1 } }
+    expect(sameDerivations(a, b)).toBe(true)
+  })
+
+  it('compares a Date equal to the ISO string it round-trips to', () => {
+    // Without this a TODAY() formula would report a change on every mount, since
+    // the stored value comes back from JSON as a string while a fresh evaluation
+    // produces a Date — dirtying a saved form merely by opening it.
+    const date = new Date(Date.UTC(2026, 8, 9))
+    expect(sameDerivations({ d: { label: 'D', value: date } }, { d: { label: 'D', value: date.toISOString() } })).toBe(
+      true,
+    )
+  })
+
+  it('reports a differing value, label, key set, or error as changed', () => {
+    expect(sameDerivations(base, { total: { label: 'Total', value: 31 } })).toBe(false)
+    expect(sameDerivations(base, { total: { label: 'Sum', value: 30 } })).toBe(false)
+    expect(sameDerivations(base, {})).toBe(false)
+    expect(sameDerivations(base, { other: { label: 'Total', value: 30 } })).toBe(false)
+    expect(sameDerivations(base, { total: { label: 'Total', value: 30, error: '#REF!' } })).toBe(false)
   })
 })

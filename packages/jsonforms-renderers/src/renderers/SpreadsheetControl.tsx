@@ -1,8 +1,9 @@
-import { withJsonFormsControlProps } from '@jsonforms/react'
+import { useJsonForms, withJsonFormsControlProps } from '@jsonforms/react'
+import { Resolve } from '@jsonforms/core'
 import type { ControlProps, JsonSchema } from '@jsonforms/core'
 import { Box, Flex, IconButton, Spinner, Table, Text, Tooltip } from '@radix-ui/themes'
 import { UploadIcon, Cross2Icon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
-import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { isEditable } from '../utils/editable'
 import { getErrorMessage } from '../utils/error'
@@ -12,11 +13,16 @@ import {
   columnLetter,
   processMatrix,
   isRecordsSheet,
+  buildDerivations,
+  sameDerivations,
+  evaluateExpressions,
   SheetParseError,
   type CellValue,
+  type DerivationResult,
   type FormulaConfigEntry,
   type SpreadsheetValue,
 } from '../utils/spreadsheet'
+import { recordsToMatrix, selectSheetSource } from '../utils/records'
 
 interface XSpreadsheetOptions {
   /** Accepted file types: comma-separated MIME types, wildcards (image/*), or extensions (.xlsx). */
@@ -43,6 +49,20 @@ interface XSpreadsheetOptions {
   showSheet?: boolean
   /** Which sheet to read by name. Defaults to the workbook's first sheet if omitted. */
   sheetName?: string
+  /**
+   * Read the data from elsewhere in the form instead of from an upload: a dotted
+   * path, relative to this control's own parent object, exactly as
+   * x-computed.inputs paths are. Any non-empty string switches the control into
+   * source mode — no upload, replace or remove, and only `derivations` is
+   * persisted, since the data itself belongs to whichever field produced it.
+   *
+   * The path may resolve to a 2-D array (addressed literally, like an uploaded
+   * sheet) or to an array of objects (flattened to a header row plus one row per
+   * record, so data starts at row 2). accept, maxSize, sheetName and persistSheet
+   * are inert in this mode; columnHeader, rowHeader and showSheet still apply,
+   * since they describe how to render the data.
+   */
+  sourcePath?: string
 }
 
 type SpreadsheetControlProps = ControlProps & {
@@ -99,6 +119,30 @@ const SpreadsheetControl = ({
   const rowHeader = xSpreadsheet.rowHeader === true
   const showSheet = xSpreadsheet.showSheet !== false
   const sheetName = xSpreadsheet.sheetName
+  const sourcePath = typeof xSpreadsheet.sourcePath === 'string' ? xSpreadsheet.sourcePath.trim() : ''
+  const sourceMode = sourcePath !== ''
+
+  // Read from the whole-form context in the RENDER BODY, not inside the effect
+  // below — that is what lets the effect re-fire when the SOURCE field changes,
+  // since neither this control's own `path` nor its own `data` moves on that
+  // write. Same mechanism ComputedControl uses to follow a sibling.
+  const ctx = useJsonForms()
+  const parentPath = path.split('.').slice(0, -1).join('.')
+  // Resolve.data is declared `any`; landing it in an explicitly `unknown`
+  // binding is the whole narrowing story — selectSheetSource below is what
+  // actually establishes the shape.
+  const resolvedSource: unknown = sourceMode
+    ? Resolve.data(ctx.core?.data, parentPath ? `${parentPath}.${sourcePath}` : sourcePath)
+    : undefined
+  // Memoized on the resolved value's REFERENCE, deliberately not on a
+  // stringification of it: the core reducer writes with lodash fp/set ->
+  // cloneByPath, a shallow clone along the written path only, so an unrelated
+  // edit elsewhere in the form leaves this value's identity untouched while a
+  // write inside it does not — exactly when a recompute is wanted. Every write
+  // re-renders every context consumer (UPDATE_DATA has no equality bail-out),
+  // so stringifying a large array here would cost on every keystroke.
+  const source = useMemo(() => selectSheetSource(resolvedSource), [resolvedSource])
+  const formReadonly = ctx.readonly === true
 
   const value = (data ?? null) as SpreadsheetValue | null
 
@@ -118,13 +162,157 @@ const SpreadsheetControl = ({
   // the matrix branch this session; only a reload (no localMatrix, reading
   // the already-shaped persisted value back) can render via the records
   // branch below. Told apart via isRecordsSheet, not a stored field.
+  // Source mode feeds the SAME two locals the upload path builds, which is what
+  // lets every preview, option and formula path below be reused untouched — a
+  // resolved 2-D array renders through the matrix branch, resolved records
+  // through the records branch, exactly as a persisted sheet of either shape
+  // already does.
   const persistedSheet = value?.sheet ?? null
-  const matrix = localMatrix ?? (persistedSheet && !isRecordsSheet(persistedSheet) ? persistedSheet : null)
-  const records = localMatrix == null && persistedSheet && isRecordsSheet(persistedSheet) ? persistedSheet : null
+  const matrix = sourceMode
+    ? source.status === 'matrix'
+      ? source.matrix
+      : null
+    : (localMatrix ?? (persistedSheet && !isRecordsSheet(persistedSheet) ? persistedSheet : null))
+  const records = sourceMode
+    ? source.status === 'records' && source.records.length > 0
+      ? (source.records as Record<string, CellValue>[])
+      : null
+    : localMatrix == null && persistedSheet && isRecordsSheet(persistedSheet)
+      ? persistedSheet
+      : null
   const derivations = value?.derivations ?? {}
   // records != null always implies value != null (records is derived only
   // from value?.sheet), so this already covers the records case too.
   const hasValue = matrix != null || value != null
+
+  // Memoized so the preview is only rebuilt when the data or the display
+  // options actually change. This control now subscribes to whole-form data
+  // (for sourcePath resolution), so it re-renders on every edit anywhere in
+  // the form — without this, a 200-row grid would be reconciled on each one.
+  const sheetPreview = useMemo(() => {
+    // columnHeader consumes row 0 as the header; rowHeader consumes column 0 as
+    // row labels — offset the body so the header row/column is never also
+    // rendered as a data row/column.
+    const rowOffset = columnHeader ? 1 : 0
+    const colOffset = rowHeader ? 1 : 0
+    const bodyRows = matrix ? matrix.slice(rowOffset) : []
+    const visibleRows = bodyRows.slice(0, MAX_PREVIEW_ROWS)
+    const colCount = Math.min(
+      MAX_PREVIEW_COLS,
+      Math.max(0, ...visibleRows.map((row) => Math.max(0, row.length - colOffset))),
+    )
+    const colIndices = Array.from({ length: colCount }, (_, i) => i + colOffset)
+    // columnHeader && rowHeader together is rejected above, so there's never a
+    // meaningful corner cell to show here — the header row/column consumes it.
+    const cornerLabel = ''
+    // rowHeader alone means every cell in the column-header row below is blank
+    // (see its own comment) — the whole row would just be dead space, so skip
+    // it entirely and lean on the row-label column's distinct styling instead.
+    const suppressColumnHeaderRow = rowHeader && !columnHeader
+
+    // records-mode preview: no row/col "offset" concept (shapeSheet already
+    // consumed the header row/column when building each record) — just the
+    // same MAX_PREVIEW_ROWS/COLS truncation the matrix branch above uses.
+    // Headers are the union of all VISIBLE records' own keys, not just the
+    // first record's — every record shapeSheet itself produces has an
+    // identical key set, so this only matters for a hand-supplied `data`
+    // value with non-uniform records (sheet crosses a serialization boundary
+    // — it isn't guaranteed to have been produced by shapeSheet).
+    const visibleRecords = records ? records.slice(0, MAX_PREVIEW_ROWS) : []
+    const recordHeaders = Array.from(new Set(visibleRecords.flatMap((r) => Object.keys(r)))).slice(0, MAX_PREVIEW_COLS)
+
+    return (
+      <>
+        {/* ── Sheet preview grid, or a note when it wasn't persisted ── */}
+        {matrix && showSheet && (
+          <Box mt="3">
+            <Box style={{ overflow: 'auto', maxHeight: 420 }}>
+              <Table.Root variant="surface" size="1">
+                {!suppressColumnHeaderRow && (
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.ColumnHeaderCell>{cornerLabel}</Table.ColumnHeaderCell>
+                      {colIndices.map((c) => (
+                        // This row only renders when rowHeader isn't the sole
+                        // flag set (see suppressColumnHeaderRow) — so reaching
+                        // here, either columnHeader is true (real labels) or
+                        // both are false (columnLetter fallback).
+                        <Table.ColumnHeaderCell key={c}>
+                          {columnHeader ? formatCell(matrix[0]?.[c]) : columnLetter(c)}
+                        </Table.ColumnHeaderCell>
+                      ))}
+                    </Table.Row>
+                  </Table.Header>
+                )}
+                <Table.Body>
+                  {visibleRows.map((row, r) => {
+                    const actualRow = rowOffset + r
+                    return (
+                      <Table.Row key={r}>
+                        <Table.RowHeaderCell
+                          style={rowHeader ? { fontWeight: 700, background: 'var(--gray-a3)' } : undefined}
+                        >
+                          {/* columnHeader alone means these are shaped into
+                                records keyed by row 1 — a 1/2/3 fallback number
+                                here isn't a real label, so it's suppressed (the
+                                column-header row above stays, since it's real
+                                labels there, not suppressed). */}
+                          {rowHeader ? formatCell(matrix[actualRow]?.[0]) : columnHeader ? '' : actualRow + 1}
+                        </Table.RowHeaderCell>
+                        {colIndices.map((c) => (
+                          <Table.Cell key={c}>{formatCell(row[c])}</Table.Cell>
+                        ))}
+                      </Table.Row>
+                    )
+                  })}
+                </Table.Body>
+              </Table.Root>
+            </Box>
+            {bodyRows.length > MAX_PREVIEW_ROWS && (
+              <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+                Showing first {MAX_PREVIEW_ROWS} of {bodyRows.length} rows
+              </Text>
+            )}
+          </Box>
+        )}
+
+        {/* ── Records-shaped sheet preview — reload of an already-persisted,
+              columnHeader/rowHeader-shaped value; mutually exclusive with the
+              matrix preview above ── */}
+        {records && showSheet && (
+          <Box mt="3">
+            <Box style={{ overflow: 'auto', maxHeight: 420 }}>
+              <Table.Root variant="surface" size="1">
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell />
+                    {recordHeaders.map((key) => (
+                      <Table.ColumnHeaderCell key={key}>{key}</Table.ColumnHeaderCell>
+                    ))}
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {visibleRecords.map((record, r) => (
+                    <Table.Row key={r}>
+                      <Table.RowHeaderCell>{r + 1}</Table.RowHeaderCell>
+                      {recordHeaders.map((key) => (
+                        <Table.Cell key={key}>{formatCell(record[key])}</Table.Cell>
+                      ))}
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Root>
+            </Box>
+            {records.length > MAX_PREVIEW_ROWS && (
+              <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+                Showing first {MAX_PREVIEW_ROWS} of {records.length} rows
+              </Text>
+            )}
+          </Box>
+        )}
+      </>
+    )
+  }, [matrix, records, showSheet, columnHeader, rowHeader])
 
   const processFile = useCallback(
     async (file: File) => {
@@ -179,6 +367,57 @@ const SpreadsheetControl = ({
     [accept, maxSize, persistSheet, columnHeader, rowHeader, sheetName, xEvaluate, path, handleChange],
   )
 
+  // ── Source mode: evaluate whenever the source data changes ──
+  // Upload mode computes from a user file event in processFile above; source
+  // mode has no event to hang off, so it follows the resolved value instead.
+  useEffect(() => {
+    if (!sourceMode) return
+
+    // Nothing configured to compute means nothing to persist. Keeping this
+    // control write-free in that case makes it usable as a plain "render this
+    // array" field without dirtying the form.
+    if (xEvaluate.length === 0) return
+
+    let cancelled = false
+
+    const persist = (next: Record<string, DerivationResult>) => {
+      // Whole-form readonly gates PERSISTING only, never computing — same
+      // reasoning as ComputedControl: silently rewriting a stored record's
+      // derivations, or tripping a host's autosave, is worse than showing a
+      // freshly computed value the user cannot save.
+      if (formReadonly) return
+      // The map is rebuilt on every run, so a reference check would always
+      // report a change and mark a saved form dirty the moment it opened.
+      if (!sameDerivations(value?.derivations, next)) handleChange(path, { derivations: next })
+    }
+
+    const formulaMatrix =
+      source.status === 'matrix' ? source.matrix : source.status === 'records' ? recordsToMatrix(source.records) : []
+
+    if (formulaMatrix.length === 0) {
+      // Don't hand an empty matrix to the engine: evaluateExpressions
+      // short-circuits that to one #ERROR! per entry, which reads as "your
+      // formula is broken" when the truth is the source field is still empty.
+      // Clear stale results, but never dirty a pristine field just to write {}.
+      if (value != null) persist(Object.create(null) as Record<string, DerivationResult>)
+      return
+    }
+
+    void evaluateExpressions(formulaMatrix, xEvaluate).then((results) => {
+      // A source change landing mid-evaluation could otherwise let an older
+      // result overwrite a newer one.
+      if (cancelled) return
+      persist(buildDerivations(results))
+    })
+
+    return () => {
+      cancelled = true
+    }
+    // Deliberately not keyed on `value`/`data`/`path`/`handleChange`, which this
+    // effect itself writes to; `source` carries the resolved reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceMode, source, xEvaluate, formReadonly])
+
   if (visible === false) {
     return null
   }
@@ -200,7 +439,7 @@ const SpreadsheetControl = ({
     )
   }
 
-  if (!canEdit && !hasValue) return null
+  if (!sourceMode && !canEdit && !hasValue) return null
 
   const handleDrag = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -232,38 +471,7 @@ const SpreadsheetControl = ({
     handleChange(path, null)
   }
 
-  // columnHeader consumes row 0 as the header; rowHeader consumes column 0 as
-  // row labels — offset the body so the header row/column is never also
-  // rendered as a data row/column.
-  const rowOffset = columnHeader ? 1 : 0
-  const colOffset = rowHeader ? 1 : 0
-  const bodyRows = matrix ? matrix.slice(rowOffset) : []
-  const visibleRows = bodyRows.slice(0, MAX_PREVIEW_ROWS)
-  const colCount = Math.min(
-    MAX_PREVIEW_COLS,
-    Math.max(0, ...visibleRows.map((row) => Math.max(0, row.length - colOffset))),
-  )
-  const colIndices = Array.from({ length: colCount }, (_, i) => i + colOffset)
-  const showStoredNote = showSheet && matrix == null && records == null && value != null
-  // columnHeader && rowHeader together is rejected above, so there's never a
-  // meaningful corner cell to show here — the header row/column consumes it.
-  const cornerLabel = ''
-  // rowHeader alone means every cell in the column-header row below is blank
-  // (see its own comment) — the whole row would just be dead space, so skip
-  // it entirely and lean on the row-label column's distinct styling instead.
-  const suppressColumnHeaderRow = rowHeader && !columnHeader
-
-  // records-mode preview: no row/col "offset" concept (shapeSheet already
-  // consumed the header row/column when building each record) — just the
-  // same MAX_PREVIEW_ROWS/COLS truncation the matrix branch above uses.
-  // Headers are the union of all VISIBLE records' own keys, not just the
-  // first record's — every record shapeSheet itself produces has an
-  // identical key set, so this only matters for a hand-supplied `data`
-  // value with non-uniform records (sheet crosses a serialization boundary
-  // — it isn't guaranteed to have been produced by shapeSheet).
-  const visibleRecords = records ? records.slice(0, MAX_PREVIEW_ROWS) : []
-  const recordHeaders = Array.from(new Set(visibleRecords.flatMap((r) => Object.keys(r)))).slice(0, MAX_PREVIEW_COLS)
-
+  const showStoredNote = !sourceMode && showSheet && matrix == null && records == null && value != null
   return (
     <Box mb="4">
       {/* ── Header row ── */}
@@ -273,7 +481,7 @@ const SpreadsheetControl = ({
             {label}
             {required && <Text color="red"> *</Text>}
           </Text>
-          {hasValue && canEdit && (
+          {!sourceMode && hasValue && canEdit && (
             <>
               <Tooltip content="Replace spreadsheet">
                 <IconButton
@@ -299,9 +507,11 @@ const SpreadsheetControl = ({
             </>
           )}
         </Flex>
-        <Text size="1" color="gray">
-          {formatBytes(maxSize)} max · {formatAccept(accept)}
-        </Text>
+        {!sourceMode && (
+          <Text size="1" color="gray">
+            {formatBytes(maxSize)} max · {formatAccept(accept)}
+          </Text>
+        )}
       </Flex>
 
       {/* A replacement upload's validation/parse error has nowhere else to
@@ -315,11 +525,32 @@ const SpreadsheetControl = ({
 
       {/* Hidden file input — triggered by the empty-state dropzone below and
           by the compact "replace" button in the header once a file exists. */}
-      <input ref={inputRef} type="file" style={{ display: 'none' }} accept={accept} onChange={handleInputChange} />
+      {!sourceMode && (
+        <input ref={inputRef} type="file" style={{ display: 'none' }} accept={accept} onChange={handleInputChange} />
+      )}
+
+      {/* ── Source mode: what the path resolved to, when it isn't rows ──
+          Each of these is a normal state rather than an error: an upstream field
+          the user hasn't filled in yet is the common case. ── */}
+      {sourceMode && source.status === 'missing' && (
+        <Text size="2" color="gray" style={{ display: 'block' }}>
+          No data available yet.
+        </Text>
+      )}
+      {sourceMode && source.status === 'invalid' && (
+        <Text size="2" color="red" style={{ display: 'block' }}>
+          {`x-spreadsheet.sourcePath "${sourcePath}" doesn't point at rows or records.`}
+        </Text>
+      )}
+      {sourceMode && source.status === 'records' && source.records.length === 0 && (
+        <Text size="2" color="gray" style={{ display: 'block' }}>
+          No rows yet.
+        </Text>
+      )}
 
       {/* ── Drop zone — empty state only; once a file exists, the compact
           header controls above handle replace/remove instead ── */}
-      {canEdit && !hasValue && (
+      {!sourceMode && canEdit && !hasValue && (
         <div
           role="button"
           tabIndex={0}
@@ -378,93 +609,7 @@ const SpreadsheetControl = ({
         </div>
       )}
 
-      {/* ── Sheet preview grid, or a note when it wasn't persisted ── */}
-      {matrix && showSheet && (
-        <Box mt="3">
-          <Box style={{ overflow: 'auto', maxHeight: 420 }}>
-            <Table.Root variant="surface" size="1">
-              {!suppressColumnHeaderRow && (
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell>{cornerLabel}</Table.ColumnHeaderCell>
-                    {colIndices.map((c) => (
-                      // This row only renders when rowHeader isn't the sole
-                      // flag set (see suppressColumnHeaderRow) — so reaching
-                      // here, either columnHeader is true (real labels) or
-                      // both are false (columnLetter fallback).
-                      <Table.ColumnHeaderCell key={c}>
-                        {columnHeader ? formatCell(matrix[0]?.[c]) : columnLetter(c)}
-                      </Table.ColumnHeaderCell>
-                    ))}
-                  </Table.Row>
-                </Table.Header>
-              )}
-              <Table.Body>
-                {visibleRows.map((row, r) => {
-                  const actualRow = rowOffset + r
-                  return (
-                    <Table.Row key={r}>
-                      <Table.RowHeaderCell
-                        style={rowHeader ? { fontWeight: 700, background: 'var(--gray-a3)' } : undefined}
-                      >
-                        {/* columnHeader alone means these are shaped into
-                            records keyed by row 1 — a 1/2/3 fallback number
-                            here isn't a real label, so it's suppressed (the
-                            column-header row above stays, since it's real
-                            labels there, not suppressed). */}
-                        {rowHeader ? formatCell(matrix[actualRow]?.[0]) : columnHeader ? '' : actualRow + 1}
-                      </Table.RowHeaderCell>
-                      {colIndices.map((c) => (
-                        <Table.Cell key={c}>{formatCell(row[c])}</Table.Cell>
-                      ))}
-                    </Table.Row>
-                  )
-                })}
-              </Table.Body>
-            </Table.Root>
-          </Box>
-          {bodyRows.length > MAX_PREVIEW_ROWS && (
-            <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
-              Showing first {MAX_PREVIEW_ROWS} of {bodyRows.length} rows
-            </Text>
-          )}
-        </Box>
-      )}
-
-      {/* ── Records-shaped sheet preview — reload of an already-persisted,
-          columnHeader/rowHeader-shaped value; mutually exclusive with the
-          matrix preview above ── */}
-      {records && showSheet && (
-        <Box mt="3">
-          <Box style={{ overflow: 'auto', maxHeight: 420 }}>
-            <Table.Root variant="surface" size="1">
-              <Table.Header>
-                <Table.Row>
-                  <Table.ColumnHeaderCell />
-                  {recordHeaders.map((key) => (
-                    <Table.ColumnHeaderCell key={key}>{key}</Table.ColumnHeaderCell>
-                  ))}
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {visibleRecords.map((record, r) => (
-                  <Table.Row key={r}>
-                    <Table.RowHeaderCell>{r + 1}</Table.RowHeaderCell>
-                    {recordHeaders.map((key) => (
-                      <Table.Cell key={key}>{formatCell(record[key])}</Table.Cell>
-                    ))}
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Root>
-          </Box>
-          {records.length > MAX_PREVIEW_ROWS && (
-            <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
-              Showing first {MAX_PREVIEW_ROWS} of {records.length} rows
-            </Text>
-          )}
-        </Box>
-      )}
+      {sheetPreview}
       {showStoredNote && (
         <Text size="2" color="gray" mt="3" style={{ display: 'block' }}>
           Sheet preview not stored for this field — re-upload to view contents.
