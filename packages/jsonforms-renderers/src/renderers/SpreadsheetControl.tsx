@@ -76,7 +76,13 @@ const SpreadsheetControl = ({
   errors,
   visible = true,
 }: SpreadsheetControlProps) => {
-  useClearWhenHidden(visible, path, handleChange, null)
+  // Clears to `undefined`, not `null` — this control's schema is `type:
+  // 'object'`, which `null` does NOT satisfy, so writing null would leave the
+  // field permanently failing validation with "must be object" and no way to
+  // recover short of uploading again. `undefined` means "no file uploaded",
+  // which is exactly the state a never-touched field is already in: valid when
+  // the field is optional, and a plain "is required" error when it isn't.
+  useClearWhenHidden(visible, path, handleChange)
 
   const isValid = !errors || errors.length === 0
   // `enabled` and `readonly` are independently computed by @jsonforms/core
@@ -229,7 +235,10 @@ const SpreadsheetControl = ({
     setLocalMatrix(null)
     setError(null)
     setStatus('empty')
-    handleChange(path, null)
+    // `undefined`, not `null` — see the useClearWhenHidden note above. Removing
+    // the file must return the field to its pristine "nothing uploaded" state,
+    // not park a null in it that `type: 'object'` then rejects.
+    handleChange(path, undefined)
   }
 
   // columnHeader consumes row 0 as the header; rowHeader consumes column 0 as
