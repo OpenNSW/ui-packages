@@ -14,12 +14,14 @@ import {
   processMatrix,
   isRecordsSheet,
   buildDerivations,
+  shapeSheet,
   sameDerivations,
+  sameSheetData,
   evaluateExpressions,
   SheetParseError,
   type CellValue,
-  type DerivationResult,
   type FormulaConfigEntry,
+  type SheetData,
   type SpreadsheetValue,
 } from '../utils/spreadsheet'
 import { recordsToMatrix, selectSheetSource } from '../utils/records'
@@ -29,7 +31,14 @@ interface XSpreadsheetOptions {
   accept?: string
   /** Max upload size in bytes. */
   maxSize?: number
-  /** Include the parsed sheet in the persisted value, so it survives a reload. Default true. */
+  /**
+   * Include the sheet in the persisted value alongside `derivations`.
+   * Defaults to whichever avoids the obvious mistake for the configured
+   * source: true for an upload, where this control owns the only copy and
+   * omitting it would lose the data; false for a sourcePath, where the rows
+   * already live in the field they were read from and persisting them again
+   * would just store a second copy. Set it explicitly either way.
+   */
   persistSheet?: boolean
   /**
    * Use row 1's values as column labels in the preview, AND persist `sheet`
@@ -52,15 +61,17 @@ interface XSpreadsheetOptions {
   /**
    * Read the data from elsewhere in the form instead of from an upload: a dotted
    * path, relative to this control's own parent object, exactly as
-   * x-computed.inputs paths are. Any non-empty string switches the control into
-   * source mode — no upload, replace or remove, and only `derivations` is
-   * persisted, since the data itself belongs to whichever field produced it.
+   * x-computed.inputs paths are. Any non-empty string selects a path source,
+   * which has no upload, replace or remove — the rows belong to whichever
+   * field produced them.
    *
    * The path may resolve to a 2-D array (addressed literally, like an uploaded
-   * sheet) or to an array of objects (flattened to a header row plus one row per
-   * record, so data starts at row 2). accept, maxSize, sheetName and persistSheet
-   * are inert in this mode; columnHeader, rowHeader and showSheet still apply,
-   * since they describe how to render the data.
+   * sheet) or to an array of objects (flattened to a header row plus one row
+   * per record, so data starts at row 2).
+   *
+   * Only accept, maxSize and sheetName are inert here, because they describe
+   * how to read a file. Everything else — columnHeader, rowHeader, showSheet,
+   * persistSheet and x-evaluate — means exactly what it means for an upload.
    */
   sourcePath?: string
 }
@@ -114,13 +125,18 @@ const SpreadsheetControl = ({
 
   const accept = xSpreadsheet.accept ?? DEFAULT_ACCEPT
   const maxSize = xSpreadsheet.maxSize ?? DEFAULT_MAX_SIZE
-  const persistSheet = xSpreadsheet.persistSheet !== false
   const columnHeader = xSpreadsheet.columnHeader === true
   const rowHeader = xSpreadsheet.rowHeader === true
   const showSheet = xSpreadsheet.showSheet !== false
   const sheetName = xSpreadsheet.sheetName
   const sourcePath = typeof xSpreadsheet.sourcePath === 'string' ? xSpreadsheet.sourcePath.trim() : ''
-  const sourceMode = sourcePath !== ''
+  const isSourceFromPath = sourcePath !== ''
+  // The one option whose DEFAULT depends on where the data came from, because
+  // that is what decides who owns it. An upload has no other copy, so omitting
+  // the sheet would lose it; a path source is already stored in the field it
+  // was read from, so persisting it here would just duplicate it. The option
+  // itself works the same either way — only the default differs.
+  const persistSheet = isSourceFromPath ? xSpreadsheet.persistSheet === true : xSpreadsheet.persistSheet !== false
 
   // Read from the whole-form context in the RENDER BODY, not inside the effect
   // below — that is what lets the effect re-fire when the SOURCE field changes,
@@ -131,7 +147,7 @@ const SpreadsheetControl = ({
   // Resolve.data is declared `any`; landing it in an explicitly `unknown`
   // binding is the whole narrowing story — selectSheetSource below is what
   // actually establishes the shape.
-  const resolvedSource: unknown = sourceMode
+  const resolvedSource: unknown = isSourceFromPath
     ? Resolve.data(ctx.core?.data, parentPath ? `${parentPath}.${sourcePath}` : sourcePath)
     : undefined
   // Memoized on the resolved value's REFERENCE, deliberately not on a
@@ -162,18 +178,18 @@ const SpreadsheetControl = ({
   // the matrix branch this session; only a reload (no localMatrix, reading
   // the already-shaped persisted value back) can render via the records
   // branch below. Told apart via isRecordsSheet, not a stored field.
-  // Source mode feeds the SAME two locals the upload path builds, which is what
+  // A path source feeds the SAME two locals the upload path builds, which is what
   // lets every preview, option and formula path below be reused untouched — a
   // resolved 2-D array renders through the matrix branch, resolved records
   // through the records branch, exactly as a persisted sheet of either shape
   // already does.
   const persistedSheet = value?.sheet ?? null
-  const matrix = sourceMode
+  const matrix = isSourceFromPath
     ? source.status === 'matrix'
       ? source.matrix
       : null
     : (localMatrix ?? (persistedSheet && !isRecordsSheet(persistedSheet) ? persistedSheet : null))
-  const records = sourceMode
+  const records = isSourceFromPath
     ? source.status === 'records' && source.records.length > 0
       ? (source.records as Record<string, CellValue>[])
       : null
@@ -367,28 +383,29 @@ const SpreadsheetControl = ({
     [accept, maxSize, persistSheet, columnHeader, rowHeader, sheetName, xEvaluate, path, handleChange],
   )
 
-  // ── Source mode: evaluate whenever the source data changes ──
-  // Upload mode computes from a user file event in processFile above; source
-  // mode has no event to hang off, so it follows the resolved value instead.
+  // ── Path source: evaluate whenever the source data changes ──
+  // An upload computes from a user file event in processFile above; a path
+  // source has no event to hang off, so it follows the resolved value instead.
   useEffect(() => {
-    if (!sourceMode) return
+    if (!isSourceFromPath) return
 
-    // Nothing configured to compute means nothing to persist. Keeping this
-    // control write-free in that case makes it usable as a plain "render this
-    // array" field without dirtying the form.
-    if (xEvaluate.length === 0) return
+    // Nothing to compute and nothing to store means nothing to write. Keeping
+    // this control write-free in that case makes it usable as a plain "render
+    // this array" field without dirtying the form.
+    if (xEvaluate.length === 0 && !persistSheet) return
 
     let cancelled = false
 
-    const persist = (next: Record<string, DerivationResult>) => {
-      // Whole-form readonly gates PERSISTING only, never computing — same
-      // reasoning as ComputedControl: silently rewriting a stored record's
-      // derivations, or tripping a host's autosave, is worse than showing a
-      // freshly computed value the user cannot save.
+    // Whole-form readonly gates PERSISTING only, never computing — same
+    // reasoning as ComputedControl: silently rewriting a stored record's
+    // derivations, or tripping a host's autosave, is worse than showing a
+    // freshly computed value the user cannot save.
+    const persist = (next: SpreadsheetValue | undefined) => {
       if (formReadonly) return
-      // The map is rebuilt on every run, so a reference check would always
+      // Both halves are rebuilt on every run, so a reference check would always
       // report a change and mark a saved form dirty the moment it opened.
-      if (!sameDerivations(value?.derivations, next)) handleChange(path, { derivations: next })
+      if (sameDerivations(value?.derivations, next?.derivations) && sameSheetData(value?.sheet, next?.sheet)) return
+      handleChange(path, next)
     }
 
     const formulaMatrix =
@@ -398,8 +415,15 @@ const SpreadsheetControl = ({
       // Don't hand an empty matrix to the engine: evaluateExpressions
       // short-circuits that to one #ERROR! per entry, which reads as "your
       // formula is broken" when the truth is the source field is still empty.
-      // Clear stale results, but never dirty a pristine field just to write {}.
-      if (value != null) persist(Object.create(null) as Record<string, DerivationResult>)
+      //
+      // Clearing to `undefined` rather than to an empty object follows the
+      // same rule the rest of the package does (see useClearWhenHidden): a
+      // field with nothing in it should be indistinguishable from one that was
+      // never touched. A persisted sheet is a snapshot of the CURRENT source,
+      // not an archive, so it goes too — keeping it would leave the field
+      // disagreeing with its source with no way to signal the staleness.
+      // Never dirty an already-pristine field just to write that.
+      if (value != null) persist(undefined)
       return
     }
 
@@ -407,7 +431,28 @@ const SpreadsheetControl = ({
       // A source change landing mid-evaluation could otherwise let an older
       // result overwrite a newer one.
       if (cancelled) return
-      persist(buildDerivations(results))
+
+      // shapeSheet applies columnHeader/rowHeader exactly as it does for an
+      // upload, so the persisted shape doesn't depend on where the rows came
+      // from. It throws on duplicate keys, which here has to land in the error
+      // state rather than propagate.
+      //
+      // Shaping happens in this callback rather than in the effect body so no
+      // setState runs synchronously during the effect, which would trigger a
+      // second render pass on every evaluation.
+      let sheet: SheetData | undefined
+      if (persistSheet) {
+        try {
+          sheet = shapeSheet(formulaMatrix, { columnHeader, rowHeader })
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to shape the source data.')
+          return
+        }
+      }
+      setError(null)
+
+      const derivations = buildDerivations(results)
+      persist(sheet === undefined ? { derivations } : { sheet, derivations })
     })
 
     return () => {
@@ -416,7 +461,7 @@ const SpreadsheetControl = ({
     // Deliberately not keyed on `value`/`data`/`path`/`handleChange`, which this
     // effect itself writes to; `source` carries the resolved reference.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceMode, source, xEvaluate, formReadonly])
+  }, [isSourceFromPath, source, xEvaluate, formReadonly, persistSheet, columnHeader, rowHeader])
 
   if (visible === false) {
     return null
@@ -439,7 +484,7 @@ const SpreadsheetControl = ({
     )
   }
 
-  if (!sourceMode && !canEdit && !hasValue) return null
+  if (!isSourceFromPath && !canEdit && !hasValue) return null
 
   const handleDrag = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -471,7 +516,7 @@ const SpreadsheetControl = ({
     handleChange(path, null)
   }
 
-  const showStoredNote = !sourceMode && showSheet && matrix == null && records == null && value != null
+  const showStoredNote = !isSourceFromPath && showSheet && matrix == null && records == null && value != null
   return (
     <Box mb="4">
       {/* ── Header row ── */}
@@ -481,7 +526,7 @@ const SpreadsheetControl = ({
             {label}
             {required && <Text color="red"> *</Text>}
           </Text>
-          {!sourceMode && hasValue && canEdit && (
+          {!isSourceFromPath && hasValue && canEdit && (
             <>
               <Tooltip content="Replace spreadsheet">
                 <IconButton
@@ -507,7 +552,7 @@ const SpreadsheetControl = ({
             </>
           )}
         </Flex>
-        {!sourceMode && (
+        {!isSourceFromPath && (
           <Text size="1" color="gray">
             {formatBytes(maxSize)} max · {formatAccept(accept)}
           </Text>
@@ -525,24 +570,24 @@ const SpreadsheetControl = ({
 
       {/* Hidden file input — triggered by the empty-state dropzone below and
           by the compact "replace" button in the header once a file exists. */}
-      {!sourceMode && (
+      {!isSourceFromPath && (
         <input ref={inputRef} type="file" style={{ display: 'none' }} accept={accept} onChange={handleInputChange} />
       )}
 
-      {/* ── Source mode: what the path resolved to, when it isn't rows ──
+      {/* ── Path source: what the path resolved to, when it isn't rows ──
           Each of these is a normal state rather than an error: an upstream field
           the user hasn't filled in yet is the common case. ── */}
-      {sourceMode && source.status === 'missing' && (
+      {isSourceFromPath && source.status === 'missing' && (
         <Text size="2" color="gray" style={{ display: 'block' }}>
           No data available yet.
         </Text>
       )}
-      {sourceMode && source.status === 'invalid' && (
+      {isSourceFromPath && source.status === 'invalid' && (
         <Text size="2" color="red" style={{ display: 'block' }}>
           {`x-spreadsheet.sourcePath "${sourcePath}" doesn't point at rows or records.`}
         </Text>
       )}
-      {sourceMode && source.status === 'records' && source.records.length === 0 && (
+      {isSourceFromPath && source.status === 'records' && source.records.length === 0 && (
         <Text size="2" color="gray" style={{ display: 'block' }}>
           No rows yet.
         </Text>
@@ -550,7 +595,7 @@ const SpreadsheetControl = ({
 
       {/* ── Drop zone — empty state only; once a file exists, the compact
           header controls above handle replace/remove instead ── */}
-      {!sourceMode && canEdit && !hasValue && (
+      {!isSourceFromPath && canEdit && !hasValue && (
         <div
           role="button"
           tabIndex={0}

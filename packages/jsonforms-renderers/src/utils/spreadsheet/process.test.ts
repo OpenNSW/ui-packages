@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDerivations, processMatrix, sameDerivations } from './process'
+import { buildDerivations, processMatrix, sameDerivations, sameSheetData } from './process'
 import type { CellValue } from './types'
 
 const matrix: CellValue[][] = [
@@ -123,5 +123,62 @@ describe('sameDerivations', () => {
     expect(sameDerivations(base, {})).toBe(false)
     expect(sameDerivations(base, { other: { label: 'Total', value: 30 } })).toBe(false)
     expect(sameDerivations(base, { total: { label: 'Total', value: 30, error: '#REF!' } })).toBe(false)
+  })
+})
+
+describe('sameSheetData', () => {
+  const records = [
+    { Item: 'Widget', Qty: 10 },
+    { Item: 'Gadget', Qty: 20 },
+  ]
+
+  it('treats two absent sheets as equal, and one absent side as changed', () => {
+    expect(sameSheetData(undefined, undefined)).toBe(true)
+    expect(sameSheetData(matrix, undefined)).toBe(false)
+    expect(sameSheetData(undefined, matrix)).toBe(false)
+  })
+
+  it('compares matrices structurally rather than by reference', () => {
+    expect(
+      sameSheetData(
+        matrix,
+        matrix.map((row) => [...row]),
+      ),
+    ).toBe(true)
+    expect(
+      sameSheetData(matrix, [
+        ['Item', 'Qty'],
+        ['Widget', 10],
+        ['Gadget', 21],
+      ]),
+    ).toBe(false)
+  })
+
+  it('ignores key order in a records sheet', () => {
+    const reordered = [
+      { Qty: 10, Item: 'Widget' },
+      { Qty: 20, Item: 'Gadget' },
+    ]
+    expect(sameSheetData(records, reordered)).toBe(true)
+  })
+
+  it('compares a Date equal to the ISO string it round-trips to', () => {
+    // Same reason as sameDerivations: a persisted sheet comes back from JSON
+    // with dates as strings, while a freshly shaped one still holds Dates. Left
+    // uncompared, opening a saved form would rewrite an identical sheet.
+    const date = new Date(Date.UTC(2026, 8, 9))
+    expect(sameSheetData([[date]], [[date.toISOString()]])).toBe(true)
+  })
+
+  it('reports a differing row count, row width, or key set as changed', () => {
+    expect(sameSheetData(matrix, matrix.slice(0, 2))).toBe(false)
+    expect(sameSheetData([['a', 'b']], [['a']])).toBe(false)
+    expect(sameSheetData(records, [{ Item: 'Widget', Qty: 10 }, { Item: 'Gadget' }])).toBe(false)
+  })
+
+  it('never reports a matrix equal to a records sheet', () => {
+    // The two shapes are read apart by isRecordsSheet, never coerced — so a
+    // sheet changing shape has to count as a change.
+    expect(sameSheetData([['Item', 'Qty']], [{ Item: 'Qty' }])).toBe(false)
   })
 })

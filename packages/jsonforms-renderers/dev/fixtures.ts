@@ -8,6 +8,45 @@ export type Fixture = {
   data?: Record<string, unknown>
 }
 
+// ── Shared by the two Sales fixtures ──────────────────────────────────────
+// "Sales (Excel upload)" and "Sales (XML -> sourcePath)" render the SAME three
+// rows through the SAME options and the SAME formulas. The only thing that
+// differs between them is where the rows come from, which is the whole point:
+// every x-spreadsheet option except the source itself is supposed to behave
+// identically either way, so any divergence you can see in the playground is a
+// bug in the control. src/utils/sample-parity.test.ts pins the other half of
+// that claim — that the .xlsx and .xml samples normalize to the same matrix.
+const SALES_DISPLAY = { columnHeader: true, rowHeader: false, showSheet: true }
+
+// Addresses work out the same for both sources: an uploaded sheet has its
+// header in row 1, and a records source gains one at row 1 when it is
+// flattened — so D2:D4 is the Quantity column of the three data rows either
+// way. `broken` is deliberate: one entry failing must not blank the others.
+const SALES_EVALUATE = [
+  { id: 'total_quantity', label: 'Total Quantity', expression: '=SUM(D2:D4)' },
+  { id: 'average_quantity', label: 'Average Quantity', expression: '=ROUND(AVERAGE(D2:D4),2)' },
+  { id: 'line_count', label: 'Line Count', expression: '=COUNTA(B2:B4)' },
+  { id: 'categories', label: 'Categories', expression: '=TEXTJOIN(", ",TRUE,C2:C4)' },
+  { id: 'broken', label: 'Broken Reference (expects #REF!)', expression: '=SUM(Z2:Z4)' },
+]
+
+// The persisted derivations map: keyed by each x-evaluate id, with the value
+// shape SpreadsheetValue declares.
+const DERIVATIONS_SCHEMA = {
+  type: 'object',
+  additionalProperties: {
+    type: 'object',
+    properties: {
+      label: { type: 'string' },
+      // Empty schema on purpose: a result may be a number, string, boolean, or
+      // null when the entry errored.
+      value: {},
+      error: { type: 'string' },
+    },
+    required: ['label', 'value'],
+  },
+}
+
 // One fixture per renderer/component. Selecting a fixture loads its schema +
 // uischema into the editors; both are live-editable from there.
 export const fixtures: Fixture[] = [
@@ -433,13 +472,7 @@ export const fixtures: Fixture[] = [
           title: 'Sales Data',
           description:
             "Upload dev/sample-files/sales-data-sample.xlsx (regenerate via generate-sales-data-sample.cjs). Since columnHeader is true, sales_data.sheet persists as one record per row (keyed by row 1's headers), not a raw matrix — see docs/spreadsheet-value-shape.md.",
-          'x-spreadsheet': {
-            accept: '.xlsx,.xls,.csv',
-            maxSize: 10485760,
-            persistSheet: true,
-            columnHeader: true,
-            rowHeader: false,
-          },
+          'x-spreadsheet': { accept: '.xlsx,.xls,.csv', maxSize: 10485760, persistSheet: true, ...SALES_DISPLAY },
           'x-evaluate': [{ id: 'total_quantity', label: 'Total Quantity', expression: '=SUM(D2:D4)' }],
           properties: {
             sheet: { type: 'array' },
@@ -550,8 +583,33 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'sales-upload',
+    name: 'Sales (Excel upload)',
+    schema: {
+      type: 'object',
+      properties: {
+        sales_totals: {
+          type: 'object',
+          title: 'Sales Totals',
+          description:
+            "Upload dev/sample-files/sales-data-sample.xlsx. The twin of 'Sales (XML -> sourcePath)': same rows, same display options, same formulas — the only difference between the two fixtures is that this one reads its rows from an uploaded file and that one reads them from a sibling field. Open both and compare: all five computed values must match exactly, #REF! included, and so must every cell of the table. The ONE thing that still differs is the leftmost row-number column — blank here, 1/2/3 there — because an uploaded sheet renders through the matrix preview (where columnHeader suppresses the numbering) while a records source renders through the records preview, which ignores columnHeader entirely. That is the last un-orthogonal option and it is tracked as its own change. Expected here: Total Quantity 1000, Average Quantity 333.33, Line Count 3, Categories 'Hardware, Hardware, Accessories'. In live data, note `sheet` IS persisted — persistSheet defaults to true for an upload, because this field holds the only copy of the rows.",
+          'x-spreadsheet': { ...SALES_DISPLAY },
+          'x-evaluate': SALES_EVALUATE,
+          properties: {
+            sheet: { type: 'array' },
+            derivations: DERIVATIONS_SCHEMA,
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/sales_totals' }],
+    } as UISchemaElement,
+  },
+  {
     id: 'xml-spreadsheet',
-    name: 'XML + Spreadsheet',
+    name: 'Sales (XML -> sourcePath)',
     schema: {
       type: 'object',
       properties: {
@@ -570,34 +628,16 @@ export const fixtures: Fixture[] = [
           type: 'object',
           title: 'Sales Totals',
           description:
-            "Formulas over the array the field above parsed, reached by sourcePath — no upload of its own. The source can be ANY 2-D array or array of objects in form data, not just an XML document: an ArrayControl's items or another spreadsheet's `sheet` work identically. Records are flattened to a header row plus one row per record, so field names are row 1 and the data starts at row 2 — A=Date, B=Item, C=Category, D=Quantity. Things to try: (1) before uploading, this reads \"No data available yet\" and writes nothing to form data; (2) after uploading, note the live data holds the parsed document under the field above and only `derivations` here — the rows are never copied; (3) the 'broken' entry reports #REF! while every other entry still computes; (4) point sourcePath at something that isn't rows, e.g. sales_document.salesData, to see the invalid-source message.",
-          'x-spreadsheet': {
-            sourcePath: 'sales_document.salesData.sale',
-          },
-          'x-evaluate': [
-            { id: 'total_quantity', label: 'Total Quantity', expression: '=SUM(D2:D4)' },
-            { id: 'average_quantity', label: 'Average Quantity', expression: '=AVERAGE(D2:D4)' },
-            { id: 'line_count', label: 'Line Count', expression: '=COUNTA(B2:B4)' },
-            { id: 'categories', label: 'Categories', expression: '=TEXTJOIN(", ",TRUE,C2:C4)' },
-            { id: 'broken', label: 'Broken Reference (expects #REF!)', expression: '=SUM(Z2:Z4)' },
-          ],
-          // Source mode persists derivations only — no `sheet`, since the rows
-          // already live under sales_document.
+            "Formulas over the array the field above parsed, reached by sourcePath — no upload of its own. The source can be ANY 2-D array or array of objects in form data, not just an XML document: an ArrayControl's items or another spreadsheet's `sheet` work identically. Records are flattened to a header row plus one row per record, so field names are row 1 and the data starts at row 2 — A=Date, B=Item, C=Category, D=Quantity. The twin fixture 'Sales (Excel upload)' runs the same rows through the same options from a file instead. Every computed value and every data cell must match; only the leftmost row-number column differs so far, since this records source renders through a preview branch that does not yet honour columnHeader. Things to try: (1) before uploading, this reads \"No data available yet\" and writes nothing to form data; (2) after uploading, live data holds the parsed document above and only `derivations` here — the rows are not copied, because persistSheet defaults to false when another field owns them; (3) add persistSheet: true and a shaped `sheet` appears alongside, identical to the twin's; (4) the 'broken' entry reports #REF! while every other entry still computes; (5) point sourcePath at something that isn't rows, e.g. sales_document.salesData, to see the invalid-source message.",
+          // Identical to the 'Sales (Excel upload)' fixture except for this one
+          // added key. Everything else about the two is shared verbatim.
+          'x-spreadsheet': { ...SALES_DISPLAY, sourcePath: 'sales_document.salesData.sale' },
+          'x-evaluate': SALES_EVALUATE,
+          // No `sheet` here: persistSheet defaults to false for a path source,
+          // since the rows already live under sales_document. Set it to true
+          // and a shaped copy appears alongside derivations.
           properties: {
-            derivations: {
-              type: 'object',
-              additionalProperties: {
-                type: 'object',
-                properties: {
-                  label: { type: 'string' },
-                  // Empty schema on purpose: a result may be a number, string,
-                  // boolean, or null when the entry errored.
-                  value: {},
-                  error: { type: 'string' },
-                },
-                required: ['label', 'value'],
-              },
-            },
+            derivations: DERIVATIONS_SCHEMA,
           },
         },
         estimated_total: {

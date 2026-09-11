@@ -1,7 +1,7 @@
 import type { CellValue } from './spreadsheet/types'
 
 // Turning arbitrary tabular data found in form data into something the formula
-// engine can address. Used by SpreadsheetControl's source mode, where the rows
+// engine can address. Used when SpreadsheetControl reads from a path, where the rows
 // come from another field's value rather than from an uploaded file — an XML
 // document's repeated element, an array control's items, another sheet.
 //

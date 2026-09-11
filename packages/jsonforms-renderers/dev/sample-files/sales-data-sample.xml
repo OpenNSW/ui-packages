@@ -3,9 +3,14 @@
   Sample document for the 'xml' fixture in dev/fixtures.ts: a plain records
   array, one <sale> per row, flat scalar children.
 
-  Carries the same figures as sales-data-sample.xlsx, but the two are
-  independent — nothing keeps them in sync, so don't rely on them matching.
-  Edit this file directly; unlike an .xlsx it needs no generator script.
+  Carries the same figures as sales-data-sample.xlsx, and that match is
+  load-bearing: the 'Sales (Excel upload)' and 'Sales (XML -> sourcePath)'
+  fixtures exist to show that the same rows compute the same way whichever
+  source they arrive through, which only means anything while the two files
+  agree. src/utils/sample-parity.test.ts fails if they drift.
+
+  Edit this file directly; unlike an .xlsx it needs no generator script — but
+  change the .xlsx generator to match, and run the tests.
 
   In the parsed output <Quantity> is a NUMBER while <Date> stays a STRING, and
   the three <sale> children parse as an array on their own — x-xml.arrayPaths

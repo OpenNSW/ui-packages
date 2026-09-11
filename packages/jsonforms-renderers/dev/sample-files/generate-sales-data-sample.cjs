@@ -1,8 +1,15 @@
 // Regenerates sales-data-sample.xlsx — a small, generic (industry-agnostic)
-// line-item sheet used to manually test ComputedControl (x-computed) reading
-// a spreadsheet derivation combined with a plain user-entered field in the
-// dev playground (see the 'computed-control-with-spreadsheet' fixture in
-// dev/fixtures.ts). Run with:
+// line-item sheet used by three fixtures in dev/fixtures.ts:
+// 'computed-control-with-spreadsheet' (ComputedControl reading a spreadsheet
+// derivation alongside a plain user-entered field) and the parity pair
+// 'sales-upload' / 'xml-spreadsheet'.
+//
+// These rows must stay identical to sales-data-sample.xml, which is what lets
+// that pair demonstrate that an uploaded source and a path source compute the
+// same. Change one and you must change the other;
+// src/utils/sample-parity.test.ts fails if they drift.
+//
+// Run with:
 //   node dev/sample-files/generate-sales-data-sample.cjs
 const { utils, writeFile } = require('@e965/xlsx')
 const path = require('node:path')
