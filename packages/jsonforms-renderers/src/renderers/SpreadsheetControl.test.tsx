@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { useState } from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { JsonForms } from '@jsonforms/react'
+import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
 import { radixRenderers } from './index'
+import { shapeSheet } from '../utils/spreadsheet'
 
 // Exercises SpreadsheetControl through a real JsonForms tree rather than by
 // calling it directly, because the behaviour under test is precisely its
@@ -38,14 +40,19 @@ const uischema = {
 // docs/spreadsheet-value-shape.md warns hosts about.
 function Harness({ schema, seed, onData }: { schema: JsonSchema; seed: Data; onData: (data: Data) => void }) {
   const [initial] = useState(seed)
+  // Wrapped in Theme exactly as a consuming app is: the upload header's
+  // replace/remove buttons are Radix Tooltips, which throw without its
+  // provider.
   return (
-    <JsonForms
-      schema={schema}
-      uischema={uischema}
-      data={initial}
-      renderers={radixRenderers}
-      onChange={({ data }) => onData(data as Data)}
-    />
+    <Theme>
+      <JsonForms
+        schema={schema}
+        uischema={uischema}
+        data={initial}
+        renderers={radixRenderers}
+        onChange={({ data }) => onData(data as Data)}
+      />
+    </Theme>
   )
 }
 
@@ -183,5 +190,76 @@ describe('SpreadsheetControl configuration errors', () => {
 
     expect(await screen.findByText(/columnHeader and rowHeader cannot both be true/)).toBeTruthy()
     expect(screen.queryByText('30')).toBeNull()
+  })
+})
+
+// An upload-mode field: no sourcePath, so it reads its own persisted `sheet`.
+function uploadSchema(spreadsheet: Record<string, unknown>): JsonSchema {
+  return makeSchema(spreadsheet, [])
+}
+
+// The rendered grid, as the row-header column plus each row's cells.
+const grid = () => {
+  const table = document.querySelector('table')
+  if (!table) return null
+  return {
+    head: [...table.querySelectorAll('thead th')].map((c) => c.textContent),
+    rows: [...table.querySelectorAll('tbody tr')].map((r) => [...r.children].map((c) => c.textContent)),
+  }
+}
+
+describe('SpreadsheetControl renders one grid whatever shape the data is in', () => {
+  it('reloads a columnHeader sheet exactly as the fresh upload rendered it', async () => {
+    // Fresh upload and reload used to take different preview branches, so the
+    // same sheet rendered two different ways depending on whether the page had
+    // been refreshed. Both now flatten to the same matrix.
+    renderForm(uploadSchema({ columnHeader: true }), { totals: { sheet: RECORDS, derivations: {} } })
+
+    await waitFor(() => expect(grid()).toBeTruthy())
+    expect(grid()).toEqual({
+      head: ['', 'Item', 'Qty'],
+      // No 1/2/3 fallback: with real column labels above, a row number would
+      // not be a real label either.
+      rows: [
+        ['', 'Widget', '10'],
+        ['', 'Gadget', '20'],
+      ],
+    })
+  })
+
+  it('numbers rows to match what the formulas address', async () => {
+    // With no header option the grid is addressed literally, so the row shown
+    // as 1 must be the row =SUM(B1:B1) reads — here the flattened field-name
+    // row, with the data starting at 2.
+    renderForm(uploadSchema({}), { totals: { sheet: RECORDS, derivations: {} } })
+
+    await waitFor(() => expect(grid()).toBeTruthy())
+    expect(grid()).toEqual({
+      head: ['', 'A', 'B'],
+      rows: [
+        ['1', 'Item', 'Qty'],
+        ['2', 'Widget', '10'],
+        ['3', 'Gadget', '20'],
+      ],
+    })
+  })
+
+  it('reloads a rowHeader sheet with its labels still down column A', async () => {
+    // shapeSheet's rowHeader branch builds one record per original COLUMN, so
+    // reading it back needs the quarter turn or the labels come out along row 1.
+    const persisted = shapeSheet(MATRIX, { rowHeader: true })
+    renderForm(uploadSchema({ rowHeader: true }), { totals: { sheet: persisted, derivations: {} } })
+
+    await waitFor(() => expect(grid()).toBeTruthy())
+    expect(grid()).toEqual({
+      // rowHeader alone suppresses the column-header row: every cell in it
+      // would be blank.
+      head: [],
+      rows: [
+        ['Item', 'Qty'],
+        ['Widget', '10'],
+        ['Gadget', '20'],
+      ],
+    })
   })
 })
