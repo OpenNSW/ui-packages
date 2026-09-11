@@ -152,7 +152,7 @@ const SpreadsheetControl = ({
       let parsedMatrix: CellValue[][]
       try {
         const buffer = await file.arrayBuffer()
-        parsedMatrix = parseWorkbookToMatrix(buffer, sheetName).matrix
+        parsedMatrix = (await parseWorkbookToMatrix(buffer, sheetName)).matrix
       } catch (err) {
         setStatus('error')
         setError(
