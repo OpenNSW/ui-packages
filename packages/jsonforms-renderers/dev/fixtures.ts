@@ -521,6 +521,35 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'xml',
+    name: 'XML',
+    schema: {
+      type: 'object',
+      properties: {
+        sales_data: {
+          type: 'object',
+          title: 'Sales Data Document',
+          description:
+            "Upload dev/sample-files/sales-data-sample.xml. XmlControl parses any XML into a plain object and persists it as the field's own value, with no wrapper — no advance knowledge of the file's shape needed, and no configuration beyond how to parse it. Things to look for in the data pane: (1) each <sale> becomes a flat record; (2) Quantity is a NUMBER (500) while Date stays a STRING (01/06/2026 isn't numeric) — see the coercion table in docs/xml-control.md; (3) arrayPaths is belt and braces for this file, since three <sale> children parse as an array anyway — delete the entry, re-upload, and the array stays an array. It is load-bearing only when a repeated element appears exactly once, which is the case that would otherwise silently parse as a bare object. Also try removing the file with the ✕ in the header: the field must go back to pristine rather than failing validation.",
+          'x-xml': {
+            accept: '.xml,text/xml,application/xml',
+            maxSize: 5242880,
+            arrayPaths: ['salesData.sale'],
+            removeNamespaces: false,
+          },
+          // No `properties`: the field's value IS the parsed document, an
+          // arbitrary shape from an untrusted file, so `type: 'object'` above is
+          // the only honest constraint — and the only affordable one, since AJV
+          // runs with allErrors: true on every keystroke anywhere in the form.
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/sales_data' }],
+    } as UISchemaElement,
+  },
+  {
     id: 'array',
     name: 'Array (objects)',
     schema: {

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sample document for the 'xml' fixture in dev/fixtures.ts: a plain records
+  array, one <sale> per row, flat scalar children.
+
+  Carries the same figures as sales-data-sample.xlsx, but the two are
+  independent — nothing keeps them in sync, so don't rely on them matching.
+  Edit this file directly; unlike an .xlsx it needs no generator script.
+
+  In the parsed output <Quantity> is a NUMBER while <Date> stays a STRING, and
+  the three <sale> children parse as an array on their own — x-xml.arrayPaths
+  is belt and braces here, load-bearing only when a repeated element appears
+  exactly once.
+-->
+<salesData>
+  <sale>
+    <Date>01/06/2026</Date>
+    <Item>Widget A</Item>
+    <Category>Hardware</Category>
+    <Quantity>500</Quantity>
+  </sale>
+  <sale>
+    <Date>02/06/2026</Date>
+    <Item>Widget B</Item>
+    <Category>Hardware</Category>
+    <Quantity>300</Quantity>
+  </sale>
+  <sale>
+    <Date>03/06/2026</Date>
+    <Item>Widget C</Item>
+    <Category>Accessories</Category>
+    <Quantity>200</Quantity>
+  </sale>
+</salesData>
