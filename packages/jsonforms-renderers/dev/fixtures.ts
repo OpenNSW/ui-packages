@@ -12,6 +12,510 @@ export type Fixture = {
 // uischema into the editors; both are live-editable from there.
 export const fixtures: Fixture[] = [
   {
+    id: 'sltb-blend-sheet',
+    name: 'SLTB Blend Sheet (demo)',
+    schema: {
+      type: 'object',
+      properties: {
+        import_blend_sheet: {
+          type: 'object',
+          title: 'Upload  Full Blend Sheet XML',
+          'x-xml': {
+            accept: '.xml,text/xml,application/xml',
+            maxSize: 5242880,
+            arrayPaths: ['BLEND_SHEET.Particulars_of_sale'],
+            persistDocument: false,
+            writeTo: [
+              {
+                from: 'BLEND_SHEET.Exporter.registration_number',
+                to: 'exporter_registration_no',
+              },
+              {
+                from: 'BLEND_SHEET.Exporter.TIN_number',
+                to: 'exporter_tin',
+                as: 'string',
+              },
+              {
+                to: 'cusdec_number',
+                inputs: {
+                  cusdec_office: 'BLEND_SHEET.CUSDEC_info.CUSDEC_office',
+                  cusdec_serial: 'BLEND_SHEET.CUSDEC_info.CUSDEC_serial',
+                  cusdec_no: 'BLEND_SHEET.CUSDEC_info.CUSDEC_number',
+                  cusdec_year: 'BLEND_SHEET.CUSDEC_info.CUSDEC_year',
+                },
+                formula: 'CONCATENATE(cusdec_office,"/",cusdec_serial,"/",cusdec_no,"/",cusdec_year)',
+              },
+              {
+                from: 'BLEND_SHEET.Blend.Lion_logo',
+                to: 'lion_logo_requested',
+                map: {
+                  '1': 'yes',
+                  '0': 'no',
+                },
+                default: 'no',
+              },
+              {
+                from: 'BLEND_SHEET.Blend.Blend_number',
+                to: 'blendsheet_data.0.blendsheet_no',
+              },
+              {
+                from: 'BLEND_SHEET.Blend.Average_rate',
+                to: 'blendsheet_data.0.avg_rate_per_kg',
+                as: 'number',
+              },
+              {
+                from: 'BLEND_SHEET.Blend.Average_FOB',
+                to: 'blendsheet_data.0.fob_avg',
+                as: 'number',
+              },
+              {
+                from: 'BLEND_SHEET.Blend.Quantity_export',
+                to: 'blendsheet_data.0.quality_to_be_exported',
+                as: 'number',
+              },
+              {
+                from: 'BLEND_SHEET.Blend.Blend_grade',
+                to: 'blendsheet_data.0.grade_or_standard',
+              },
+              {
+                from: 'BLEND_SHEET.Blend.Blend_date',
+                to: 'blendsheet_data.0.date_of_blend',
+                as: 'date',
+                format: 'M/DD/YY',
+              },
+              {
+                from: 'BLEND_SHEET.Particulars_of_sale',
+                to: 'blendsheet_data.0.sales.sheet',
+              },
+              {
+                from: 'BLEND_SHEET.Sample.Remarks',
+                to: 'blendsheet_data.0.remarks',
+                default: '',
+              },
+              {
+                from: 'BLEND_SHEET.Sample.Sample_date',
+                to: 'blendsheet_data.0.sample_rediness_date',
+                as: 'date',
+                format: 'M/DD/YY',
+              },
+              {
+                from: 'BLEND_SHEET.Sample.Sample_Warehouse',
+                to: 'blendsheet_data.0.warehouse_address',
+                as: 'string',
+              },
+              {
+                from: 'BLEND_SHEET.Total.Blend_gain',
+                to: 'blendsheet_data.0.blend_gain_determined',
+                as: 'number',
+                default: 0,
+              },
+              {
+                from: 'BLEND_SHEET.Total.Flavor',
+                to: 'blendsheet_data.0.flavors',
+                as: 'number',
+                default: 0,
+              },
+            ],
+          },
+        },
+        exporter_registration_no: {
+          type: 'string',
+          title: 'Exporter Registration Number',
+        },
+        exporter_tin: {
+          type: 'string',
+          title: 'Exporter TIN Number',
+        },
+        cusdec_number: {
+          type: 'string',
+          title: 'CUSDEC Number',
+        },
+        warehouse_id: {
+          type: 'string',
+          title: 'Warehouse Name / ID',
+          oneOf: [
+            {
+              const: 'WH-COLOMBO-TEA-01',
+              title: 'SLTB Colombo Central Warehouse (WH-COLOMBO-TEA-01)',
+            },
+            {
+              const: 'WH-GAMPOLA-TEA-02',
+              title: 'SLTB Gampola Tea Logistics Hub (WH-GAMPOLA-TEA-02)',
+            },
+          ],
+        },
+        blendsheet_data: {
+          type: 'array',
+          title: 'Blend Sheet Data',
+          items: {
+            type: 'object',
+            properties: {
+              form: {
+                type: 'string',
+                title: 'Form Type',
+                default: '100_local',
+                oneOf: [
+                  {
+                    const: '100_local',
+                    title: '100% LOCAL',
+                  },
+                  {
+                    const: 'local_and_imported',
+                    title: 'LOCAL+IMPORTED',
+                  },
+                  {
+                    const: 'imported',
+                    title: 'IMPORTED',
+                  },
+                ],
+              },
+              private_treaty_to_be_exported: {
+                type: 'string',
+                title: 'Private Treaty to be Exported',
+              },
+              blendsheet_no: {
+                type: 'string',
+                title: 'Blend Sheet Number',
+              },
+              avg_rate_per_kg: {
+                type: 'number',
+                title: 'Average Value Per KG',
+              },
+              fob_avg: {
+                type: 'number',
+                title: 'FOB Average Value',
+              },
+              quality_to_be_exported: {
+                type: 'number',
+                title: 'Quality to be Exported (Kg)',
+              },
+              grade_or_standard: {
+                type: 'string',
+                title: 'Grade/Standard',
+              },
+              date_of_blend: {
+                type: 'string',
+                format: 'date',
+                title: 'Date of Blend',
+              },
+              sales: {
+                type: 'object',
+                title: 'PARTICULARS OF SALE',
+                'x-spreadsheet': {
+                  accept: '.xlsx,.xls,.csv',
+                  maxSize: 10485760,
+                  columnHeader: true,
+                },
+                'x-evaluate': [
+                  {
+                    id: 'average_value_per_kg',
+                    label: 'Average Value Per KG',
+                    expression: '=SUM(J2:J10000)/SUM(I2:I10000)',
+                  },
+                  {
+                    id: 'total_sales_quantity',
+                    label: 'Total Sales Quantity (KG)',
+                    expression: '=SUM(I2:I10000)',
+                  },
+                  {
+                    id: 'total_sales_value',
+                    label: 'Total Sales Value (LKR)',
+                    expression: '=SUM(J2:J10000)',
+                  },
+                ],
+                properties: {
+                  sheet: {
+                    type: 'array',
+                  },
+                  derivations: {
+                    type: 'object',
+                  },
+                },
+              },
+              imported_tea: {
+                type: 'object',
+                title: 'PARTICULARS OF IMPORTED TEA',
+                'x-spreadsheet': {
+                  accept: '.xlsx,.xls,.csv',
+                  maxSize: 10485760,
+                  columnHeader: true,
+                },
+                'x-evaluate': [
+                  {
+                    id: 'total_import_quantity',
+                    label: 'Total Import Quantity (KG)',
+                    expression: '=SUM(F2:F10000)',
+                  },
+                  {
+                    id: 'total_import_value',
+                    label: 'Total Import Value (LKR)',
+                    expression: '=SUM(G2:G10000)',
+                  },
+                ],
+                properties: {
+                  sheet: {
+                    type: 'array',
+                  },
+                  derivations: {
+                    type: 'object',
+                  },
+                },
+              },
+              blend_balances: {
+                type: 'object',
+                title: 'PARTICULARS OF BLEND BALANCES USED (IF APPLICABLE)',
+                'x-spreadsheet': {
+                  accept: '.xlsx,.xls,.csv',
+                  maxSize: 10485760,
+                  columnHeader: true,
+                },
+                'x-evaluate': [
+                  {
+                    id: 'total_blend_balances',
+                    label: 'Total Blend Balances (KG)',
+                    expression: '=SUM(C2:C10000)',
+                  },
+                  {
+                    id: 'total_blend_gain',
+                    label: 'Total Blend Gain (KG)',
+                    expression: '=SUM(D2:D10000)',
+                  },
+                ],
+                properties: {
+                  sheet: {
+                    type: 'array',
+                  },
+                  derivations: {
+                    type: 'object',
+                  },
+                },
+              },
+              total_blend_balances_and_gain: {
+                type: 'number',
+                title: 'Total Blend Balances and Gain (KG)',
+                'x-computed': {
+                  inputs: {
+                    blend_balances_total: {
+                      path: 'blend_balances.derivations.total_blend_balances.value',
+                      default: 0,
+                    },
+                    blend_gain_total: {
+                      path: 'blend_balances.derivations.total_blend_gain.value',
+                      default: 0,
+                    },
+                  },
+                  formula: 'blend_balances_total + blend_gain_total',
+                  decimals: 4,
+                },
+              },
+              total: {
+                type: 'number',
+                title: 'Total Quantity (KG)',
+                'x-computed': {
+                  inputs: {
+                    sales_quantity: {
+                      path: 'sales.derivations.total_sales_quantity.value',
+                      default: 0,
+                    },
+                    imported_quantity: {
+                      path: 'imported_tea.derivations.total_import_quantity.value',
+                      default: 0,
+                    },
+                    balances_and_gain: {
+                      path: 'total_blend_balances_and_gain',
+                      default: 0,
+                    },
+                  },
+                  formula: 'sales_quantity + imported_quantity + balances_and_gain',
+                  decimals: 4,
+                },
+              },
+              remarks: {
+                type: 'string',
+                title: 'Remarks',
+              },
+              sample_rediness_date: {
+                type: 'string',
+                format: 'date',
+                title: 'Sample Readiness Date',
+              },
+              warehouse_address: {
+                type: 'string',
+                title: 'Warehouse Address',
+              },
+              blend_gain_determined: {
+                type: 'number',
+                title: 'Blend Gain Determined (KG)',
+              },
+              flavors: {
+                type: 'number',
+                title: 'Flavors (KG)',
+              },
+              blend_balance: {
+                type: 'number',
+                title: 'Blend Balance (KG)',
+                'x-computed': {
+                  inputs: {
+                    total_quantity: {
+                      path: 'total',
+                      default: 0,
+                    },
+                    export_quantity: {
+                      path: 'quality_to_be_exported',
+                      default: 0,
+                    },
+                  },
+                  formula: 'total_quantity - export_quantity',
+                  decimals: 4,
+                },
+              },
+            },
+          },
+        },
+        lion_logo_requested: {
+          type: 'string',
+          title: 'Apply for Lion Logo Certification',
+          oneOf: [
+            {
+              const: 'no',
+              title: 'No \u2014 Lion Logo not required',
+            },
+            {
+              const: 'yes',
+              title: 'Yes \u2014 Apply for Lion Logo',
+            },
+          ],
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/import_blend_sheet',
+        },
+        {
+          type: 'Group',
+          label: '1. Exporter & Blend Information',
+          elements: [
+            {
+              type: 'Control',
+              scope: '#/properties/exporter_registration_no',
+            },
+            {
+              type: 'Control',
+              scope: '#/properties/exporter_tin',
+            },
+            {
+              type: 'Control',
+              scope: '#/properties/cusdec_number',
+            },
+            {
+              type: 'Control',
+              scope: '#/properties/warehouse_id',
+            },
+          ],
+        },
+        {
+          type: 'Group',
+          label: '2. Blend Sheet Data',
+          elements: [
+            {
+              type: 'Control',
+              scope: '#/properties/blendsheet_data',
+              options: {
+                detail: {
+                  type: 'VerticalLayout',
+                  elements: [
+                    {
+                      type: 'Control',
+                      scope: '#/properties/blendsheet_no',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/avg_rate_per_kg',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/fob_avg',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/quality_to_be_exported',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/grade_or_standard',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/date_of_blend',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/sales',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/imported_tea',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/blend_balances',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/total_blend_balances_and_gain',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/total',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/remarks',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/sample_rediness_date',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/warehouse_address',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/blend_gain_determined',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/flavors',
+                    },
+                    {
+                      type: 'Control',
+                      scope: '#/properties/blend_balance',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+        {
+          type: 'Group',
+          label: '3. Lion Logo Certification',
+          elements: [
+            {
+              type: 'Control',
+              scope: '#/properties/lion_logo_requested',
+            },
+          ],
+        },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'text',
     name: 'Text',
     schema: {
