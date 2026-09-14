@@ -5,8 +5,8 @@ export {
   evaluateFormulaWithVariables,
   describeFormulaError,
 } from './expression'
-export { processMatrix, shapeSheet, isRecordsSheet } from './process'
-export type { ProcessMatrixOptions, ShapeSheetOptions } from './process'
+export { shapeSheet, isRecordsSheet, buildDerivations, sameDerivations, sameSheetData } from './process'
+export type { ShapeSheetOptions } from './process'
 export type {
   CellValue,
   Matrix,

@@ -1,13 +1,8 @@
-import { evaluateExpressions } from './expression'
-import type { CellValue, DerivationResult, FormulaConfigEntry, SheetData, SpreadsheetValue } from './types'
+import type { CellValue, DerivationResult, FormulaResult, SheetData } from './types'
 
 export interface ShapeSheetOptions {
   columnHeader?: boolean
   rowHeader?: boolean
-}
-
-export interface ProcessMatrixOptions extends ShapeSheetOptions {
-  persistSheet?: boolean
 }
 
 // Shapes a raw matrix into what gets persisted as `sheet`. Never touches
@@ -17,8 +12,8 @@ export interface ProcessMatrixOptions extends ShapeSheetOptions {
 // winner" situation — each orientation is independently meaningful in real
 // usage, so silently guessing would silently discard the other.
 //
-// Same format-agnostic contract as processMatrix below (see its own
-// comment): this operates purely on the normalized CellValue[][] matrix,
+// Deliberately format-agnostic: this operates purely on the normalized
+// CellValue[][] matrix,
 // never on the original file format. A future XML (or any other) upload
 // path only needs to produce that same matrix shape — with, if it wants
 // records-shaping, a real header row/column at position 0 in it, the same
@@ -52,7 +47,7 @@ function cellKey(cell: CellValue): string | null {
   return String(cell)
 }
 
-// Unlike processMatrix's `derivations` id (schema-author-controlled, so a
+// Unlike a `derivations` id (schema-author-controlled, so a
 // collision is a config mistake it's reasonable to resolve leniently), these
 // keys come straight from the uploaded file — a collision there means the
 // file itself doesn't actually identify a column/row uniquely, so silently
@@ -86,7 +81,7 @@ function rowsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
     // otherwise set the record's prototype instead of creating an
     // enumerable own property, silently dropping that column from
     // Object.keys/entries and JSON serialization. Same fix already applied
-    // to processMatrix's derivations accumulator below (#32) — worse here
+    // to the derivations accumulator below (#32) — worse here
     // since these keys come from the uploaded file, not a schema-author-
     // controlled x-evaluate id.
     const record: Record<string, CellValue> = Object.create(null)
@@ -126,26 +121,91 @@ export function isRecordsSheet(sheet: SheetData): sheet is Record<string, CellVa
   return !Array.isArray(sheet[0])
 }
 
-// Matrix-in, persisted-value-out. Deliberately format-agnostic: doesn't care
-// whether the matrix came from an xlsx/csv upload or (in the future) an XML
-// one — this is the reusable seam for both.
-export async function processMatrix(
-  matrix: CellValue[][],
-  formulas: FormulaConfigEntry[],
-  options: ProcessMatrixOptions = {},
-): Promise<SpreadsheetValue> {
-  const results = await evaluateExpressions(matrix, formulas)
-  // Keyed by id (not an array) — a duplicate/malformed id collides
-  // last-write-wins here, where it previously got its own array slot;
-  // accepted for simplicity since ids are schema-author-controlled.
-  // Object.create(null), not {} — an id of "__proto__" would otherwise set
-  // the object's prototype instead of creating an enumerable own property,
-  // silently dropping that derivation from Object.keys/entries and from
-  // JSON serialization.
+// Folds evaluation results into the persisted map, for SpreadsheetControl's
+// evaluation effect — the one place this package turns results into a stored
+// value, whether the rows came from an upload or from an importer's write.
+//
+// Keyed by id (not an array) so a sibling field can address one derivation
+// directly via a plain data path, with no "find by id" step. A duplicate or
+// malformed id collides last-write-wins — accepted for simplicity, since ids are
+// schema-author-controlled. Object.create(null), not {}, because an id of
+// "__proto__" would otherwise set the object's prototype instead of creating an
+// enumerable own property, silently dropping that derivation from
+// Object.keys/entries and from JSON serialization.
+export function buildDerivations(results: FormulaResult[]): Record<string, DerivationResult> {
   const derivations: Record<string, DerivationResult> = Object.create(null)
   for (const { id, label, value, error } of results) {
     derivations[id] = error === undefined ? { label, value } : { label, value, error }
   }
-  if (options.persistSheet === false) return { derivations }
-  return { sheet: shapeSheet(matrix, options), derivations }
+  return derivations
+}
+
+// Normalizes one derivation value for comparison. A Date has to compare equal to
+// the ISO string it round-trips to through JSON storage — otherwise a TODAY()
+// formula reports a change on every mount and marks a saved form dirty.
+function sameValue(a: CellValue | null | undefined, b: CellValue | null | undefined): boolean {
+  const normalize = (v: CellValue | null | undefined) => (v instanceof Date ? v.toISOString() : (v ?? null))
+  return normalize(a) === normalize(b)
+}
+
+// Structural equality for two derivation maps, deliberately not JSON.stringify:
+// key order in a stored map need not match the x-evaluate iteration order that
+// produced it, and a Date needs the normalization above.
+//
+// Used as the write guard when SpreadsheetControl reads from a path, where the
+// value is an object rebuilt on every evaluation — so a reference check would
+// always report a change and dirty the form merely by opening a saved record.
+export function sameDerivations(
+  a: Record<string, DerivationResult> | undefined,
+  b: Record<string, DerivationResult> | undefined,
+): boolean {
+  const left = a ?? {}
+  const right = b ?? {}
+  const keys = Object.keys(left)
+  if (keys.length !== Object.keys(right).length) return false
+  return keys.every((key) => {
+    if (!Object.prototype.hasOwnProperty.call(right, key)) return false
+    const x = left[key]
+    const y = right[key]
+    return x.label === y.label && x.error === y.error && sameValue(x.value, y.value)
+  })
+}
+
+// One row of either SheetData shape: a matrix row is an array of cells, a
+// records row is a plain object. A shape mismatch is a difference, not a
+// coercion — the two are never interchangeable.
+function sameSheetRow(a: unknown, b: unknown): boolean {
+  if (a == null || b == null) return a === b
+  const isMatrixRow = Array.isArray(a)
+  if (isMatrixRow !== Array.isArray(b)) return false
+
+  if (isMatrixRow) {
+    const left = a as CellValue[]
+    const right = b as CellValue[]
+    return left.length === right.length && left.every((cell, i) => sameValue(cell, right[i]))
+  }
+
+  const left = a as Record<string, CellValue>
+  const right = b as Record<string, CellValue>
+  const keys = Object.keys(left)
+  if (keys.length !== Object.keys(right).length) return false
+  return keys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && sameValue(left[key], right[key]))
+}
+
+// Structural equality for two persisted sheets, on the same terms as
+// sameDerivations above: never JSON.stringify, and a Date has to compare equal
+// to the ISO string it round-trips to through JSON storage.
+//
+// Used as the write guard in SpreadsheetControl's evaluation effect, where the
+// shaped sheet is rebuilt on every run. Without it, opening a saved form would
+// rewrite an identical sheet and mark it dirty on
+// mount. Comparing whole sheets is affordable because the effect it guards runs
+// only when the resolved source's reference changes, not on every keystroke.
+export function sameSheetData(a: SheetData | undefined, b: SheetData | undefined): boolean {
+  if (a === b) return true
+  if (a == null || b == null) return false
+  const left = a as unknown[]
+  const right = b as unknown[]
+  if (left.length !== right.length) return false
+  return left.every((row, i) => sameSheetRow(row, right[i]))
 }
