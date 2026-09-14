@@ -28,11 +28,26 @@ interface XXmlOptions {
   removeNamespaces?: boolean
   /**
    * Map values out of the parsed document onto other fields, filling a form
-   * from one upload. Each entry's `to` is an ABSOLUTE, dot-joined data path,
-   * so an importer can reach a top-level field and an array item alike — see
-   * utils/mapping.ts and docs/xml-control.md.
+   * from one upload. Each entry's `to` is a dot-joined data path, resolved
+   * from the form root or from this control's own record depending on
+   * `writeBase` — see utils/mapping.ts and docs/xml-control.md.
    */
   writeTo?: WriteToEntry[]
+  /**
+   * Where `writeTo` paths are resolved from. Default 'root' — absolute from
+   * the form data root, so one importer reaches a top-level field and a fixed
+   * array index alike.
+   *
+   * 'parent' resolves them against this control's own containing object, the
+   * way `x-computed.inputs` reads. That is what lets an importer sit inside
+   * each array item and fill only that item: without it every item's importer
+   * writes the same absolute paths, so the second one overwrites the first.
+   *
+   * 'parent' means the containing OBJECT, not the array item — an importer
+   * nested in a sub-object of an item rebases onto that sub-object. Keep it a
+   * direct property of the item.
+   */
+  writeBase?: 'root' | 'parent'
   /**
    * Keep the parsed document as this field's own value. Default true.
    *
@@ -87,6 +102,7 @@ const XmlControl = ({
   const arrayPaths = xXml.arrayPaths
   const removeNamespaces = xXml.removeNamespaces === true
   const writeTo = xXml.writeTo
+  const writeBase = xXml.writeBase ?? 'root'
   const persistDocument = xXml.persistDocument !== false
 
   // Writing outside this control's own path is the whole point of writeTo, so
@@ -175,10 +191,14 @@ const XmlControl = ({
 
       if (sequence !== uploadSequence.current) return
       if (persistDocument) handleChange(path, parsed)
-      for (const write of writes) ctx.dispatch?.(update(write.to, () => write.value))
+      // `path` is this control's own field, so its parent is the record the
+      // writes belong to. At the form root that is '', which is exactly the
+      // absolute behaviour — so 'parent' on a top-level control is a no-op.
+      const base = writeBase === 'parent' ? path.split('.').slice(0, -1).join('.') : ''
+      for (const write of writes) ctx.dispatch?.(update(base ? `${base}.${write.to}` : write.to, () => write.value))
       setStatus('ready')
     },
-    [accept, maxSize, arrayPaths, removeNamespaces, writeTo, persistDocument, path, handleChange, ctx],
+    [accept, maxSize, arrayPaths, removeNamespaces, writeTo, writeBase, persistDocument, path, handleChange, ctx],
   )
 
   if (visible === false) {

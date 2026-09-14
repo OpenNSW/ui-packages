@@ -559,7 +559,7 @@ export const fixtures: Fixture[] = [
           type: 'object',
           title: 'Order Document',
           description:
-            'Upload dev/sample-files/order-sample.xml. One upload fills this whole form: x-xml.writeTo maps values out of the parsed document onto other fields by ABSOLUTE data path, so it reaches both top-level fields and an item inside the array below — something a relative path could not do. Things to look for: (1) Reference Number is composed from four separate elements by a formula; (2) Account Reference keeps all 13 digits because `as: string` runs before anything can round it; (3) Priority arrives as the number 1 and is mapped to an enum value; (4) Ordered On is reformatted from 7/23/26; (5) Discount is <null/> in the file, which parses to an OBJECT — it lands as 0 via `default`, not as {}; (6) the three <line> elements fill the table, whose derivations then feed Net Total. persistDocument is false, so this field itself stores nothing: everything worth keeping was distributed, and storing the document too would duplicate every mapped value.',
+            'Upload dev/sample-files/order-sample.xml. One upload fills this whole form: x-xml.writeTo maps values out of the parsed document onto other fields by ABSOLUTE data path, so it reaches both top-level fields and an item inside the array below — something a relative path could not do. Things to look for: (1) Reference Number is composed from four separate elements by a formula; (2) Account Reference keeps all 13 digits because `as: string` runs before anything can round it; (3) Priority arrives as the number 1 and is mapped to an enum value; (4) Ordered On is reformatted from 7/23/26; (5) Discount is <null/> in the file, which parses to an OBJECT — it lands as 0 via `default`, not as {}; (6) the three <line> elements fill the table, whose derivations then feed Net Total. persistDocument is false, so this field itself stores nothing: everything worth keeping was distributed, and storing the document too would duplicate every mapped value. Then try the SECOND importer, the one inside each order: that is writeBase: "parent", so its paths carry no index and it fills only the order it sits in. Add a second order and import into it — order 1 is left exactly as it was, which the absolute default could not do, since every item shares one schema and they would all write orders.0.*.',
           'x-xml': {
             accept: '.xml,text/xml,application/xml',
             maxSize: 5242880,
@@ -602,6 +602,24 @@ export const fixtures: Fixture[] = [
           items: {
             type: 'object',
             properties: {
+              import_line: {
+                type: 'object',
+                title: 'Order Document',
+                description:
+                  'The same document, imported per order rather than for the form. writeBase: "parent" resolves each `to` against this order — the base x-computed.inputs already reads from — so the paths carry no index and one schema serves every item. `from` and arrayPaths are untouched: they address the document, which knows nothing about where in the form the control sits.',
+                'x-xml': {
+                  accept: '.xml,text/xml,application/xml',
+                  maxSize: 5242880,
+                  arrayPaths: ['order.line'],
+                  persistDocument: false,
+                  writeBase: 'parent',
+                  writeTo: [
+                    { from: 'order.header.order_date', to: 'ordered_on', as: 'date', format: 'M/D/YY' },
+                    { from: 'order.header.discount', to: 'discount', as: 'number', default: 0 },
+                    { from: 'order.line', to: 'lines.sheet' },
+                  ],
+                },
+              },
               ordered_on: { type: 'string', format: 'date', title: 'Ordered On' },
               discount: { type: 'number', title: 'Discount' },
               lines: {
@@ -649,6 +667,7 @@ export const fixtures: Fixture[] = [
             detail: {
               type: 'VerticalLayout',
               elements: [
+                { type: 'Control', scope: '#/properties/import_line' },
                 { type: 'Control', scope: '#/properties/ordered_on' },
                 { type: 'Control', scope: '#/properties/discount' },
                 { type: 'Control', scope: '#/properties/lines' },

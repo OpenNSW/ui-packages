@@ -41,7 +41,7 @@ function makeSchema(xXml: Record<string, unknown>): JsonSchema {
 // The `data` prop is a SEED, never fed back from onChange — feeding it back
 // makes JsonForms replace its internal state and drop writes made from effects
 // and dispatch, which is exactly what this control does.
-function renderForm(schema: JsonSchema, seed: Data = {}) {
+function renderForm(schema: JsonSchema, seed: Data = {}, ui: UISchemaElement = uischema) {
   const writes: Data[] = []
   let live = true
   finishers.push(() => {
@@ -53,7 +53,7 @@ function renderForm(schema: JsonSchema, seed: Data = {}) {
       <Theme>
         <JsonForms
           schema={schema}
-          uischema={uischema}
+          uischema={ui}
           data={initial}
           renderers={radixRenderers}
           onChange={({ data }) => {
@@ -145,5 +145,96 @@ describe('XmlControl as a plain parse-and-hold field', () => {
     await waitFor(() => expect(latest()?.doc).toEqual({ order: { code: 'FIRST' } }))
     expect(screen.queryByLabelText('Remove document')).toBeTruthy()
     expect(screen.queryByLabelText('Replace document')).toBeTruthy()
+  })
+})
+
+// An importer inside an array item shares one schema with every other item, so
+// an absolute `to` is index-locked: item 2's upload writes item 1's paths.
+// writeBase: 'parent' rebases onto the item the control actually sits in.
+
+const arrayUischema = {
+  type: 'VerticalLayout',
+  elements: [
+    {
+      type: 'Control',
+      scope: '#/properties/orders',
+      options: {
+        detail: {
+          type: 'VerticalLayout',
+          elements: [
+            { type: 'Control', scope: '#/properties/doc' },
+            { type: 'Control', scope: '#/properties/code' },
+          ],
+        },
+      },
+    },
+  ],
+} as UISchemaElement
+
+function makeArraySchema(xXml: Record<string, unknown>): JsonSchema {
+  return {
+    type: 'object',
+    properties: {
+      orders: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            doc: { type: 'object', title: 'Document', 'x-xml': xXml },
+            code: { type: 'string', title: 'Code' },
+          },
+        },
+      },
+    },
+  } as unknown as JsonSchema
+}
+
+function uploadInto(index: number, code: string) {
+  const input = document.querySelectorAll('input[type=file]')[index]
+  if (!input) throw new Error(`no file input at index ${index}`)
+  const file = new File([xml(code)], 'order.xml', { type: 'text/xml' })
+  fireEvent.change(input, { target: { files: [file] } })
+}
+
+const orders = (latest: Data | undefined) => (latest?.orders ?? []) as Data[]
+
+describe('XmlControl inside an array item (writeBase)', () => {
+  it('fills the item it sits in and leaves its siblings alone', async () => {
+    const { latest } = renderForm(
+      makeArraySchema({ writeTo: WRITE_TO, writeBase: 'parent', persistDocument: false }),
+      { orders: [{}, {}] },
+      arrayUischema,
+    )
+    await waitFor(() => expect(document.querySelectorAll('input[type=file]').length).toBe(2))
+
+    uploadInto(1, 'SECOND')
+
+    await waitFor(() => expect(orders(latest())[1]?.code).toBe('SECOND'))
+    expect(orders(latest())[0]?.code).toBeUndefined()
+  })
+
+  it('is index-locked without it, which is the whole reason it exists', async () => {
+    // Not a vacuous pairing: this asserts the DEFAULT still writes absolutely,
+    // so the test above is proving a rebase rather than a coincidence.
+    const { latest } = renderForm(
+      makeArraySchema({ writeTo: [{ from: 'order.code', to: 'orders.0.code' }], persistDocument: false }),
+      { orders: [{}, {}] },
+      arrayUischema,
+    )
+    await waitFor(() => expect(document.querySelectorAll('input[type=file]').length).toBe(2))
+
+    uploadInto(1, 'SECOND')
+
+    await waitFor(() => expect(orders(latest())[0]?.code).toBe('SECOND'))
+    expect(orders(latest())[1]?.code).toBeUndefined()
+  })
+
+  it("behaves like 'root' on a top-level control, where there is no parent", async () => {
+    const { latest } = renderForm(makeSchema({ writeTo: WRITE_TO, writeBase: 'parent', persistDocument: false }))
+    await waitFor(() => expect(uploadButton()).toBeTruthy())
+
+    upload('FIRST')
+
+    await waitFor(() => expect(latest()?.code).toBe('FIRST'))
   })
 })

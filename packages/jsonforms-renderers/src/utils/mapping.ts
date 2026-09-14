@@ -13,14 +13,13 @@ import { evaluateFormulaWithVariables, describeFormulaError, type CellValue } fr
 
 export interface WriteToEntry {
   /**
-   * Target data path, ABSOLUTE from the form root, dot-joined —
-   * `blendsheet_data.0.blendsheet_no`. This is the representation
-   * handleChange/update consume (see @jsonforms/core's toDataPath), not the
-   * JSON Pointer a uischema `scope` uses.
+   * Target data path, dot-joined — `blendsheet_data.0.blendsheet_no`. This is
+   * the representation handleChange/update consume (see @jsonforms/core's
+   * toDataPath), not the JSON Pointer a uischema `scope` uses.
    *
-   * Absolute where x-computed's paths are relative, deliberately: a writer has
-   * to reach anywhere in the form, while a reader stays scoped to its own
-   * record so array items cannot read across each other.
+   * Resolved verbatim here: this module is form-agnostic and returns whatever
+   * `to` says. Whether that is absolute from the form root or relative to the
+   * importer's own record is the caller's choice, via `x-xml.writeBase`.
    */
   to: string
   /** Source path within the parsed document. Mutually exclusive with inputs/formula. */

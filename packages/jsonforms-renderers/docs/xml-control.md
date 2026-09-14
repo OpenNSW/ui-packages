@@ -179,7 +179,7 @@ A document almost never matches the shape a form wants: a date arrives as `7/23/
 
 | Key                  | Meaning                                                                         |
 | -------------------- | ------------------------------------------------------------------------------- |
-| `to`                 | Target data path. Required.                                                     |
+| `to`                 | Target data path, resolved per `x-xml.writeBase`. Required.                     |
 | `from`               | Source path in the parsed document. Mutually exclusive with `inputs`/`formula`. |
 | `inputs` + `formula` | Named sources and an expression over them, for a value the document splits up.  |
 | `as`                 | `string`, `number`, `boolean` or `date`.                                        |
@@ -208,7 +208,39 @@ JSONForms uses two addressing schemes, and this is the second one:
 
 `@jsonforms/core`'s own bridge between them states the rule — `toDataPath('#/properties/foo/properties/bar') === 'foo.bar'`, documented as _"Data paths can be used in field change event handlers like handleChange."_ `writeTo` writes data, so `orders.0.lines.sheet` is what the API consumes; a JSON Pointer there would not resolve.
 
-Paths are **absolute from the form root**, where `x-computed.inputs` paths are relative to their own field's parent. That asymmetry is deliberate: a writer has to reach anywhere in the form, while a reader stays scoped to its own record so array items cannot read across each other.
+Paths are **absolute from the form root** by default, where `x-computed.inputs` paths are relative to their own field's parent: a writer normally has to reach anywhere in the form, while a reader stays scoped to its own record so array items cannot read across each other.
+
+### One importer per array item (`writeBase`)
+
+That default breaks down for the one layout where a writer should _not_ reach anywhere: an importer sitting inside each item of an array, where every item's schema is the same schema. Absolute paths there are index-locked — item 2's upload writes `orders.0.*` just like item 1's, silently overwriting it — and the index cannot be varied without a tuple schema, which caps the array's length and is not rendered.
+
+`writeBase: "parent"` resolves every `to` against the control's own containing object instead, the same base `x-computed.inputs` reads from:
+
+```jsonc
+// at blendsheet_data.<i>.import_blend_sheet
+"x-xml": {
+  "writeBase": "parent",
+  "persistDocument": false,
+  "writeTo": [
+    { "from": "BLEND_SHEET.Blend.Blend_number", "to": "blend_no" },
+    { "from": "BLEND_SHEET.Particulars_of_sale", "to": "sales.sheet" }
+  ]
+}
+```
+
+`blend_no` now means `blendsheet_data.<i>.blend_no`, so item 2's import can never touch item 1.
+
+| `writeBase` | `to` is resolved from               |
+| ----------- | ----------------------------------- |
+| `"root"`    | the form data root (default)        |
+| `"parent"`  | the control's own containing object |
+
+Two things to hold on to:
+
+- **`parent` is the containing _object_, not the array item.** An importer nested in a sub-object of an item rebases onto that sub-object. Keep it a direct property of the item — the same rule `x-computed` already follows.
+- **`from` and `arrayPaths` are unaffected.** They address the parsed document, which has no notion of where in the form the control sits. Only `to` is rebased.
+
+On a top-level control `parent` resolves to `''`, so it behaves exactly like `root`.
 
 A dot-joined path cannot address a key that itself contains a dot — the same limitation noted under [Known scope decisions](#known-scope-decisions) for element names like `<Order.Header>`.
 
