@@ -60,6 +60,47 @@ describe('recordsToMatrix', () => {
     expect(recordsToMatrix([{}, {}])).toEqual([])
   })
 
+  describe('columns', () => {
+    it('pins header order to the given key list instead of first-seen order', () => {
+      const records: DataRecord[] = [{ Quantity: 500, Item: 'Widget A' }]
+      expect(recordsToMatrix(records, ['Item', 'Quantity'])).toEqual([
+        ['Item', 'Quantity'],
+        ['Widget A', 500],
+      ])
+    })
+
+    it('still appends a record key absent from columns, in first-seen order', () => {
+      const records: DataRecord[] = [{ Item: 'A', Quantity: 10, Note: 'late' }]
+      expect(recordsToMatrix(records, ['Quantity', 'Item'])).toEqual([
+        ['Quantity', 'Item', 'Note'],
+        [10, 'A', 'late'],
+      ])
+    })
+
+    it('gives a listed key its own all-null column even if no record has it', () => {
+      const records: DataRecord[] = [{ Item: 'A' }]
+      expect(recordsToMatrix(records, ['Item', 'Quantity'])).toEqual([
+        ['Item', 'Quantity'],
+        ['A', null],
+      ])
+    })
+
+    it('pins column letters an x-evaluate formula addresses, regardless of per-record key order', async () => {
+      // The scenario this exists for: rows written by an XML importer, whose
+      // element order can vary row to row, but whose consuming formula still
+      // has to find quantity in a fixed column.
+      const records: DataRecord[] = [
+        { Item: 'A', Quantity: 10 },
+        { Quantity: 25, Item: 'B' },
+      ]
+      const matrix = recordsToMatrix(records, ['Item', 'Quantity'])
+      const [result] = await evaluateExpressions(matrix, [
+        { id: 'total', label: 'Total', expression: '=SUM(B2:B3)' },
+      ])
+      expect(result.value).toBe(35)
+    })
+  })
+
   it('does not read an inherited property for a header key named after one', () => {
     const records: DataRecord[] = [{ Item: 'A' }, { toString: 'shadowed' }]
     expect(recordsToMatrix(records)).toEqual([

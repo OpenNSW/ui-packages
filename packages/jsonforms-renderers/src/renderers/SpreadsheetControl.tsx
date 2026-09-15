@@ -57,6 +57,17 @@ interface XSpreadsheetOptions {
   showSheet?: boolean
   /** Which sheet to read by name. Defaults to the workbook's first sheet if omitted. */
   sheetName?: string
+  /**
+   * Pin column order, as an ordered list of record keys, when rendering or
+   * evaluating an array-of-objects sheet (e.g. one an XML importer wrote
+   * straight into this field). Without it, column order is the union of
+   * every record's keys in first-seen order — fine when every record's keys
+   * arrive in the same order, but an x-evaluate formula addressing a fixed
+   * column letter (e.g. SUM(I2:I10000)) breaks silently if that order ever
+   * shifts. A key missing from this list still gets a column, appended
+   * after, in first-seen order.
+   */
+  columns?: string[]
 }
 
 type SpreadsheetControlProps = ControlProps & {
@@ -113,6 +124,7 @@ const SpreadsheetControl = ({
   const showSheet = xSpreadsheet.showSheet !== false
   const sheetName = xSpreadsheet.sheetName
   const persistSheet = xSpreadsheet.persistSheet !== false
+  const columns = xSpreadsheet.columns
 
   const value = (data ?? null) as SpreadsheetValue | null
 
@@ -164,10 +176,10 @@ const SpreadsheetControl = ({
   const asMatrix = useCallback(
     (sheet: SheetData): CellValue[][] => {
       if (!isRecordsSheet(sheet)) return sheet
-      const flattened = recordsToMatrix(sheet)
+      const flattened = recordsToMatrix(sheet, columns)
       return rowHeader ? transpose(flattened) : flattened
     },
-    [rowHeader],
+    [rowHeader, columns],
   )
 
   // Memoized because recordsToMatrix builds a fresh array every call: an
