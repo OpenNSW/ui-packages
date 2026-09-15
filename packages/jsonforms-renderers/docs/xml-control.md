@@ -147,7 +147,7 @@ The value is `undefined` when nothing is uploaded, and again when the file is re
 
 The control renders no preview of the parsed document — it goes into the field's value, and that is where to read it.
 
-To compute over a repeated element inside it, add a sibling `SpreadsheetControl` field pointing at that element with [`x-spreadsheet.sourcePath`](./spreadsheet-value-shape.md#source-mode-x-spreadsheetsourcepath). `XmlControl` deliberately does no evaluation of its own: formulas over an array have nothing to do with the format the array arrived in.
+`XmlControl` deliberately does no evaluation of its own: formulas over an array have nothing to do with the format the array arrived in.
 
 Two things to keep in mind when writing the schema for this field:
 
