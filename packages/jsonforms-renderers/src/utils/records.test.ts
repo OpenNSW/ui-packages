@@ -94,9 +94,7 @@ describe('recordsToMatrix', () => {
         { Quantity: 25, Item: 'B' },
       ]
       const matrix = recordsToMatrix(records, ['Item', 'Quantity'])
-      const [result] = await evaluateExpressions(matrix, [
-        { id: 'total', label: 'Total', expression: '=SUM(B2:B3)' },
-      ])
+      const [result] = await evaluateExpressions(matrix, [{ id: 'total', label: 'Total', expression: '=SUM(B2:B3)' }])
       expect(result.value).toBe(35)
     })
   })
