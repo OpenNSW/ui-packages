@@ -218,6 +218,20 @@ describe('SpreadsheetControl evaluating a sheet written into its own field', () 
     expect(neverWroteTotals()).toBe(true)
   })
 
+  it('keeps a formula pointed at the right column when records disagree on key order', async () => {
+    // The scenario x-spreadsheet.columns exists for: rows an XML importer wrote
+    // straight into this field, whose element order isn't guaranteed row to
+    // row. Without `columns`, the second row's key order would win the header
+    // and put Item ahead of Qty, moving the quantities out of column B.
+    const skewed = [
+      { Item: 'Widget', Qty: 10 },
+      { Qty: 20, Item: 'Gadget' },
+    ]
+    const { totals } = renderForm(makeSchema({ columnHeader: true, columns: ['Item', 'Qty'] }), written(skewed))
+
+    await waitFor(() => expect(totals()?.derivations).toEqual(DERIVED))
+  })
+
   it('addresses a written 2-D sheet literally, as an uploaded one is', async () => {
     const { totals } = renderForm(makeSchema({}), written(MATRIX))
 
@@ -335,6 +349,21 @@ describe('SpreadsheetControl renders one grid whatever shape the data is in', ()
         ['1', 'Item', 'Qty'],
         ['2', 'Widget', '10'],
         ['3', 'Gadget', '20'],
+      ],
+    })
+  })
+
+  it('pins the header order to x-spreadsheet.columns instead of first-seen order', async () => {
+    renderForm(uploadSchema({ columnHeader: true, columns: ['Qty', 'Item'] }), {
+      totals: { sheet: RECORDS, derivations: {} },
+    })
+
+    await waitFor(() => expect(grid()).toBeTruthy())
+    expect(grid()).toEqual({
+      head: ['', 'Qty', 'Item'],
+      rows: [
+        ['', '10', 'Widget'],
+        ['', '20', 'Gadget'],
       ],
     })
   })

@@ -34,6 +34,18 @@
 
 There's no stored discriminant field. Told apart at read time the same way `SpreadsheetControl` itself does — `Array.isArray(sheet[0])`: `true` for a matrix (each row is itself an array), `false` for records (each entry is a plain object). Exported as `isRecordsSheet` from `utils/spreadsheet`. An empty persisted sheet (`[]`) reads as records under this check — harmless, since there's nothing to render either way.
 
+## Column order for a records array
+
+Whenever the sheet in the field is a records array — persisted by this control under `columnHeader`, or written straight in by something else entirely, e.g. an XML importer — `recordsToMatrix` (`utils/records.ts`) has to turn it back into a matrix before rendering the preview or addressing it from `x-evaluate`. By default the column order is the union of every record's keys, in first-seen order across the whole array, not just the first record. That is stable for a sheet this control itself produced (every record was built from the same header row), but it is only stable for one an importer wrote if every row's keys happen to arrive in the same order — an `x-evaluate` formula addressing a fixed column letter (`SUM(I2:I10000)`) breaks silently if that order ever shifts row to row.
+
+`x-spreadsheet.columns` pins it instead:
+
+```json
+"x-spreadsheet": { "columnHeader": true, "columns": ["Sale_quantity", "Sale_value"] }
+```
+
+Given as an ordered list of record keys, it seeds the header before the first-seen scan runs: a listed key claims that column position regardless of which record — or which of that record's own keys — mentions it first, and gets an all-null column if no record has it at all. Any record key not in the list still falls in afterwards, in first-seen order, exactly as without `columns`.
+
 ## Duplicate keys
 
 A duplicate header value (`columnHeader`) or duplicate column-A value (`rowHeader`) is rejected outright — `shapeSheet` throws (caught the same way `SpreadsheetControl` already catches a parse failure, surfacing a configuration-error message instead of rendering anything). This is unlike a duplicate `x-evaluate` id in the `derivations` map, which collides last-write-wins: an `x-evaluate` id is schema-author-controlled, so a collision there is a config mistake reasonable to resolve leniently, but a header/column-A value comes from whatever's in the uploaded file — a collision there means the file itself doesn't actually identify a column/row uniquely, so silently picking a winner would silently drop real data instead.
