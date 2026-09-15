@@ -1,4 +1,3 @@
-import { read, utils } from '@e965/xlsx'
 import type { CellValue, ParsedSheet } from './types'
 
 // Thrown for well-formed-but-unexpected sheet situations (no sheets, or a
@@ -10,7 +9,17 @@ export class SheetParseError extends Error {}
 // Parses one sheet of a workbook into an address-preserving matrix: no
 // header-stripping, so a formula's `B2` maps exactly onto `matrix[1][1]`.
 // Defaults to the workbook's first sheet when `sheetName` is omitted.
-export function parseWorkbookToMatrix(buffer: ArrayBuffer, sheetName?: string): ParsedSheet {
+//
+// The library is imported dynamically so it splits into an on-demand chunk.
+// SpreadsheetControl is registered in radixRenderers, which every consumer
+// imports, so a static import here puts SheetJS in the initial payload of
+// every app — including ones whose forms have no spreadsheet field. Same
+// reason expression.ts and utils/xml/parse.ts load their own parsers this
+// way. The ESM build exposes `read` and `utils` as real named exports, so
+// unlike fast-formula-parser this needs no `.default ?? module` interop.
+export async function parseWorkbookToMatrix(buffer: ArrayBuffer, sheetName?: string): Promise<ParsedSheet> {
+  const { read, utils } = await import('@e965/xlsx')
+
   const workbook = read(buffer, { type: 'array', cellDates: true })
 
   if (workbook.SheetNames.length === 0) {
@@ -34,6 +43,8 @@ export function parseWorkbookToMatrix(buffer: ArrayBuffer, sheetName?: string): 
 }
 
 // 0-based column index -> spreadsheet column letter (0 -> 'A', 25 -> 'Z', 26 -> 'AA').
+// Pure string maths, no xlsx involved — so it stays synchronous and is safe to
+// call from a render body, which SpreadsheetControl's column headers do.
 export function columnLetter(index: number): string {
   let n = index + 1
   let letters = ''
