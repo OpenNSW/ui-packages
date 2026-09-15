@@ -550,6 +550,136 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'xml-writeto',
+    name: 'XML → writeTo',
+    schema: {
+      type: 'object',
+      properties: {
+        import_doc: {
+          type: 'object',
+          title: 'Order Document',
+          description:
+            'Upload dev/sample-files/order-sample.xml. One upload fills this whole form: x-xml.writeTo maps values out of the parsed document onto other fields by ABSOLUTE data path, so it reaches both top-level fields and an item inside the array below — something a relative path could not do. Things to look for: (1) Reference Number is composed from four separate elements by a formula; (2) Account Reference keeps all 13 digits because `as: string` runs before anything can round it; (3) Priority arrives as the number 1 and is mapped to an enum value; (4) Ordered On is reformatted from 7/23/26; (5) Discount is <null/> in the file, which parses to an OBJECT — it lands as 0 via `default`, not as {}; (6) the three <line> elements fill the table, whose derivations then feed Net Total. persistDocument is false, so this field itself stores nothing: everything worth keeping was distributed, and storing the document too would duplicate every mapped value. Then try the SECOND importer, the one inside each order: that is writeBase: "parent", so its paths carry no index and it fills only the order it sits in. Add a second order and import into it — order 1 is left exactly as it was, which the absolute default could not do, since every item shares one schema and they would all write orders.0.*.',
+          'x-xml': {
+            accept: '.xml,text/xml,application/xml',
+            maxSize: 5242880,
+            arrayPaths: ['order.line'],
+            persistDocument: false,
+            writeTo: [
+              {
+                to: 'reference_no',
+                inputs: {
+                  ref_office: 'order.reference.office',
+                  ref_serial: 'order.reference.serial',
+                  ref_number: 'order.reference.number',
+                  ref_year: 'order.reference.year',
+                },
+                // Aliases are snake_case on purpose: a 1-3 letter alphabetic
+                // alias lexes as a spreadsheet column reference instead.
+                formula: 'CONCATENATE(ref_office,"/",ref_serial,"/",ref_number,"/",ref_year)',
+              },
+              { from: 'order.customer.account_number', to: 'account_ref', as: 'string' },
+              { from: 'order.header.priority', to: 'priority', map: { '1': 'high', '0': 'normal' }, default: 'normal' },
+              { from: 'order.header.order_date', to: 'orders.0.ordered_on', as: 'date', format: 'M/D/YY' },
+              { from: 'order.header.discount', to: 'orders.0.discount', as: 'number', default: 0 },
+              { from: 'order.line', to: 'orders.0.lines.sheet' },
+            ],
+          },
+        },
+        reference_no: { type: 'string', title: 'Reference Number' },
+        account_ref: { type: 'string', title: 'Account Reference' },
+        priority: {
+          type: 'string',
+          title: 'Priority',
+          oneOf: [
+            { const: 'high', title: 'High' },
+            { const: 'normal', title: 'Normal' },
+          ],
+        },
+        orders: {
+          type: 'array',
+          title: 'Orders',
+          items: {
+            type: 'object',
+            properties: {
+              import_line: {
+                type: 'object',
+                title: 'Order Document',
+                description:
+                  'The same document, imported per order rather than for the form. writeBase: "parent" resolves each `to` against this order — the base x-computed.inputs already reads from — so the paths carry no index and one schema serves every item. `from` and arrayPaths are untouched: they address the document, which knows nothing about where in the form the control sits.',
+                'x-xml': {
+                  accept: '.xml,text/xml,application/xml',
+                  maxSize: 5242880,
+                  arrayPaths: ['order.line'],
+                  persistDocument: false,
+                  writeBase: 'parent',
+                  writeTo: [
+                    { from: 'order.header.order_date', to: 'ordered_on', as: 'date', format: 'M/D/YY' },
+                    { from: 'order.header.discount', to: 'discount', as: 'number', default: 0 },
+                    { from: 'order.line', to: 'lines.sheet' },
+                  ],
+                },
+              },
+              ordered_on: { type: 'string', format: 'date', title: 'Ordered On' },
+              discount: { type: 'number', title: 'Discount' },
+              lines: {
+                type: 'object',
+                title: 'Order Lines',
+                // The importer writes `sheet` straight into this field and the
+                // control evaluates it — no upload of its own needed, though
+                // one still works.
+                'x-spreadsheet': { columnHeader: true },
+                'x-evaluate': [
+                  { id: 'total_qty', label: 'Total Quantity', expression: '=SUM(C2:C4)' },
+                  { id: 'total_value', label: 'Total Value', expression: '=SUM(E2:E4)' },
+                  { id: 'average_price', label: 'Average Price', expression: '=SUM(E2:E4)/SUM(C2:C4)' },
+                ],
+                properties: { sheet: { type: 'array' }, derivations: { type: 'object' } },
+              },
+              net_total: {
+                type: 'number',
+                title: 'Net Total',
+                'x-computed': {
+                  inputs: {
+                    total_value: { path: 'lines.derivations.total_value.value', default: 0 },
+                    order_discount: { path: 'discount', default: 0 },
+                  },
+                  formula: 'total_value - order_discount',
+                  decimals: 2,
+                },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/import_doc' },
+        { type: 'Control', scope: '#/properties/reference_no' },
+        { type: 'Control', scope: '#/properties/account_ref' },
+        { type: 'Control', scope: '#/properties/priority' },
+        {
+          type: 'Control',
+          scope: '#/properties/orders',
+          options: {
+            detail: {
+              type: 'VerticalLayout',
+              elements: [
+                { type: 'Control', scope: '#/properties/import_line' },
+                { type: 'Control', scope: '#/properties/ordered_on' },
+                { type: 'Control', scope: '#/properties/discount' },
+                { type: 'Control', scope: '#/properties/lines' },
+                { type: 'Control', scope: '#/properties/net_total' },
+              ],
+            },
+          },
+        },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'array',
     name: 'Array (objects)',
     schema: {
