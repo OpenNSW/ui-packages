@@ -29,7 +29,12 @@ const DEFAULT_DECIMALS = 2
 const EMPTY_INPUTS: Record<string, ComputedInput> = {}
 
 const ComputedControl = ({ data, handleChange, path, label, schema, visible = true }: ComputedControlProps) => {
-  useClearWhenHidden(visible, path, handleChange, null)
+  // `undefined`, not `null` — this control only ever matches `type: 'number'`
+  // schemas (see ComputedControlTester), and `null` doesn't satisfy that, so
+  // clearing with null would add a spurious "must be number" on top of
+  // whatever the real situation is. undefined means "no value", which is what
+  // an uncomputed field genuinely is.
+  useClearWhenHidden(visible, path, handleChange)
 
   const xComputed = schema?.['x-computed']
   const inputs = xComputed?.inputs ?? EMPTY_INPUTS
@@ -93,19 +98,26 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
     // record if the formula/inputs have since changed, and can trigger an
     // unwanted autosave in a host app that reacts to onChange. Render the
     // computed number and leave data alone instead.
-    const persist = (next: CellValue | null) => {
+    //
+    // "No value" is persisted as `undefined`, never `null`: this control only
+    // matches `type: 'number'` schemas, which `null` doesn't satisfy, so a
+    // null would pile a spurious "must be number" on top of the real reason
+    // the value is missing. Comparing against raw `data` (not `data ?? null`)
+    // also means a legacy null left behind by an earlier version gets actively
+    // cleared rather than treated as already-empty.
+    const persist = (next: number | undefined) => {
       if (formReadonly) return
       // Loop-safety guard: this control only ever writes to its own path, so
       // a sibling's data (which this effect otherwise depends on) doesn't
       // change from that write — but guard anyway.
-      if (next !== (data ?? null)) handleChange(path, next)
+      if (next !== data) handleChange(path, next)
     }
 
     if (resolvedInputs === undefined) {
       setStatus('unavailable')
       setError(null)
       setValue(null)
-      persist(null)
+      persist(undefined)
       return
     }
 
@@ -136,7 +148,7 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
           result.status === 'error' ? (result.error ?? 'Unable to compute value.') : 'Computed value must be a number.',
         )
         setValue(null)
-        persist(null)
+        persist(undefined)
         return
       }
 
