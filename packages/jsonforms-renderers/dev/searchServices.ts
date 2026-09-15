@@ -1,5 +1,13 @@
 import type { SearchOption, SearchServiceRegistry } from '../src'
 
+// Richer records than a plain {id, name} — the extra fields are what AutoFillGroup matches
+// against sibling scopes (firstName/lastName/department) once an employee is selected.
+const EMPLOYEES: SearchOption[] = [
+  { id: 'e1', name: 'Amara Perera', firstName: 'Amara', lastName: 'Perera', department: { name: 'Engineering' } },
+  { id: 'e2', name: 'Nadeesha Silva', firstName: 'Nadeesha', lastName: 'Silva', department: { name: 'Design' } },
+  { id: 'e3', name: 'Ruwan Fernando', firstName: 'Ruwan', lastName: 'Fernando', department: { name: 'Finance' } },
+]
+
 // Small fixed list so pagination (5/page) and search filtering are both easy to exercise by hand.
 const COUNTRIES: (SearchOption & { continent: string })[] = [
   { id: 'au', name: 'Australia', continent: 'oceania' },
@@ -39,6 +47,15 @@ export const searchServices: SearchServiceRegistry = {
     },
     async resolve(value) {
       return COUNTRIES.find((c) => c.id === value)
+    },
+  },
+  employees: {
+    async search({ query }) {
+      const matches = query ? EMPLOYEES.filter((e) => e.name.toLowerCase().includes(query.toLowerCase())) : EMPLOYEES
+      return { options: matches, nextCursor: undefined }
+    },
+    async resolve(value) {
+      return EMPLOYEES.find((e) => e.id === value)
     },
   },
 }
