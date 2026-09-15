@@ -238,6 +238,54 @@ export const fixtures: Fixture[] = [
     data: { country: { value: 'au', label: 'Australia' } },
   },
   {
+    id: 'dependent-select',
+    name: 'Dependent Select',
+    schema: {
+      type: 'object',
+      properties: {
+        kernel_products: {
+          type: 'array',
+          description:
+            'Each row: pick a manufacturer, then its email — the email list is filtered to that ' +
+            'manufacturer via x-depends-on/x-group, independently per row.',
+          items: {
+            type: 'object',
+            properties: {
+              manufacturer_name: {
+                type: 'string',
+                enum: ['EOAS INTERNATIONAL PVT LTD', 'HDDES Extracts (Pvt) Ltd'],
+              },
+              manufacturer_email: {
+                type: 'string',
+                'x-depends-on': 'manufacturer_name',
+                oneOf: [
+                  {
+                    const: 'eoasorg@gmail.com',
+                    title: 'eoasorg@gmail.com',
+                    'x-group': 'EOAS INTERNATIONAL PVT LTD',
+                  },
+                  {
+                    const: 'sampath@eoasorganics.com',
+                    title: 'sampath@eoasorganics.com',
+                    'x-group': 'EOAS INTERNATIONAL PVT LTD',
+                  },
+                  { const: 'info@hddes.com', title: 'info@hddes.com', 'x-group': 'HDDES Extracts (Pvt) Ltd' },
+                  { const: 'sales@hddes.com', title: 'sales@hddes.com', 'x-group': 'HDDES Extracts (Pvt) Ltd' },
+                ],
+              },
+            },
+            required: ['manufacturer_name'],
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/kernel_products' }],
+    } as UISchemaElement,
+    data: { kernel_products: [{ manufacturer_name: 'EOAS INTERNATIONAL PVT LTD' }] },
+  },
+  {
     id: 'date',
     name: 'Date / Time',
     schema: {
