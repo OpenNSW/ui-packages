@@ -383,6 +383,40 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'spreadsheet-pinned-columns',
+    name: 'Spreadsheet (pinned columns)',
+    schema: {
+      type: 'object',
+      properties: {
+        stock: {
+          type: 'object',
+          description:
+            "Upload dev/sample-files/inventory-shuffled-sample.xlsx (regenerate via generate-inventory-shuffled-sample.cjs) to test x-spreadsheet.columns. That file's columns are Total Cost, Unit Cost, Quantity, Category, Item — in that order, left to right — but the canonical field order the x-evaluate formulas below assume (and that x-spreadsheet.columns pins the header to) is Item, Category, Quantity, Unit Cost, Total Cost (A-E). With columnHeader: true, an upload normally keys each record by row 1's labels in whatever order row 1 has them, so a fixed-column formula like SUM(C2:C5) would silently sum Quantity or Total Cost depending on which file you uploaded. columns re-normalizes the header to the declared order regardless of the file's own column arrangement, so the totals below (895 kg, Rs 6060, avg unit cost 15.39) come out right even though the uploaded columns are reversed. Remove the columns array and re-upload the same file to see the totals become nonsensical instead.",
+          'x-spreadsheet': {
+            accept: '.xlsx,.xls,.csv',
+            maxSize: 10485760,
+            persistSheet: true,
+            columnHeader: true,
+            columns: ['Item', 'Category', 'Quantity', 'Unit Cost', 'Total Cost'],
+          },
+          'x-evaluate': [
+            { id: 'total_quantity', label: 'Total Quantity', expression: '=SUM(C2:C5)' },
+            { id: 'total_cost', label: 'Total Cost (Rs)', expression: '=SUM(E2:E5)' },
+            { id: 'average_unit_cost', label: 'Average Unit Cost', expression: '=AVERAGE(D2:D5)' },
+          ],
+          properties: {
+            sheet: { type: 'array' },
+            derivations: { type: 'object' },
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/stock' }],
+    } as UISchemaElement,
+  },
+  {
     id: 'computed-control',
     name: 'Computed Control',
     schema: {

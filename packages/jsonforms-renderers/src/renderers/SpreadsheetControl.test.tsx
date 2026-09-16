@@ -368,6 +368,42 @@ describe('SpreadsheetControl renders one grid whatever shape the data is in', ()
     })
   })
 
+  it('pins column order for a FRESH upload too, not only a reload', async () => {
+    // The gap this closes: a fresh upload used to render straight from the
+    // raw parsed matrix, bypassing recordsToMatrix (and so `columns`)
+    // entirely — only a RELOAD of an already-shaped sheet honored it. The
+    // uploaded CSV's own header is Item,Qty — the reverse of `columns` —
+    // so this only passes if the upload path is reordered the same way a
+    // reload is.
+    renderForm(uploadSchema({ columnHeader: true, columns: ['Qty', 'Item'] }), { totals: undefined })
+
+    uploadCsv('Item,Qty\nWidget,10\nGadget,20\n')
+
+    await waitFor(() => expect(grid()).toBeTruthy())
+    expect(grid()).toEqual({
+      head: ['', 'Qty', 'Item'],
+      rows: [
+        ['', '10', 'Widget'],
+        ['', '20', 'Gadget'],
+      ],
+    })
+  })
+
+  it('keeps a formula pointed at the right column for a fresh upload with columns pinned', async () => {
+    const { totals } = renderForm(
+      makeSchema({ columnHeader: true, columns: ['Qty', 'Item'] }, [
+        { id: 'total_qty', label: 'Total Qty', expression: '=SUM(A2:A3)' },
+      ]),
+      { totals: undefined },
+    )
+
+    // File's own header is Item,Qty — without pinning, column A would be
+    // Item (text) and SUM(A2:A3) would be 0, not 30.
+    uploadCsv('Item,Qty\nWidget,10\nGadget,20\n')
+
+    await waitFor(() => expect(totals()?.derivations).toEqual({ total_qty: { label: 'Total Qty', value: 30 } }))
+  })
+
   it('reloads a rowHeader sheet with its labels still down column A', async () => {
     // shapeSheet's rowHeader branch builds one record per original COLUMN, so
     // reading it back needs the quarter turn or the labels come out along row 1.

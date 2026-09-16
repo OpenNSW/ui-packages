@@ -322,6 +322,26 @@ const SpreadsheetControl = ({
         return
       }
 
+      // x-spreadsheet.columns pins column order for a records-shaped sheet
+      // regardless of how it reached this field — a reload of a previously
+      // shaped upload, or rows an importer wrote straight in, both go
+      // through asMatrix(persistedSheet), further down. A FRESH upload never
+      // did: it rendered straight from this raw parsed matrix, bypassing
+      // that entirely. Round-tripping it through shapeSheet + asMatrix here
+      // — key row out, columns-ordered matrix back in, in the same
+      // orientation, since asMatrix re-applies the rowHeader transpose —
+      // reuses that same pinning so it applies uniformly, not only after a
+      // save-and-reload.
+      if ((columnHeader || rowHeader) && columns && columns.length > 0) {
+        try {
+          parsedMatrix = asMatrix(shapeSheet(parsedMatrix, { columnHeader, rowHeader }))
+        } catch (err) {
+          setStatus('error')
+          setError(err instanceof Error ? err.message : 'Failed to process this sheet.')
+          return
+        }
+      }
+
       // Parsing ends here. Evaluating and persisting is the effect's job
       // below, for an upload exactly as for a sheet an importer wrote — one
       // matrix in, one evaluation, one write, whatever put the rows there.
@@ -332,7 +352,7 @@ const SpreadsheetControl = ({
       setLocalMatrix(parsedMatrix)
       setStatus('ready')
     },
-    [accept, maxSize, sheetName, data],
+    [accept, maxSize, sheetName, data, columnHeader, rowHeader, columns, asMatrix],
   )
 
   // ── Release the upload preview when the field's sheet changes underneath it ──
