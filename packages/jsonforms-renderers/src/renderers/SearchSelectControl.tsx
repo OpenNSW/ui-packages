@@ -1,4 +1,4 @@
-import { type ControlProps, type JsonSchema } from '@jsonforms/core'
+import { type ControlProps, type JsonSchema, Resolve } from '@jsonforms/core'
 import { useJsonForms, withJsonFormsControlProps } from '@jsonforms/react'
 import { Box, Button, Flex, ScrollArea, Spinner, Text, TextField } from '@radix-ui/themes'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
@@ -18,18 +18,6 @@ interface XSearchOptions {
   params?: Record<string, unknown>
   // sibling property name; its current value is sent to the service as params.parent
   dependsOn?: string
-}
-
-function siblingPath(path: string, sibling: string): string {
-  const i = path.lastIndexOf('.')
-  return i === -1 ? sibling : `${path.slice(0, i)}.${sibling}`
-}
-
-function valueAt(data: unknown, path: string): unknown {
-  return path.split('.').reduce<unknown>((acc, key) => {
-    if (acc == null || typeof acc !== 'object') return undefined
-    return (acc as Record<string, unknown>)[key]
-  }, data)
 }
 
 function dependsOnConst(raw: unknown): string | undefined {
@@ -77,11 +65,11 @@ const SearchSelectControl = ({
   const modeConfig = MODE_CONFIG[mode]
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
   const dependsOnProp = xSearch.dependsOn
-  const jsonForms = useJsonForms()
-  const parentValue = useMemo(() => {
-    if (!dependsOnProp) return undefined
-    return dependsOnConst(valueAt(jsonForms.core?.data, siblingPath(path, dependsOnProp)))
-  }, [dependsOnProp, jsonForms.core?.data, path])
+  const ctx = useJsonForms()
+  const parentPath = path.split('.').slice(0, -1).join('.')
+  const parentValue = dependsOnProp
+    ? dependsOnConst(Resolve.data(ctx.core?.data, parentPath ? `${parentPath}.${dependsOnProp}` : dependsOnProp))
+    : undefined
   const searchParams = useMemo(() => {
     if (!dependsOnProp) return xSearch.params
     return { ...xSearch.params, parent: parentValue }
@@ -324,7 +312,7 @@ const SearchSelectControl = ({
           <TextField.Root
             id={path}
             value={open ? inputValue : (selectedOption?.name ?? '')}
-            placeholder={open && modeConfig?.searchable ? 'Type to find…' : placeholder}
+            placeholder={open && modeConfig?.searchable ? 'Search...' : placeholder}
             disabled={!isEnabled}
             readOnly={open && !modeConfig?.searchable}
             style={!isValid ? { outline: '2px solid var(--red-7)', outlineOffset: '-1px' } : undefined}
@@ -407,7 +395,7 @@ const SearchSelectControl = ({
                             ? 'Select the related field first.'
                             : inputValue || fetchOnOpen
                               ? 'No results found.'
-                              : 'Type to find…'}
+                              : 'Type to search…'}
                         </Text>
                       </Box>
                     )}
