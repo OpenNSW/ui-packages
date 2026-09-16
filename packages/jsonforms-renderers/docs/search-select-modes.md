@@ -54,7 +54,11 @@ value is set, the dropdown shows "Select the related field first." instead of fe
 {
   "commodity_common_name": {
     "type": "object",
-    "x-search": { "service": "static-data", "mode": "large-searchable-list", "params": { "id": "commodities", "version": "1" } },
+    "x-search": {
+      "service": "static-data",
+      "mode": "large-searchable-list",
+      "params": { "id": "commodities", "version": "1" },
+    },
   },
   "commodity_botanical_name": {
     "type": "string",
