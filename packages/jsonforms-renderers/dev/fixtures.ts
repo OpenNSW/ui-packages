@@ -263,7 +263,10 @@ export const fixtures: Fixture[] = [
       label: 'Employee lookup',
       options: {
         autoFill: {
-          trigger: 'employeeId',
+          // SearchSelectControl only writes { value, label } to employeeId's own data, but publishes
+          // the full selected employee record to this group's side channel — firstName/lastName
+          // auto-match by key against it, department needs an explicit reshape below
+          source: 'employeeId',
           fill: [{ path: 'department', from: 'department.name' }],
         },
       },

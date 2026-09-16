@@ -1,6 +1,6 @@
-import { StrictMode, useMemo, useState } from 'react'
+import { StrictMode, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Theme, Flex, Box, Heading, Card, Text, Separator, TextArea, Badge } from '@radix-ui/themes'
+import { Theme, Flex, Box, Heading, Card, Text, Separator, TextArea, Badge, Button } from '@radix-ui/themes'
 import '@radix-ui/themes/styles.css'
 import { JsonForms } from '@jsonforms/react'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
@@ -73,6 +73,8 @@ function Playground() {
   const [uischema, setUischema] = useState<UISchemaElement>(() => fixtures[0].uischema)
   const [schemaError, setSchemaError] = useState<string>()
   const [uiError, setUiError] = useState<string>()
+  const [dataFileError, setDataFileError] = useState<string>()
+  const dataFileInputRef = useRef<HTMLInputElement>(null)
 
   const loadFixture = (f: Fixture) => {
     setSelectedId(f.id)
@@ -111,8 +113,25 @@ function Playground() {
     }
   }
 
-  // Remount JsonForms when switching fixtures so it doesn't hold onto stale internal state.
-  const formKey = selectedId
+  // Re-seeds `data` (and `liveData`) from an uploaded .json file, leaving schema/uischema
+  // untouched — a quick way to try a specific payload against whatever fixture is selected
+  // without hand-editing fixtures.ts.
+  const onDataFile = (file: File) => {
+    void file.text().then((text) => {
+      const { value, error } = parse(text)
+      if (error) {
+        setDataFileError(error)
+        return
+      }
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        setDataFileError('Expected a JSON object at the top level.')
+        return
+      }
+      setData(value as Record<string, unknown>)
+      setLiveData(value as Record<string, unknown>)
+      setDataFileError(undefined)
+    })
+  }
 
   return (
     <Flex align="start" style={{ minHeight: '100vh' }}>
@@ -154,6 +173,29 @@ function Playground() {
         <Text size="2" color="gray">
           Pick a component on the left, then edit its Schema or UI Schema below — the form updates in real time.
         </Text>
+
+        <Flex align="center" gap="2" mt="2">
+          <Button size="1" variant="soft" onClick={() => dataFileInputRef.current?.click()}>
+            Load sample data (.json)…
+          </Button>
+          {dataFileError && (
+            <Text size="1" color="red">
+              {dataFileError}
+            </Text>
+          )}
+          <input
+            ref={dataFileInputRef}
+            type="file"
+            accept=".json,application/json"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = '' // allow re-picking the same file
+              if (file) onDataFile(file)
+            }}
+          />
+        </Flex>
+
         <Separator my="4" size="4" />
 
         <Flex gap="4" align="start" wrap="wrap">
@@ -164,7 +206,8 @@ function Playground() {
                 Rendered form
               </Text>
               <JsonForms
-                key={formKey}
+                // remount when switching fixtures so it doesn't hold onto stale internal state
+                key={selectedId}
                 schema={schema}
                 uischema={uischema}
                 data={data}
