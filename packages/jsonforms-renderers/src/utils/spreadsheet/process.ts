@@ -1,113 +1,144 @@
-import type { CellValue, DerivationResult, FormulaResult, SheetData } from './types'
+import type { CellValue, DerivationResult, FormulaResult, SheetData, SpreadsheetFieldSpec } from './types'
 
 export interface ShapeSheetOptions {
   columnHeader?: boolean
   rowHeader?: boolean
+  columns?: SpreadsheetFieldSpec[]
+  rows?: SpreadsheetFieldSpec[]
+}
+
+function firstDuplicateId(fields: SpreadsheetFieldSpec[]): string | null {
+  const seen = new Set<string>()
+  for (const { id } of fields) {
+    if (seen.has(id)) return id
+    seen.add(id)
+  }
+  return null
+}
+
+// Single source of truth for whether an x-spreadsheet config is valid,
+// shared by shapeSheet's throw and SpreadsheetControl's inline error box —
+// so the two can never drift into different wording for the same mistake.
+// Checked in an order that catches a malformed SHAPE before anything
+// downstream ever iterates it: a schema author's `columns: "Qty"` (a plain
+// string, not an array) must surface as this same config-error message, not
+// as a thrown exception from something treating it as an array of
+// characters.
+//
+// Returns null when valid, else a message (no "x-spreadsheet:" /
+// "Invalid x-spreadsheet config:" prefix — each caller prefixes its own way).
+export function validateSpreadsheetConfig(options: ShapeSheetOptions): string | null {
+  const { columnHeader, rowHeader, columns, rows } = options
+
+  if (columns !== undefined && !Array.isArray(columns)) {
+    return 'columns must be an array of { id, label } objects.'
+  }
+  if (rows !== undefined && !Array.isArray(rows)) {
+    return 'rows must be an array of { id, label } objects.'
+  }
+
+  const isValidField = (f: SpreadsheetFieldSpec): boolean =>
+    !!f && typeof f.id === 'string' && f.id !== '' && typeof f.label === 'string' && f.label !== ''
+  const badColumnIndex = columns?.findIndex((f) => !isValidField(f))
+  if (badColumnIndex != null && badColumnIndex !== -1) {
+    return `columns[${badColumnIndex}] must be a { id, label } object with non-empty string fields.`
+  }
+  const badRowIndex = rows?.findIndex((f) => !isValidField(f))
+  if (badRowIndex != null && badRowIndex !== -1) {
+    return `rows[${badRowIndex}] must be a { id, label } object with non-empty string fields.`
+  }
+
+  const hasColumns = !!columns && columns.length > 0
+  const hasRows = !!rows && rows.length > 0
+
+  if (hasColumns) {
+    const dup = firstDuplicateId(columns)
+    if (dup) return `duplicate column id "${dup}" — every declared column id must be unique.`
+  }
+  if (hasRows) {
+    const dup = firstDuplicateId(rows)
+    if (dup) return `duplicate row id "${dup}" — every declared row id must be unique.`
+  }
+
+  if (columnHeader && rowHeader) {
+    return 'columnHeader and rowHeader cannot both be true — pick one orientation for the persisted sheet shape.'
+  }
+  if (hasColumns && hasRows) {
+    return 'columns and rows cannot both be declared — pick one orientation for the persisted sheet shape.'
+  }
+  if (columnHeader && !hasColumns) {
+    return 'columnHeader is true but columns is missing or empty — declare the column list columnHeader positions map to.'
+  }
+  if (rowHeader && !hasRows) {
+    return 'rowHeader is true but rows is missing or empty — declare the row list rowHeader positions map to.'
+  }
+  return null
 }
 
 // Shapes a raw matrix into what gets persisted as `sheet`. Never touches
 // formula evaluation — only ever called when building the PERSISTED value,
-// after derivations are already computed against the original, unshaped
-// matrix. Both flags true is a schema-authoring error, not a "pick a
-// winner" situation — each orientation is independently meaningful in real
-// usage, so silently guessing would silently discard the other.
+// after derivations are already computed against the (possibly already
+// columns/rows-normalized, see SpreadsheetControl.tsx) matrix.
 //
-// Deliberately format-agnostic: this operates purely on the normalized
-// CellValue[][] matrix,
-// never on the original file format. A future XML (or any other) upload
-// path only needs to produce that same matrix shape — with, if it wants
-// records-shaping, a real header row/column at position 0 in it, the same
-// convention columnHeader/rowHeader already use for the preview table
-// today — and this function works on it completely unchanged. Not adding
-// any further pluggability (e.g. an injectable key-extraction strategy)
-// ahead of that actually existing: the one real assumption here (keys come
-// from row/column 0 of the matrix) is already the existing convention, not
-// a new one, and speculatively generalizing further for a format that
-// doesn't exist yet isn't worth it until its actual needs are known.
+// `columns`/`rows` are the SOLE source of a record's keys, assigned strictly
+// by POSITION — column/row i of the real data maps to fields[i].id,
+// regardless of what (if anything) is in a skipped header row/column.
+// columnHeader/rowHeader mean only "skip an extra header row/column in this
+// matrix, discard its content unread" — never "read it for keys". This is a
+// deliberate choice over matching declared ids against real header text: a
+// database round trip (e.g. Postgres JSONB, which does not preserve object
+// key insertion order) can never invalidate a positional assignment the way
+// it can silently scramble a text-matched one.
 export function shapeSheet(matrix: CellValue[][], options: ShapeSheetOptions = {}): SheetData {
-  if (options.columnHeader && options.rowHeader) {
-    throw new Error(
-      'x-spreadsheet: columnHeader and rowHeader cannot both be true — pick one orientation for the persisted sheet shape.',
-    )
-  }
-  if (options.columnHeader) return rowsToRecords(matrix)
-  if (options.rowHeader) return columnsToRecords(matrix)
+  const configError = validateSpreadsheetConfig(options)
+  if (configError) throw new Error(`x-spreadsheet: ${configError}`)
+  const { columnHeader, rowHeader, columns, rows } = options
+  if (columns && columns.length > 0) return rowsToRecords(matrix, columns, columnHeader === true)
+  if (rows && rows.length > 0) return columnsToRecords(matrix, rows, rowHeader === true)
   return matrix
 }
 
-// Fixed, timezone-independent stringification for a header/column-A cell.
-// String(date)/date.toString() renders in the LOCAL time zone, which would
-// make the persisted record's KEYS vary depending on which time zone the
-// uploading browser is in; date.toISOString() (fixed, UTC) doesn't. Only
-// display formatting (formatCell, SpreadsheetControl.tsx) is allowed to be
-// locale-aware — persisted keys must be deterministic.
-function cellKey(cell: CellValue): string | null {
-  if (cell == null || cell === '') return null
-  if (cell instanceof Date) return cell.toISOString()
-  return String(cell)
-}
-
-// Unlike a `derivations` id (schema-author-controlled, so a
-// collision is a config mistake it's reasonable to resolve leniently), these
-// keys come straight from the uploaded file — a collision there means the
-// file itself doesn't actually identify a column/row uniquely, so silently
-// picking a winner would silently drop real data. Reject instead.
-function assertUniqueKeys(keys: (string | null)[], option: 'columnHeader' | 'rowHeader'): void {
-  const seen = new Set<string>()
-  for (const key of keys) {
-    if (key == null) continue
-    if (seen.has(key)) {
-      throw new Error(
-        `x-spreadsheet: duplicate ${option} value "${key}" — every ${option === 'columnHeader' ? 'column header' : 'column-A value'} must be unique to shape as records.`,
-      )
-    }
-    seen.add(key)
-  }
-}
-
-// columnHeader: row 1 = keys, every row after it = one record. A blank/null
-// header cell contributes no key (that column is absent from every record,
-// not present under a stringified "null"/""). A data row shorter than the
-// header fills missing trailing values with null; a row longer than the
-// header silently drops its unheaded trailing cells. A duplicate header
-// value is rejected outright (see assertUniqueKeys above).
-function rowsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
-  const [headerRow, ...bodyRows] = matrix
-  if (!headerRow) return []
-  const keys = headerRow.map(cellKey)
-  assertUniqueKeys(keys, 'columnHeader')
-  return bodyRows.map((row) => {
-    // Object.create(null), not {} — a header cell of "__proto__" would
+// columnHeader: discard matrix[0] UNREAD when skipHeaderRow (whatever text,
+// if any, is in it), then every remaining row's cell at index i maps to
+// fields[i].id — position only, never by matching text. A data row shorter
+// than fields fills the missing trailing values with null; a row longer
+// than fields silently drops its undeclared trailing cells.
+function rowsToRecords(
+  matrix: CellValue[][],
+  fields: SpreadsheetFieldSpec[],
+  skipHeaderRow: boolean,
+): Record<string, CellValue>[] {
+  const dataRows = skipHeaderRow ? matrix.slice(1) : matrix
+  return dataRows.map((row) => {
+    // Object.create(null), not {} — a declared id of "__proto__" would
     // otherwise set the record's prototype instead of creating an
     // enumerable own property, silently dropping that column from
     // Object.keys/entries and JSON serialization. Same fix already applied
-    // to the derivations accumulator below (#32) — worse here
-    // since these keys come from the uploaded file, not a schema-author-
-    // controlled x-evaluate id.
+    // to the derivations accumulator below (#32).
     const record: Record<string, CellValue> = Object.create(null)
-    keys.forEach((key, i) => {
-      if (key == null) return
-      record[key] = row[i] ?? null
+    fields.forEach((field, i) => {
+      record[field.id] = row[i] ?? null
     })
     return record
   })
 }
 
-// rowHeader: column A = keys (on every row), every OTHER column = one
-// record, transposed. Column A is fully consumed as the key source,
-// symmetric with how row 1 is fully consumed above. Same blank/duplicate
-// handling as rowsToRecords, transposed.
-function columnsToRecords(matrix: CellValue[][]): Record<string, CellValue>[] {
-  const keys = matrix.map((row) => cellKey(row[0]))
-  assertUniqueKeys(keys, 'rowHeader')
+// rowHeader: discard column 0 of every row UNREAD when skipHeaderColumn,
+// then every OTHER column becomes one record, transposed — symmetric to
+// rowsToRecords, fields[r].id assigned to row r's data, by position.
+function columnsToRecords(
+  matrix: CellValue[][],
+  fields: SpreadsheetFieldSpec[],
+  skipHeaderColumn: boolean,
+): Record<string, CellValue>[] {
+  const colOffset = skipHeaderColumn ? 1 : 0
   const width = Math.max(0, ...matrix.map((row) => row.length))
-  const colCount = Math.max(0, width - 1)
+  const colCount = Math.max(0, width - colOffset)
   return Array.from({ length: colCount }, (_, i) => {
-    const col = i + 1
+    const col = colOffset + i
     const record: Record<string, CellValue> = Object.create(null)
-    keys.forEach((key, r) => {
-      if (key == null) return
-      record[key] = matrix[r][col] ?? null
+    fields.forEach((field, r) => {
+      record[field.id] = matrix[r]?.[col] ?? null
     })
     return record
   })

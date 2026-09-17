@@ -5,7 +5,14 @@ export {
   evaluateFormulaWithVariables,
   describeFormulaError,
 } from './expression'
-export { shapeSheet, isRecordsSheet, buildDerivations, sameDerivations, sameSheetData } from './process'
+export {
+  shapeSheet,
+  validateSpreadsheetConfig,
+  isRecordsSheet,
+  buildDerivations,
+  sameDerivations,
+  sameSheetData,
+} from './process'
 export type { ShapeSheetOptions } from './process'
 export type {
   CellValue,
@@ -17,4 +24,5 @@ export type {
   DerivationResult,
   SpreadsheetValue,
   SheetData,
+  SpreadsheetFieldSpec,
 } from './types'

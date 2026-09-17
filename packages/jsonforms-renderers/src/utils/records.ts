@@ -37,7 +37,17 @@ function isScalar(value: unknown): value is CellValue {
 //
 //  1. The header is the union of EVERY record's keys, in first-seen order — not
 //     just the first record's. Neither a fixed key set nor a fixed key order is
-//     guaranteed across records.
+//     guaranteed across records. `columns`, when given, seeds the header before
+//     that scan, so a caller with a declared field order (SpreadsheetControl's
+//     x-spreadsheet.columns/rows) can pin those positions to specific keys
+//     instead of trusting whatever order the records array happens to arrive
+//     in — this is what re-normalizes a records array whose own key order
+//     isn't guaranteed to survive a storage round trip (e.g. Postgres JSONB,
+//     which does not preserve object key insertion order) back to the
+//     declared order, by matching key NAME, regardless of each record's own
+//     insertion order. A listed key not present in any record still claims
+//     its column, all null; any record key not listed still falls in
+//     afterwards, in first-seen order, exactly as without `columns`.
 //  2. Every row is built by looking up the header keys, never by iterating the
 //     record, and a missing key becomes null. That keeps a REORDERED record
 //     aligned, and pads a SHORT record to the header's width — without the
@@ -52,11 +62,16 @@ function isScalar(value: unknown): value is CellValue {
 //     aggregate (a column of 10 / [1,2] / 25 sums to 38). Blanking is the only
 //     shape that cannot silently corrupt a total; the real value is still in the
 //     source field, since this matrix is a derived view for formulas alone.
-export function recordsToMatrix(records: DataRecord[]): CellValue[][] {
+export function recordsToMatrix(records: DataRecord[], columns?: string[]): CellValue[][] {
   if (records.length === 0) return []
 
   const header: string[] = []
   const seen = new Set<string>()
+  for (const key of columns ?? []) {
+    if (seen.has(key)) continue
+    seen.add(key)
+    header.push(key)
+  }
   for (const record of records) {
     for (const key of Object.keys(record)) {
       if (seen.has(key)) continue

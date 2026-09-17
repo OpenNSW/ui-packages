@@ -164,7 +164,14 @@ describe('transpose', () => {
       ['Units', 100, 150],
       ['Revenue', 40, 55],
     ]
-    const asRecords = shapeSheet(original, { rowHeader: true }) as Record<string, CellValue>[]
+    // Every matrix ROW is one declared field, including the first — "Metric"
+    // is itself a field here, whose values are the literal Q1/Q2 labels.
+    const rows = [
+      { id: 'Metric', label: 'Metric' },
+      { id: 'Units', label: 'Units' },
+      { id: 'Revenue', label: 'Revenue' },
+    ]
+    const asRecords = shapeSheet(original, { rowHeader: true, rows }) as Record<string, CellValue>[]
     expect(transpose(recordsToMatrix(asRecords))).toEqual(original)
   })
 
