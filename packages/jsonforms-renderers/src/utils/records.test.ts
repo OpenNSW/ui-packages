@@ -38,6 +38,36 @@ describe('recordsToMatrix', () => {
     ])
   })
 
+  describe('columns', () => {
+    it('seeds the header order, matching by key name regardless of a record’s own key order', () => {
+      const records: DataRecord[] = [
+        { Quantity: 20, Item: 'B' },
+        { Item: 'A', Quantity: 10 },
+      ]
+      expect(recordsToMatrix(records, ['Item', 'Quantity'])).toEqual([
+        ['Item', 'Quantity'],
+        ['B', 20],
+        ['A', 10],
+      ])
+    })
+
+    it('still appends a record key not listed in columns, in first-seen order', () => {
+      const records: DataRecord[] = [{ Item: 'A', Quantity: 10, Note: 'x' }]
+      expect(recordsToMatrix(records, ['Item', 'Quantity'])).toEqual([
+        ['Item', 'Quantity', 'Note'],
+        ['A', 10, 'x'],
+      ])
+    })
+
+    it('gives a listed column its own all-null column even if no record has that key', () => {
+      const records: DataRecord[] = [{ Item: 'A' }]
+      expect(recordsToMatrix(records, ['Item', 'Quantity'])).toEqual([
+        ['Item', 'Quantity'],
+        ['A', null],
+      ])
+    })
+  })
+
   it('pads a short record out to the header width', () => {
     const records: DataRecord[] = [{ A: 1, B: 2, C: 3 }, { A: 4 }]
     expect(recordsToMatrix(records)).toEqual([

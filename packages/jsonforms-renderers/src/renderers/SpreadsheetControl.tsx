@@ -363,16 +363,14 @@ const SpreadsheetControl = ({
         return
       }
 
-      // Declaring columns/rows shapes this upload into records immediately —
-      // not only after a save-and-reload — via the same shapeSheet + asMatrix
-      // round trip a reload takes: raw matrix in (columnHeader/rowHeader say
-      // whether ITS row/column 0 is a header to skip), a canonical,
-      // positionally-assigned matrix back out. Unconditional on columns/rows
-      // alone (not gated on a separate "explicit override" concept the way an
-      // earlier by-name design needed): positional assignment has nothing
-      // left to "reorder" depending on staleness, so there is no risk of a
-      // fresh upload getting force-matched to some OTHER, previous upload's
-      // shape — it always defines its own, from its own real column i.
+      // Declaring columns/rows shapes a fresh upload into records right here,
+      // via the same shapeSheet + asMatrix round trip used to render a
+      // reloaded sheet: raw matrix in (columnHeader/rowHeader say whether ITS
+      // row/column 0 is a header to skip), a canonical, positionally-assigned
+      // matrix back out. Safe to do unconditionally whenever columns/rows is
+      // declared — position i of THIS upload's own data always defines
+      // itself fresh, so there is nothing that could be "stale" here the way
+      // a name-matched assignment could be.
       if (hasColumns || hasRows) {
         try {
           parsedMatrix = asMatrix(shapeSheet(parsedMatrix, { columnHeader, rowHeader, columns, rows }))

@@ -559,7 +559,7 @@ export const fixtures: Fixture[] = [
         stock: {
           type: 'object',
           description:
-            'Upload dev/sample-files/inventory-headerless-sample.xlsx (regenerate via generate-inventory-headerless-sample.cjs) — this file has NO header row at all; real data starts at row 1. columnHeader is absent/false, so nothing is skipped — row 1 maps straight to columns[0].id, row 2 to the same columns[0].id for the next record, and so on, purely by position. This is the counterpart to the columnHeader: true fixtures above, which skip an actual header row in the file — see the "Breaking change" and validation-matrix sections of docs/spreadsheet-value-shape.md for the full rules, including why an uploaded file whose columns are shuffled relative to this declared order is NOT auto-corrected (that required reading and matching the file\'s own header text, which this design deliberately no longer does).',
+            "Upload dev/sample-files/inventory-headerless-sample.xlsx (regenerate via generate-inventory-headerless-sample.cjs) — this file has NO header row at all; real data starts at row 1. columnHeader is absent/false, so nothing is skipped — row 1 maps straight to columns[0].id, row 2 to columns[0].id for the next record, and so on, purely by position. Contrast with the columnHeader: true fixtures above, which skip an actual header row in the file first. Column assignment is always positional, never by matching label text — see docs/spreadsheet-value-shape.md for the full validation matrix, including why an uploaded file's columns must already be in the declared order.",
           'x-spreadsheet': {
             accept: '.xlsx,.xls,.csv',
             maxSize: 10485760,

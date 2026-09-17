@@ -230,10 +230,9 @@ describe('validateSpreadsheetConfig', () => {
     expect(validateSpreadsheetConfig({ rowHeader: true, rows })).toMatch(/duplicate row id "A"/)
   })
 
-  // Directly regression-tests a PR review nit: a schema author's `columns:
-  // "Qty"` (a plain string, not an array) must surface as this same
-  // config-error message, never as a thrown exception from something
-  // iterating it as an array of characters ("Q", "t", "y").
+  // A schema author's `columns: "Qty"` (a plain string, not an array) must
+  // surface as this same config-error message, never as a thrown exception
+  // from something iterating it as an array of characters ("Q", "t", "y").
   it('rejects columns given as a plain string instead of an array', () => {
     expect(
       validateSpreadsheetConfig({ columnHeader: true, columns: 'Qty' as unknown as SpreadsheetFieldSpec[] }),

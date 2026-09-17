@@ -287,11 +287,10 @@ describe('SpreadsheetControl configuration errors', () => {
     expect(await screen.findByText(/cannot both be declared/)).toBeTruthy()
   })
 
-  // Regression test for a PR review nit: a schema author's `columns: "Qty"`
-  // (a plain string, not an array) must render this same config-error box,
-  // never throw during render (a bad schema string would otherwise be
-  // iterated as individual characters by anything downstream that assumes
-  // an array).
+  // A schema author's `columns: "Qty"` (a plain string, not an array) must
+  // render this same config-error box, never throw during render — a bad
+  // schema string would otherwise be iterated as individual characters by
+  // anything downstream that assumes an array.
   it('rejects columns given as a plain string instead of an array, without throwing', async () => {
     expect(() => renderForm(makeSchema({ columnHeader: true, columns: 'Qty' }), written(RECORDS))).not.toThrow()
 
@@ -411,7 +410,7 @@ describe('SpreadsheetControl renders one grid whatever shape the data is in', ()
 })
 
 describe('SpreadsheetControl shaping a FRESH upload into records', () => {
-  it('shapes a FRESH upload into records immediately, not only after a reload', async () => {
+  it('shapes a fresh upload into records immediately, keyed by declared columns', async () => {
     // Row 1 of this file is decorative/wrong-looking on purpose — it must be
     // discarded unread (columnHeader: true), never matched against `columns`.
     const { totals } = renderForm(uploadSchema({ columnHeader: true, columns: ITEM_QTY_COLUMNS }), {
