@@ -27,6 +27,7 @@ export const SelectControl = ({
 
   const [open, setOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -66,6 +67,8 @@ export const SelectControl = ({
     const filteredOptions = open
       ? options.filter((o) => o.label.toLowerCase().includes(inputValue.toLowerCase()))
       : options
+    // clamp rather than store out-of-range: the filtered list shrinks as the user keeps typing
+    const activeIndex = Math.min(highlightedIndex, filteredOptions.length - 1)
 
     const onSelect = (opt: { value: string; label: string }) => {
       handleChange(path, opt.value)
@@ -98,16 +101,36 @@ export const SelectControl = ({
               style={!isValid ? { outline: '2px solid var(--red-7)', outlineOffset: '-1px' } : undefined}
               onChange={(e) => {
                 setInputValue(e.target.value)
+                setHighlightedIndex(0)
                 if (!open) setOpen(true)
               }}
               onFocus={() => {
                 if (enabled && !open) {
                   setInputValue('')
+                  setHighlightedIndex(0)
                   setOpen(true)
                 }
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Escape') setOpen(false)
+                if (e.key === 'Escape') {
+                  setOpen(false)
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  if (!open) {
+                    setInputValue('')
+                    setOpen(true)
+                  } else {
+                    setHighlightedIndex((i) => Math.min(i + 1, filteredOptions.length - 1))
+                  }
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  if (open) setHighlightedIndex((i) => Math.max(i - 1, 0))
+                } else if (e.key === 'Enter') {
+                  if (open && filteredOptions[activeIndex]) {
+                    e.preventDefault()
+                    onSelect(filteredOptions[activeIndex])
+                  }
+                }
               }}
             >
               <TextField.Slot side="right">
@@ -157,17 +180,23 @@ export const SelectControl = ({
                       </Box>
                     )}
 
-                    {filteredOptions.map((opt) => (
+                    {filteredOptions.map((opt, index) => (
                       <Box
                         key={opt.value}
                         px="3"
                         py="2"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => onSelect(opt)}
+                        onMouseEnter={() => setHighlightedIndex(index)}
                         style={{
                           cursor: 'pointer',
                           borderRadius: 'var(--radius-2)',
-                          backgroundColor: opt.value === value ? 'var(--accent-3)' : undefined,
+                          backgroundColor:
+                            index === activeIndex
+                              ? 'var(--accent-4)'
+                              : opt.value === value
+                                ? 'var(--accent-3)'
+                                : undefined,
                         }}
                       >
                         <Text size="2">{opt.label}</Text>

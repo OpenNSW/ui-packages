@@ -102,6 +102,34 @@ describe('SelectControl autocomplete', () => {
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('')
   })
 
+  it('selects a match via keyboard: type a unique prefix, press Enter', async () => {
+    const { writes } = renderForm(autocompleteUischema, {})
+
+    const input = screen.getByRole('textbox')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'ind' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    await waitFor(() => {
+      expect(writes[writes.length - 1]?.country).toBe('India')
+    })
+  })
+
+  it('moves the highlight with ArrowDown/ArrowUp and selects the highlighted option on Enter', async () => {
+    const { writes } = renderForm(autocompleteUischema, {})
+
+    const input = screen.getByRole('textbox')
+    fireEvent.focus(input) // opens with the full list: Sri Lanka, India, Maldives
+    fireEvent.keyDown(input, { key: 'ArrowDown' }) // -> India
+    fireEvent.keyDown(input, { key: 'ArrowDown' }) // -> Maldives
+    fireEvent.keyDown(input, { key: 'ArrowUp' }) // -> India
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    await waitFor(() => {
+      expect(writes[writes.length - 1]?.country).toBe('India')
+    })
+  })
+
   it('does not show a clear button when there is no value', () => {
     renderForm(autocompleteUischema, {})
     expect(screen.queryByLabelText('Clear selection')).toBeNull()
