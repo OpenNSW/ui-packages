@@ -23,7 +23,7 @@ interface XFileOptions {
 
 interface FileControlProps {
   data: string | string[] | null
-  handleChange(path: string, value: string | string[] | null): void
+  handleChange(path: string, value: string | string[] | undefined): void
   path: string
   label: string
   required?: boolean
@@ -175,7 +175,12 @@ const FileControl = ({
       return next
     })
     const newKeys = currentKeys.filter((k) => k !== key)
-    handleChange(path, isMulti ? (newKeys.length > 0 ? newKeys : null) : (newKeys[0] ?? null))
+    // `undefined`, not `null` — same reason as the clear-when-hidden call
+    // above: `null` doesn't satisfy this field's `type: 'string'` schema, so
+    // removing the last file would leave it failing validation. `newKeys[0]`
+    // is already `undefined` once the array is empty, so the scalar branch
+    // needs no fallback at all.
+    handleChange(path, isMulti ? (newKeys.length > 0 ? newKeys : undefined) : newKeys[0])
   }
 
   const onView = async (e: React.MouseEvent<HTMLButtonElement>, key: string) => {
