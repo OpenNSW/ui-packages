@@ -450,13 +450,19 @@ export const fixtures: Fixture[] = [
           type: 'object',
           title: 'Sales Data',
           description:
-            "Upload dev/sample-files/sales-data-sample.xlsx (regenerate via generate-sales-data-sample.cjs). Since columnHeader is true, sales_data.sheet persists as one record per row (keyed by row 1's headers), not a raw matrix — see docs/spreadsheet-value-shape.md.",
+            "Upload dev/sample-files/sales-data-sample.xlsx (regenerate via generate-sales-data-sample.cjs). Row 1 of the file (Date, Item, Category, Quantity) is skipped unread — columnHeader just says a header row is there to skip; the declared columns list below is the actual, positional source of each record's keys. sales_data.sheet persists as one record per row — see docs/spreadsheet-value-shape.md.",
           'x-spreadsheet': {
             accept: '.xlsx,.xls,.csv',
             maxSize: 10485760,
             persistSheet: true,
             columnHeader: true,
             rowHeader: false,
+            columns: [
+              { id: 'date', label: 'Date' },
+              { id: 'item', label: 'Item' },
+              { id: 'category', label: 'Category' },
+              { id: 'quantity', label: 'Quantity' },
+            ],
           },
           'x-evaluate': [{ id: 'total_quantity', label: 'Total Quantity', expression: '=SUM(D2:D4)' }],
           properties: {
@@ -515,13 +521,19 @@ export const fixtures: Fixture[] = [
           type: 'object',
           title: 'Quarterly Metrics',
           description:
-            "Upload dev/sample-files/quarterly-metrics-sample.xlsx (regenerate via generate-quarterly-metrics-sample.cjs) — column A holds each metric's name (row header), columns B-D hold one quarter each. With rowHeader: true and columnHeader: false, the persisted sheet is the TRANSPOSED records shape: each quarter becomes one record, keyed by column A's metric names — see docs/spreadsheet-value-shape.md. Contrast with 'Spreadsheet' and 'Computed Control (with Spreadsheet)', which both use columnHeader and persist one record per row instead.",
+            "Upload dev/sample-files/quarterly-metrics-sample.xlsx (regenerate via generate-quarterly-metrics-sample.cjs) — column A holds each metric's name (Metric, Units Sold, Returns, Net Units — one per matrix ROW), columns B-D hold one quarter each. Column A's text is skipped unread (rowHeader: true, symmetric to columnHeader) — the declared rows list below, one entry per matrix row, is the actual positional source of each record's keys. The persisted sheet is the TRANSPOSED records shape: each quarter becomes one record — see docs/spreadsheet-value-shape.md. Contrast with 'Spreadsheet' and 'Computed Control (with Spreadsheet)', which both use columnHeader and persist one record per row instead.",
           'x-spreadsheet': {
             accept: '.xlsx,.xls,.csv',
             maxSize: 10485760,
             persistSheet: true,
             columnHeader: false,
             rowHeader: true,
+            rows: [
+              { id: 'metric', label: 'Metric' },
+              { id: 'units_sold', label: 'Units Sold' },
+              { id: 'returns', label: 'Returns' },
+              { id: 'net_units', label: 'Net Units' },
+            ],
           },
           'x-evaluate': [
             { id: 'total_units_sold', label: 'Total Units Sold (all quarters)', expression: '=SUM(B2:D2)' },
@@ -536,6 +548,45 @@ export const fixtures: Fixture[] = [
     uischema: {
       type: 'VerticalLayout',
       elements: [{ type: 'Control', scope: '#/properties/quarterly_metrics' }],
+    } as UISchemaElement,
+  },
+  {
+    id: 'spreadsheet-headerless-columns',
+    name: 'Spreadsheet (headerless columns)',
+    schema: {
+      type: 'object',
+      properties: {
+        stock: {
+          type: 'object',
+          description:
+            'Upload dev/sample-files/inventory-headerless-sample.xlsx (regenerate via generate-inventory-headerless-sample.cjs) — this file has NO header row at all; real data starts at row 1. columnHeader is absent/false, so nothing is skipped — row 1 maps straight to columns[0].id, row 2 to the same columns[0].id for the next record, and so on, purely by position. This is the counterpart to the columnHeader: true fixtures above, which skip an actual header row in the file — see the "Breaking change" and validation-matrix sections of docs/spreadsheet-value-shape.md for the full rules, including why an uploaded file whose columns are shuffled relative to this declared order is NOT auto-corrected (that required reading and matching the file\'s own header text, which this design deliberately no longer does).',
+          'x-spreadsheet': {
+            accept: '.xlsx,.xls,.csv',
+            maxSize: 10485760,
+            persistSheet: true,
+            columns: [
+              { id: 'item', label: 'Item' },
+              { id: 'category', label: 'Category' },
+              { id: 'quantity', label: 'Quantity' },
+              { id: 'unit_cost', label: 'Unit Cost' },
+              { id: 'total_cost', label: 'Total Cost' },
+            ],
+          },
+          'x-evaluate': [
+            { id: 'total_quantity', label: 'Total Quantity', expression: '=SUM(C2:C5)' },
+            { id: 'total_cost', label: 'Total Cost (Rs)', expression: '=SUM(E2:E5)' },
+            { id: 'average_unit_cost', label: 'Average Unit Cost', expression: '=AVERAGE(D2:D5)' },
+          ],
+          properties: {
+            sheet: { type: 'array' },
+            derivations: { type: 'object' },
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/stock' }],
     } as UISchemaElement,
   },
   {
@@ -645,8 +696,23 @@ export const fixtures: Fixture[] = [
                 title: 'Order Lines',
                 // The importer writes `sheet` straight into this field and the
                 // control evaluates it — no upload of its own needed, though
-                // one still works.
-                'x-spreadsheet': { columnHeader: true },
+                // one still works. The importer's records already arrive
+                // keyed by the real <line> element tag names (sku,
+                // description, qty, unit_price, line_total, in that document
+                // order) — declaring `columns` to match is what
+                // recordsToMatrix's by-name reordering (utils/records.ts)
+                // uses to keep those columns pinned regardless of what order
+                // the records' own keys happen to arrive in.
+                'x-spreadsheet': {
+                  columnHeader: true,
+                  columns: [
+                    { id: 'sku', label: 'SKU' },
+                    { id: 'description', label: 'Description' },
+                    { id: 'qty', label: 'Qty' },
+                    { id: 'unit_price', label: 'Unit Price' },
+                    { id: 'line_total', label: 'Line Total' },
+                  ],
+                },
                 'x-evaluate': [
                   { id: 'total_qty', label: 'Total Quantity', expression: '=SUM(C2:C4)' },
                   { id: 'total_value', label: 'Total Value', expression: '=SUM(E2:E4)' },
