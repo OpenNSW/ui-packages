@@ -43,6 +43,7 @@ export default defineConfig(({ command }) => ({
         '@e965/xlsx',
         'fast-formula-parser',
         '@formulajs/formulajs',
+        'fast-xml-parser',
       ],
     },
   },

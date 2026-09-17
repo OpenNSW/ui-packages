@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isRecordsSheet, processMatrix, shapeSheet } from './process'
+import { isRecordsSheet, shapeSheet } from './process'
 import type { CellValue } from './types'
 
 describe('shapeSheet', () => {
@@ -194,38 +194,5 @@ describe('isRecordsSheet', () => {
 
   it('is true for an empty sheet (documented, unavoidable tie-break)', () => {
     expect(isRecordsSheet([])).toBe(true)
-  })
-})
-
-describe('processMatrix records-shaping integration', () => {
-  const matrix: CellValue[][] = [
-    ['Item', 'Qty'],
-    ['Widget', 10],
-    ['Gadget', 20],
-  ]
-
-  it('shapes sheet as records while derivations still reflect the raw, unshaped matrix', async () => {
-    const result = await processMatrix(matrix, [{ id: 'total', label: 'Total', expression: '=SUM(B2:B3)' }], {
-      columnHeader: true,
-    })
-    expect(result.sheet).toEqual([
-      { Item: 'Widget', Qty: 10 },
-      { Item: 'Gadget', Qty: 20 },
-    ])
-    expect(result.derivations).toEqual({ total: { label: 'Total', value: 30 } })
-  })
-
-  it('omits sheet entirely when persistSheet is false, even with a header flag set', async () => {
-    const result = await processMatrix(matrix, [{ id: 'total', label: 'Total', expression: '=SUM(B2:B3)' }], {
-      persistSheet: false,
-      columnHeader: true,
-    })
-    expect(result).not.toHaveProperty('sheet')
-  })
-
-  it('stays matrix-shaped when neither header flag is set (backward-compat regression guard)', async () => {
-    const result = await processMatrix(matrix, [{ id: 'total', label: 'Total', expression: '=SUM(B2:B3)' }])
-    expect(Array.isArray(result.sheet)).toBe(true)
-    expect(Array.isArray((result.sheet as CellValue[][])[0])).toBe(true)
   })
 })

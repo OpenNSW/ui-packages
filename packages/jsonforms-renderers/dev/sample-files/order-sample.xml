@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sample document for the 'xml-writeto' fixture in dev/fixtures.ts.
+
+  Deliberately awkward in the ways real exports are, so one upload exercises
+  every x-xml.writeTo conversion exactly once:
+
+    <account_number>   a number so long it must be carried as a string
+    <office|serial|number|year>  one identifier split across four elements
+    <order_date>       M/D/YY, which is not what a `format: date` field wants
+    <priority>         an enum encoded as a number
+    <discount>         "empty" spelled as <null/>, which parses to an OBJECT
+    <line>             the repeated element that fills a table
+
+  Line totals are present but IGNORED: the table recomputes them, so the
+  fixture proves the derivations rather than trusting the file.
+    qty 10 + 20 + 5 = 35,  value 250 + 250 + 200 = 700,  average 20.
+-->
+<order id="A-1001">
+  <customer>
+    <code>CUST-0042</code>
+    <account_number>9940013877000</account_number>
+    <notes><null/></notes>
+  </customer>
+  <reference>
+    <office>CBEX1</office>
+    <serial>E</serial>
+    <number>44695</number>
+    <year>2026</year>
+  </reference>
+  <header>
+    <order_date>7/23/26</order_date>
+    <priority>1</priority>
+    <discount><null/></discount>
+  </header>
+  <line>
+    <sku>A-1</sku>
+    <description>Widget</description>
+    <qty>10</qty>
+    <unit_price>25</unit_price>
+    <line_total>250</line_total>
+  </line>
+  <line>
+    <sku>B-2</sku>
+    <description>Gadget</description>
+    <qty>20</qty>
+    <unit_price>12.5</unit_price>
+    <line_total>250</line_total>
+  </line>
+  <line>
+    <sku>C-3</sku>
+    <description>Sprocket</description>
+    <qty>5</qty>
+    <unit_price>40</unit_price>
+    <line_total>200</line_total>
+  </line>
+</order>

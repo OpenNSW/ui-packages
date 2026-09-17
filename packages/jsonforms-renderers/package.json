@@ -1,6 +1,6 @@
 {
   "name": "@opennsw/jsonforms-renderers",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "JSONForms renderer set for OpenNSW, built on Radix Themes and React 19.",
   "license": "Apache-2.0",
   "keywords": [
@@ -59,10 +59,13 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.9",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4.0.9",
     "typescript": "~5.7.2",
     "vite": "^6.2.0",
@@ -73,6 +76,7 @@
     "@e965/xlsx": "^0.20.3",
     "@formulajs/formulajs": "^4.6.1",
     "dayjs": "^1.11.21",
-    "fast-formula-parser": "^1.0.19"
+    "fast-formula-parser": "^1.0.19",
+    "fast-xml-parser": "^5.11.1"
   }
 }

@@ -1,6 +1,11 @@
 # Persisted sheet shape (`sheet`: matrix vs records)
 
-`SpreadsheetControl` persists `{ sheet, derivations }` (see [spreadsheet-formulas.md](./spreadsheet-formulas.md) for `derivations`/formula details, and [computed-fields.md](./computed-fields.md) for how a sibling field addresses one). `sheet` itself can take one of two shapes, driven entirely by the existing `x-spreadsheet.columnHeader`/`rowHeader` options — no separate switch:
+`SpreadsheetControl` persists `{ sheet, derivations }` (see [spreadsheet-formulas.md](./spreadsheet-formulas.md) for `derivations`/formula details, and [computed-fields.md](./computed-fields.md) for how a sibling field addresses one).
+
+**Where the rows come from doesn't change any of this.** `SpreadsheetControl` evaluates whatever sheet is in its field, whether the user uploaded it or another control wrote it there — one matrix in, one evaluation, one write. Two rules follow from that:
+
+- **A sheet the control did not parse is passed through untouched.** It is data, not output. Reshaping it would rewrite a records sheet as a matrix whenever no header option is set, silently editing it the moment the form opened.
+- **An already-correct value is left alone.** Both halves are rebuilt on every run, so the write is guarded by a structural comparison — otherwise merely opening a saved record would mark it dirty. `sheet` itself can take one of two shapes, driven entirely by the existing `x-spreadsheet.columnHeader`/`rowHeader` options — no separate switch:
 
 ```json
 "x-spreadsheet": { "columnHeader": true }
@@ -39,5 +44,5 @@ A blank/null header (or column-A) cell contributes no key at all, rather than a 
 
 Unlike a schema-author-controlled `x-evaluate` id, a header/column-A value comes from whatever's in the uploaded file, so two edge cases get handled explicitly rather than assumed away:
 
-- **A header value of `"__proto__"` is a safe, real key.** Each record is built with `Object.create(null)`, not `{}` — a plain object's inherited `__proto__` setter would otherwise intercept the write and change the record's _prototype_ instead of creating an enumerable own property, silently dropping that column from `Object.keys`/`Object.entries` and from JSON serialization (the same fix already applied to `processMatrix`'s `derivations` accumulator).
+- **A header value of `"__proto__"` is a safe, real key.** Each record is built with `Object.create(null)`, not `{}` — a plain object's inherited `__proto__` setter would otherwise intercept the write and change the record's _prototype_ instead of creating an enumerable own property, silently dropping that column from `Object.keys`/`Object.entries` and from JSON serialization (the same fix already applied to `buildDerivations`' accumulator).
 - **A `Date` header/column-A value keys deterministically.** Keys are built via `date.toISOString()` for `Date` cells, not `String(date)` — the latter renders in the _local_ time zone, which would make the same uploaded file produce different record keys depending on which time zone the uploading browser is in.
