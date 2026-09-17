@@ -4,6 +4,7 @@ import { Box, Button, Flex, ScrollArea, Spinner, Text, TextField } from '@radix-
 import { ChevronDownIcon } from '@radix-ui/react-icons'
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react'
 import { useSearchService, type SearchOption } from '../contexts/SearchServiceContext'
+import { usePublishAutoFillSource } from './autoFillGroup/AutoFillSourceContext'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { getErrorMessage } from '../utils/error'
 import * as React from 'react'
@@ -18,7 +19,7 @@ interface XSearchOptions {
   params?: Record<string, unknown>
 }
 
-// shape of `data` for an object-typed `x-search` field (`type: "object"`); string-typed fields keep `data` as the raw id
+// shape of `data` for an object-typed `x-search` field (`type: "object"`); string-typed fields keep `data` as the raw id.
 interface SearchSelectValue {
   value: string
   label?: string
@@ -55,6 +56,9 @@ const SearchSelectControl = ({
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
   const searchParams = xSearch.params
   const service = useSearchService(serviceName)
+  // hands the full selected record to an ancestor AutoFillGroup, if any, without it ever landing
+  // in form data — a no-op when this control isn't rendered inside one
+  const publishAutoFillSource = usePublishAutoFillSource(path)
 
   const isObjectMode = schema.type === 'object'
   // legacy records may have a bare string in `data` if the field was migrated from `type: "string"` after being saved
@@ -238,6 +242,7 @@ const SearchSelectControl = ({
 
   const onSelect = (option: SearchOption) => {
     handleChange(path, isObjectMode ? { value: option.id, label: option.name } : option.id)
+    publishAutoFillSource(option)
     setSelectedOption(option)
     // prevent resolve effect from re-running for the just-selected value
     lastResolvedRef.current = { value: option.id, label: isObjectMode ? option.name : undefined }
@@ -247,6 +252,7 @@ const SearchSelectControl = ({
   const onClear = (e: React.SyntheticEvent) => {
     e.stopPropagation()
     handleChange(path, isObjectMode ? undefined : null)
+    publishAutoFillSource(undefined)
     setSelectedOption(undefined)
   }
 

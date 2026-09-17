@@ -256,6 +256,47 @@ export const fixtures: Fixture[] = [
     data: { country: { value: 'au', label: 'Australia' } },
   },
   {
+    id: 'auto-fill-group',
+    name: 'Auto-Fill Group',
+    schema: {
+      type: 'object',
+      properties: {
+        employeeId: {
+          type: 'object',
+          description: 'Pick an employee — firstName/lastName/department below fill automatically',
+          'x-search': { service: 'employees', mode: 'large-searchable-list' },
+          properties: {
+            value: { type: 'string', minLength: 1 },
+            label: { type: 'string' },
+          },
+          required: ['value'],
+        },
+        firstName: { type: 'string' },
+        lastName: { type: 'string' },
+        department: { type: 'string' },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'AutoFillGroup',
+      label: 'Employee lookup',
+      options: {
+        autoFill: {
+          // SearchSelectControl only writes { value, label } to employeeId's own data, but publishes
+          // the full selected employee record to this group's side channel — firstName/lastName
+          // auto-match by key against it, department needs an explicit reshape below
+          source: 'employeeId',
+          fill: [{ path: 'department', from: 'department.name' }],
+        },
+      },
+      elements: [
+        { type: 'Control', scope: '#/properties/employeeId', options: { placeholder: 'Search employee…' } },
+        { type: 'Control', scope: '#/properties/firstName' },
+        { type: 'Control', scope: '#/properties/lastName' },
+        { type: 'Control', scope: '#/properties/department' },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'date',
     name: 'Date / Time',
     schema: {
