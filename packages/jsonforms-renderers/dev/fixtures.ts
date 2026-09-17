@@ -92,6 +92,24 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'select-autocomplete',
+    name: 'Select (Autocomplete)',
+    schema: {
+      type: 'object',
+      properties: {
+        autocompleteEnum: {
+          type: 'string',
+          enum: ['Sri Lanka', 'India', 'Maldives', 'Bangladesh', 'Nepal', 'Pakistan'],
+          description: 'Type to filter, purely client-side — no remote service',
+        },
+      },
+    },
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/autocompleteEnum', options: { autocomplete: true } }],
+    } as UISchemaElement,
+  },
+  {
     id: 'search-select-small',
     name: 'Search Select (Small list)',
     schema: {
