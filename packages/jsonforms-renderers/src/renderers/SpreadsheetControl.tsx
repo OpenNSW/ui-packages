@@ -147,6 +147,16 @@ const SpreadsheetControl = ({
   // then crash on `fields.map` instead of showing that error at all.
   const hasColumns = Array.isArray(columns) && columns.length > 0
   const hasRows = Array.isArray(rows) && rows.length > 0
+  // Shared with shapeSheet's own throw (utils/spreadsheet/process.ts), so the
+  // two can never drift into different wording for the same mistake. Computed
+  // here — before either effect below, not just before the render's early
+  // return — because an invalid config must stop evaluation and persistence
+  // outright, not merely change what's shown: `asMatrix`/`matrix` still
+  // compute *something* from a misconfigured field (e.g. falling back to
+  // first-seen-key order), and without this gate the persist effect would
+  // evaluate and potentially write derivations from that fallback shape while
+  // the render shows nothing but a configuration-error box.
+  const configError = validateSpreadsheetConfig({ columnHeader, rowHeader, columns, rows })
   const showSheet = xSpreadsheet.showSheet !== false
   const sheetName = xSpreadsheet.sheetName
   const persistSheet = xSpreadsheet.persistSheet !== false
@@ -423,6 +433,14 @@ const SpreadsheetControl = ({
   // care what produced the rows: a user's upload, or an importer writing them
   // straight into this field. Both land in `matrix`, and both take this path.
   useEffect(() => {
+    // A misconfigured field must not evaluate or persist anything at all —
+    // not even the "clear to undefined" path further down — while it's
+    // showing nothing but a configuration-error box. `matrix`/`asMatrix`
+    // still produce SOME shape from a misconfigured field (e.g. falling back
+    // to first-seen-key order), so without this, this effect could evaluate
+    // and write derivations computed from that fallback shape.
+    if (configError) return
+
     // Nothing to compute and nothing to store means nothing to write. Keeping
     // this control write-free in that case makes it usable as a plain "render
     // this array" field without dirtying the form.
@@ -517,19 +535,12 @@ const SpreadsheetControl = ({
     // effect itself writes to; `matrix` is the memoized reference that moves
     // when the rows actually change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matrix, localMatrix, xEvaluate, canEdit, persistSheet, hasColumns, hasRows, columns, rows])
+  }, [matrix, localMatrix, xEvaluate, canEdit, persistSheet, hasColumns, hasRows, columns, rows, configError])
 
   if (visible === false) {
     return null
   }
 
-  // Shared with shapeSheet's own throw (utils/spreadsheet/process.ts), so the
-  // two can never drift into different wording for the same mistake. Checked
-  // here too, not just inside shapeSheet, because an upload isn't the only
-  // way to reach this control's error state — a misconfigured columnHeader
-  // with no columns declared should show this immediately, before any file
-  // is ever selected.
-  const configError = validateSpreadsheetConfig({ columnHeader, rowHeader, columns, rows })
   if (configError) {
     return (
       <Box mb="4">

@@ -275,6 +275,21 @@ describe('SpreadsheetControl configuration errors', () => {
     expect(screen.queryByText('30')).toBeNull()
   })
 
+  // matrix/asMatrix still fall back to SOME shape for a misconfigured field
+  // (e.g. first-seen-key order), so the config error must stop evaluation and
+  // persistence outright — not just what's rendered — or this could silently
+  // write derivations computed from that fallback shape while showing nothing
+  // but the error box.
+  it('never evaluates or persists anything while the config is invalid', async () => {
+    const { writes } = renderForm(makeSchema({ columnHeader: true }), written(RECORDS))
+
+    await screen.findByText(/columns is missing or empty/)
+    await new Promise((r) => setTimeout(r, 80))
+
+    const derivationsOf = (w: Data) => (w.totals as { derivations?: unknown } | undefined)?.derivations
+    expect(writes.every((w) => derivationsOf(w) === undefined)).toBe(true)
+  })
+
   it('rejects rowHeader: true with rows missing, as a configuration error', async () => {
     renderForm(makeSchema({ rowHeader: true }), written(RECORDS))
 

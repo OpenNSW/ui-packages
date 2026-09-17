@@ -38,21 +38,22 @@ Because assignment is positional, the uploaded file's physical column layout mus
 
 `validateSpreadsheetConfig` (exported from `utils/spreadsheet`) is the single source of truth both `shapeSheet`'s throw and `SpreadsheetControl`'s inline error box use, so the two can never drift into different wording for the same mistake:
 
-| `columnHeader` | `columns`        | `rowHeader`    | `rows`        | Result                                        |
-| -------------- | ---------------- | -------------- | ------------- | --------------------------------------------- |
-| —              | —                | —              | —             | valid: raw matrix passthrough                 |
-| `true`         | declared         | —              | —             | valid: records, row 0 skipped                 |
-| `false`/absent | declared         | —              | —             | valid: records, headerless (row 0 is data)    |
-| —              | —                | `true`         | declared      | valid: records, column 0 skipped              |
-| —              | —                | `false`/absent | declared      | valid: records, headerless (column 0 is data) |
-| `true`         | missing/empty    |                |               | **error**                                     |
-|                |                  | `true`         | missing/empty | **error**                                     |
-| `true`         |                  | `true`         |               | **error** (both orientations)                 |
-|                | declared         |                | declared      | **error** (both orientations)                 |
-| any            | not an array     | any            | any           | **error**, before anything iterates it        |
-| any            | a duplicate `id` | any            | any           | **error**                                     |
+| `columnHeader` | `columns`                 | `rowHeader`    | `rows`        | Result                                              |
+| -------------- | ------------------------- | -------------- | ------------- | --------------------------------------------------- |
+| —              | —                         | —              | —             | valid: raw matrix passthrough                       |
+| `true`         | declared                  | —              | —             | valid: records, row 0 skipped                       |
+| `false`/absent | declared                  | —              | —             | valid: records, headerless (row 0 is data)          |
+| —              | —                         | `true`         | declared      | valid: records, column 0 skipped                    |
+| —              | —                         | `false`/absent | declared      | valid: records, headerless (column 0 is data)       |
+| `true`         | missing/empty             |                |               | **error**                                           |
+|                |                           | `true`         | missing/empty | **error**                                           |
+| `true`         |                           | `true`         |               | **error** (both orientations)                       |
+|                | declared                  |                | declared      | **error** (both orientations)                       |
+| any            | not an array              | any            | any           | **error**, before anything iterates it              |
+| any            | `[]` (declared but empty) | any            | any           | **error**, regardless of `columnHeader`/`rowHeader` |
+| any            | a duplicate `id`          | any            | any           | **error**                                           |
 
-A malformed `columns`/`rows` (e.g. a schema author's typo leaving it a plain string rather than an array) is checked _first_, before anything downstream ever iterates it — it always surfaces as this same configuration-error message, never as a thrown render exception.
+A malformed `columns`/`rows` (e.g. a schema author's typo leaving it a plain string rather than an array) is checked _first_, before anything downstream ever iterates it — it always surfaces as this same configuration-error message, never as a thrown render exception. An explicitly declared `columns: []`/`rows: []` is rejected the same way in every mode, including headerless — reading it the same as an omitted field would silently fall back to raw matrix persistence instead of the records shape the schema author was clearly trying to declare.
 
 `x-evaluate` addresses cells by literal coordinate (`B2`, `SUM(I2:I6)`), the same as in Excel. Once `columns`/`rows` is declared, a fresh upload is positionally normalized _before_ evaluation runs, so formulas address that canonical matrix. In raw matrix mode (neither declared), formula addressing is exactly the uploaded matrix, unshaped.
 

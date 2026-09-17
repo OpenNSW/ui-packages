@@ -37,6 +37,19 @@ export function validateSpreadsheetConfig(options: ShapeSheetOptions): string | 
     return 'rows must be an array of { id, label } objects.'
   }
 
+  // An explicitly supplied `columns: []`/`rows: []` is rejected outright, in
+  // every mode — not just when columnHeader/rowHeader is true. Without this,
+  // it reads identically to omitting the field entirely (both give
+  // hasColumns/hasRows false below), so shapeSheet would silently fall back
+  // to raw matrix persistence instead of the records shape the schema author
+  // was clearly trying to declare.
+  if (columns !== undefined && columns.length === 0) {
+    return 'columns is declared but empty — declare at least one field, or omit it entirely for raw matrix mode.'
+  }
+  if (rows !== undefined && rows.length === 0) {
+    return 'rows is declared but empty — declare at least one field, or omit it entirely for raw matrix mode.'
+  }
+
   const isValidField = (f: SpreadsheetFieldSpec): boolean =>
     !!f && typeof f.id === 'string' && f.id !== '' && typeof f.label === 'string' && f.label !== ''
   const badColumnIndex = columns?.findIndex((f) => !isValidField(f))

@@ -191,7 +191,7 @@ describe('validateSpreadsheetConfig', () => {
   })
 
   it('rejects columnHeader: true with columns: []', () => {
-    expect(validateSpreadsheetConfig({ columnHeader: true, columns: [] })).toMatch(/columns is missing or empty/)
+    expect(validateSpreadsheetConfig({ columnHeader: true, columns: [] })).toMatch(/columns is declared but empty/)
   })
 
   it('rejects rowHeader: true with rows missing', () => {
@@ -199,7 +199,15 @@ describe('validateSpreadsheetConfig', () => {
   })
 
   it('rejects rowHeader: true with rows: []', () => {
-    expect(validateSpreadsheetConfig({ rowHeader: true, rows: [] })).toMatch(/rows is missing or empty/)
+    expect(validateSpreadsheetConfig({ rowHeader: true, rows: [] })).toMatch(/rows is declared but empty/)
+  })
+
+  it('rejects columns: [] even with columnHeader false/absent (headerless mode)', () => {
+    expect(validateSpreadsheetConfig({ columns: [] })).toMatch(/columns is declared but empty/)
+  })
+
+  it('rejects rows: [] even with rowHeader false/absent (headerless mode)', () => {
+    expect(validateSpreadsheetConfig({ rows: [] })).toMatch(/rows is declared but empty/)
   })
 
   it('rejects columnHeader and rowHeader both true', () => {
