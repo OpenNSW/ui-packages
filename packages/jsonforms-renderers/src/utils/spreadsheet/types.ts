@@ -39,6 +39,18 @@ export interface DerivationResult {
   error?: string
 }
 
+// One declared field position for x-spreadsheet.columns/rows. `id` is the
+// actual record key — what a fixed-column x-evaluate formula lines up with
+// positionally, and what a sibling x-computed reads by path. `label` is
+// preview-display only: never read from, matched against, or validated
+// against an uploaded file's actual header content. See process.ts's
+// rowsToRecords/columnsToRecords, which assign `id` to each column/row
+// strictly by position, never by name-matching file text.
+export interface SpreadsheetFieldSpec {
+  id: string
+  label: string
+}
+
 // Either shape a persisted `sheet` can take: a raw, address-preserving
 // matrix (default), or an array of plain objects shaped by
 // utils/spreadsheet/process.ts's shapeSheet when x-spreadsheet.columnHeader

@@ -13,6 +13,7 @@ import {
   isRecordsSheet,
   buildDerivations,
   shapeSheet,
+  validateSpreadsheetConfig,
   sameDerivations,
   sameSheetData,
   evaluateExpressions,
@@ -22,6 +23,7 @@ import {
   type FormulaConfigEntry,
   type SheetData,
   type SpreadsheetValue,
+  type SpreadsheetFieldSpec,
 } from '../utils/spreadsheet'
 import { recordsToMatrix, transpose } from '../utils/records'
 
@@ -40,19 +42,35 @@ interface XSpreadsheetOptions {
    */
   persistSheet?: boolean
   /**
-   * Use row 1's values as column labels in the preview, AND persist `sheet`
-   * as one record per data row, keyed by those labels, instead of a raw
-   * matrix. Default false. Cannot be combined with rowHeader — see
+   * Skip an extra header row at the top of the uploaded matrix before the
+   * real data starts — its content is discarded unread, never used for
+   * anything. Mandatory to also declare `columns` whenever this is true (a
+   * config error otherwise): `columns` is the sole source of field
+   * identity/order, assigned strictly by position, not by matching this
+   * skipped row's text. Cannot be combined with rowHeader — see
    * docs/spreadsheet-value-shape.md.
    */
   columnHeader?: boolean
   /**
-   * Use column A's values as row labels in the preview, AND (only when
-   * columnHeader is not also set) persist `sheet` as one record per OTHER
-   * column, transposed, keyed by those labels. Default false. Cannot be
-   * combined with columnHeader — see docs/spreadsheet-value-shape.md.
+   * Symmetric to columnHeader, for column A instead of row 1 — skip it
+   * unread, and declare `rows` (mandatory whenever this is true) as the sole
+   * source of field identity/order. Cannot be combined with columnHeader —
+   * see docs/spreadsheet-value-shape.md.
    */
   rowHeader?: boolean
+  /**
+   * The declared column list a records-shaped sheet is keyed by, in order:
+   * `id` becomes each record's actual property key (what a fixed-column
+   * x-evaluate formula lines up with positionally); `label` is preview
+   * display only, never read from or matched against uploaded content.
+   * Mandatory whenever columnHeader is true; may also be set with
+   * columnHeader false/absent for a file with no header row at all (data
+   * starts at row 1, mapped straight to columns[i].id by position). Cannot
+   * be combined with `rows` — see docs/spreadsheet-value-shape.md.
+   */
+  columns?: SpreadsheetFieldSpec[]
+  /** Symmetric to `columns`, for the rowHeader/transposed orientation. */
+  rows?: SpreadsheetFieldSpec[]
   /** Render the grid preview at all. Default true — set false to show only computed values. */
   showSheet?: boolean
   /** Which sheet to read by name. Defaults to the workbook's first sheet if omitted. */
@@ -116,6 +134,35 @@ const SpreadsheetControl = ({
   const maxSize = xSpreadsheet.maxSize ?? DEFAULT_MAX_SIZE
   const columnHeader = xSpreadsheet.columnHeader === true
   const rowHeader = xSpreadsheet.rowHeader === true
+  const columns = xSpreadsheet.columns
+  const rows = xSpreadsheet.rows
+  // Whether this field is shaping into records at all — the signal for
+  // everything downstream of a fresh upload's round-trip (preview offsets,
+  // asMatrix, the persist-time re-shape), as opposed to columnHeader/rowHeader
+  // themselves, which only ever mean "does the RAW FILE have an extra
+  // row/column to skip" (see processFile). Once a fresh upload round-trips
+  // through shapeSheet + asMatrix, the canonical matrix always carries a
+  // synthetic id-header row/column whenever columns/rows is declared, whether
+  // or not the original file itself had one — hasColumns/hasRows is what
+  // still tells that canonical matrix apart from a true no-header field.
+  // Array.isArray, not just truthiness: a malformed schema (columns given as
+  // a plain string, say) must never make it past this into something that
+  // assumes an array — asMatrix/processFile run every render, before the
+  // config-error box below ever gets a chance to short-circuit anything, so
+  // an unguarded `columns.length > 0` here would read a STRING's length and
+  // then crash on `fields.map` instead of showing that error at all.
+  const hasColumns = Array.isArray(columns) && columns.length > 0
+  const hasRows = Array.isArray(rows) && rows.length > 0
+  // Shared with shapeSheet's own throw (utils/spreadsheet/process.ts), so the
+  // two can never drift into different wording for the same mistake. Computed
+  // here — before either effect below, not just before the render's early
+  // return — because an invalid config must stop evaluation and persistence
+  // outright, not merely change what's shown: `asMatrix`/`matrix` still
+  // compute *something* from a misconfigured field (e.g. falling back to
+  // first-seen-key order), and without this gate the persist effect would
+  // evaluate and potentially write derivations from that fallback shape while
+  // the render shows nothing but a configuration-error box.
+  const configError = validateSpreadsheetConfig({ columnHeader, rowHeader, columns, rows })
   const showSheet = xSpreadsheet.showSheet !== false
   const sheetName = xSpreadsheet.sheetName
   const persistSheet = xSpreadsheet.persistSheet !== false
@@ -170,10 +217,19 @@ const SpreadsheetControl = ({
   const asMatrix = useCallback(
     (sheet: SheetData): CellValue[][] => {
       if (!isRecordsSheet(sheet)) return sheet
-      const flattened = recordsToMatrix(sheet)
-      return rowHeader ? transpose(flattened) : flattened
+      // hasColumns/hasRows gate which declared list (if either) is actually
+      // safe to use — not just "rows if set, else columns" — so a malformed
+      // `columns` (caught by hasColumns's Array.isArray check, not by mere
+      // presence) never reaches recordsToMatrix as something other than a
+      // real array or undefined.
+      const fields = hasRows ? rows : hasColumns ? columns : undefined
+      const flattened = recordsToMatrix(
+        sheet,
+        fields?.map((f) => f.id),
+      )
+      return hasRows ? transpose(flattened) : flattened
     },
-    [rowHeader],
+    [hasColumns, hasRows, columns, rows],
   )
 
   // Memoized because recordsToMatrix builds a fresh array every call: an
@@ -201,11 +257,13 @@ const SpreadsheetControl = ({
   // Memoized so a 200-row grid is only rebuilt when the data or the display
   // options actually change, rather than on every render of the form.
   const sheetPreview = useMemo(() => {
-    // columnHeader consumes row 0 as the header; rowHeader consumes column 0 as
-    // row labels — offset the body so the header row/column is never also
-    // rendered as a data row/column.
-    const rowOffset = columnHeader ? 1 : 0
-    const colOffset = rowHeader ? 1 : 0
+    // hasColumns means the on-screen matrix has a synthetic id-header row 0
+    // (recordsToMatrix always puts one there for a records-shaped sheet,
+    // regardless of whether the original file itself had one) — hasRows is
+    // the same for column 0. Offset the body so that row/column is never
+    // also rendered as a data row/column.
+    const rowOffset = hasColumns ? 1 : 0
+    const colOffset = hasRows ? 1 : 0
     const bodyRows = matrix ? matrix.slice(rowOffset) : []
     const visibleRows = bodyRows.slice(0, MAX_PREVIEW_ROWS)
     const colCount = Math.min(
@@ -213,13 +271,13 @@ const SpreadsheetControl = ({
       Math.max(0, ...visibleRows.map((row) => Math.max(0, row.length - colOffset))),
     )
     const colIndices = Array.from({ length: colCount }, (_, i) => i + colOffset)
-    // columnHeader && rowHeader together is rejected above, so there's never a
+    // columns && rows together is rejected above, so there's never a
     // meaningful corner cell to show here — the header row/column consumes it.
     const cornerLabel = ''
-    // rowHeader alone means every cell in the column-header row below is blank
+    // hasRows alone means every cell in the column-header row below is blank
     // (see its own comment) — the whole row would just be dead space, so skip
     // it entirely and lean on the row-label column's distinct styling instead.
-    const suppressColumnHeaderRow = rowHeader && !columnHeader
+    const suppressColumnHeaderRow = hasRows && !hasColumns
 
     return (
       <>
@@ -233,12 +291,14 @@ const SpreadsheetControl = ({
                     <Table.Row>
                       <Table.ColumnHeaderCell>{cornerLabel}</Table.ColumnHeaderCell>
                       {colIndices.map((c) => (
-                        // This row only renders when rowHeader isn't the sole
+                        // This row only renders when hasRows isn't the sole
                         // flag set (see suppressColumnHeaderRow) — so reaching
-                        // here, either columnHeader is true (real labels) or
-                        // both are false (columnLetter fallback).
+                        // here, either hasColumns is true (declared labels,
+                        // looked up positionally — never read from the matrix
+                        // cell itself, which only ever holds the id) or both
+                        // are false (columnLetter fallback).
                         <Table.ColumnHeaderCell key={c}>
-                          {columnHeader ? formatCell(matrix[0]?.[c]) : columnLetter(c)}
+                          {hasColumns ? (columns?.[c]?.label ?? '') : columnLetter(c)}
                         </Table.ColumnHeaderCell>
                       ))}
                     </Table.Row>
@@ -250,14 +310,17 @@ const SpreadsheetControl = ({
                     return (
                       <Table.Row key={r}>
                         <Table.RowHeaderCell
-                          style={rowHeader ? { fontWeight: 700, background: 'var(--gray-a3)' } : undefined}
+                          style={hasRows ? { fontWeight: 700, background: 'var(--gray-a3)' } : undefined}
                         >
-                          {/* columnHeader alone means these are shaped into
-                                records keyed by row 1 — a 1/2/3 fallback number
-                                here isn't a real label, so it's suppressed (the
-                                column-header row above stays, since it's real
-                                labels there, not suppressed). */}
-                          {rowHeader ? formatCell(matrix[actualRow]?.[0]) : columnHeader ? '' : actualRow + 1}
+                          {/* hasColumns alone means these are shaped into
+                                records keyed by declared columns — a 1/2/3
+                                fallback number here isn't a real label, so
+                                it's suppressed (the column-header row above
+                                stays, since it's real labels there, not
+                                suppressed). Declared labels are looked up
+                                positionally — matrix[actualRow][0] only ever
+                                holds the id, never read for display. */}
+                          {hasRows ? (rows?.[actualRow]?.label ?? '') : hasColumns ? '' : actualRow + 1}
                         </Table.RowHeaderCell>
                         {colIndices.map((c) => (
                           <Table.Cell key={c}>{formatCell(row[c])}</Table.Cell>
@@ -277,7 +340,7 @@ const SpreadsheetControl = ({
         )}
       </>
     )
-  }, [matrix, showSheet, columnHeader, rowHeader])
+  }, [matrix, showSheet, hasColumns, hasRows, columns, rows])
 
   const processFile = useCallback(
     async (file: File) => {
@@ -316,6 +379,24 @@ const SpreadsheetControl = ({
         return
       }
 
+      // Declaring columns/rows shapes a fresh upload into records right here,
+      // via the same shapeSheet + asMatrix round trip used to render a
+      // reloaded sheet: raw matrix in (columnHeader/rowHeader say whether ITS
+      // row/column 0 is a header to skip), a canonical, positionally-assigned
+      // matrix back out. Safe to do unconditionally whenever columns/rows is
+      // declared — position i of THIS upload's own data always defines
+      // itself fresh, so there is nothing that could be "stale" here the way
+      // a name-matched assignment could be.
+      if (hasColumns || hasRows) {
+        try {
+          parsedMatrix = asMatrix(shapeSheet(parsedMatrix, { columnHeader, rowHeader, columns, rows }))
+        } catch (err) {
+          setStatus('error')
+          setError(err instanceof Error ? err.message : 'Failed to process this sheet.')
+          return
+        }
+      }
+
       // Parsing ends here. Evaluating and persisting is the effect's job
       // below, for an upload exactly as for a sheet an importer wrote — one
       // matrix in, one evaluation, one write, whatever put the rows there.
@@ -326,7 +407,7 @@ const SpreadsheetControl = ({
       setLocalMatrix(parsedMatrix)
       setStatus('ready')
     },
-    [accept, maxSize, sheetName, data],
+    [accept, maxSize, sheetName, data, columnHeader, rowHeader, columns, rows, hasColumns, hasRows, asMatrix],
   )
 
   // ── Release the upload preview when the field's sheet changes underneath it ──
@@ -358,6 +439,14 @@ const SpreadsheetControl = ({
   // care what produced the rows: a user's upload, or an importer writing them
   // straight into this field. Both land in `matrix`, and both take this path.
   useEffect(() => {
+    // A misconfigured field must not evaluate or persist anything at all —
+    // not even the "clear to undefined" path further down — while it's
+    // showing nothing but a configuration-error box. `matrix`/`asMatrix`
+    // still produce SOME shape from a misconfigured field (e.g. falling back
+    // to first-seen-key order), so without this, this effect could evaluate
+    // and write derivations computed from that fallback shape.
+    if (configError) return
+
     // Nothing to compute and nothing to store means nothing to write. Keeping
     // this control write-free in that case makes it usable as a plain "render
     // this array" field without dirtying the form.
@@ -422,7 +511,13 @@ const SpreadsheetControl = ({
       if (localMatrix != null) {
         if (persistSheet) {
           try {
-            sheet = shapeSheet(formulaMatrix, { columnHeader, rowHeader })
+            // hasColumns/hasRows, not the literal columnHeader/rowHeader:
+            // formulaMatrix here is always the already-canonical matrix (a
+            // fresh upload already round-tripped through processFile's own
+            // shapeSheet + asMatrix above), which carries a synthetic
+            // id-header row/column whenever columns/rows is declared,
+            // regardless of whether the ORIGINAL raw file had one to skip.
+            sheet = shapeSheet(formulaMatrix, { columnHeader: hasColumns, rowHeader: hasRows, columns, rows })
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to process this sheet.')
             return
@@ -446,24 +541,20 @@ const SpreadsheetControl = ({
     // effect itself writes to; `matrix` is the memoized reference that moves
     // when the rows actually change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matrix, localMatrix, xEvaluate, canEdit, persistSheet, columnHeader, rowHeader])
+  }, [matrix, localMatrix, xEvaluate, canEdit, persistSheet, hasColumns, hasRows, columns, rows, configError])
 
   if (visible === false) {
     return null
   }
 
-  // columnHeader and rowHeader are independently meaningful for the persisted
-  // records shape (see shapeSheet in utils/spreadsheet/process.ts) — neither
-  // one is a safe default when both are set, so this is rejected outright
-  // rather than silently picking a winner.
-  if (columnHeader && rowHeader) {
+  if (configError) {
     return (
       <Box mb="4">
         <Text as="label" size="2" weight="bold">
           {label}
         </Text>
         <Text size="2" color="red" style={{ display: 'block' }}>
-          Invalid x-spreadsheet config: columnHeader and rowHeader cannot both be true — pick one orientation.
+          Invalid x-spreadsheet config: {configError}
         </Text>
       </Box>
     )

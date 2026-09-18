@@ -154,6 +154,14 @@ function makeSchema(spreadsheet: Record<string, unknown>, evaluate: unknown[] = 
   } as unknown as JsonSchema
 }
 
+// The declared field list every columnHeader-mode test below needs — ids
+// happen to equal the display labels, so a formatted grid cell reads the
+// same either way and existing assertions don't have to distinguish them.
+const ITEM_QTY_COLUMNS = [
+  { id: 'Item', label: 'Item' },
+  { id: 'Qty', label: 'Qty' },
+]
+
 // Flattens to [['Item','Qty'],['Widget',10],['Gadget',20]], so B2:B3 is the Qty
 // column of the two data rows and SUM is 30.
 const RECORDS = [
@@ -185,7 +193,7 @@ const written = (sheet: unknown, derivations?: unknown) => ({
 
 describe('SpreadsheetControl evaluating a sheet written into its own field', () => {
   it('computes derivations for rows it never parsed itself', async () => {
-    const { totals } = renderForm(makeSchema({ columnHeader: true }), written(RECORDS))
+    const { totals } = renderForm(makeSchema({ columnHeader: true, columns: ITEM_QTY_COLUMNS }), written(RECORDS))
 
     await waitFor(() => expect(totals()?.derivations).toEqual(DERIVED))
   })
@@ -203,7 +211,10 @@ describe('SpreadsheetControl evaluating a sheet written into its own field', () 
     // Reference identity is the precise tell: a write runs buildDerivations,
     // which always returns a NEW object. Deep equality would pass either way,
     // since the recomputed numbers are the same ones already stored.
-    const { writes } = renderForm(makeSchema({ columnHeader: true }), written(RECORDS, DERIVED))
+    const { writes } = renderForm(
+      makeSchema({ columnHeader: true, columns: ITEM_QTY_COLUMNS }),
+      written(RECORDS, DERIVED),
+    )
 
     await new Promise((r) => setTimeout(r, 80))
     const derivationsOf = (w: Data) => (w.totals as { derivations?: unknown } | undefined)?.derivations
@@ -256,6 +267,50 @@ describe('SpreadsheetControl configuration errors', () => {
     expect(await screen.findByText(/columnHeader and rowHeader cannot both be true/)).toBeTruthy()
     expect(screen.queryByText('30')).toBeNull()
   })
+
+  it('rejects columnHeader: true with columns missing, as a configuration error', async () => {
+    renderForm(makeSchema({ columnHeader: true }), written(RECORDS))
+
+    expect(await screen.findByText(/columns is missing or empty/)).toBeTruthy()
+    expect(screen.queryByText('30')).toBeNull()
+  })
+
+  // matrix/asMatrix still fall back to SOME shape for a misconfigured field
+  // (e.g. first-seen-key order), so the config error must stop evaluation and
+  // persistence outright — not just what's rendered — or this could silently
+  // write derivations computed from that fallback shape while showing nothing
+  // but the error box.
+  it('never evaluates or persists anything while the config is invalid', async () => {
+    const { writes } = renderForm(makeSchema({ columnHeader: true }), written(RECORDS))
+
+    await screen.findByText(/columns is missing or empty/)
+    await new Promise((r) => setTimeout(r, 80))
+
+    const derivationsOf = (w: Data) => (w.totals as { derivations?: unknown } | undefined)?.derivations
+    expect(writes.every((w) => derivationsOf(w) === undefined)).toBe(true)
+  })
+
+  it('rejects rowHeader: true with rows missing, as a configuration error', async () => {
+    renderForm(makeSchema({ rowHeader: true }), written(RECORDS))
+
+    expect(await screen.findByText(/rows is missing or empty/)).toBeTruthy()
+  })
+
+  it('rejects columns and rows both declared', async () => {
+    renderForm(makeSchema({ columns: ITEM_QTY_COLUMNS, rows: [{ id: 'x', label: 'X' }] }), written(RECORDS))
+
+    expect(await screen.findByText(/cannot both be declared/)).toBeTruthy()
+  })
+
+  // A schema author's `columns: "Qty"` (a plain string, not an array) must
+  // render this same config-error box, never throw during render — a bad
+  // schema string would otherwise be iterated as individual characters by
+  // anything downstream that assumes an array.
+  it('rejects columns given as a plain string instead of an array, without throwing', async () => {
+    expect(() => renderForm(makeSchema({ columnHeader: true, columns: 'Qty' }), written(RECORDS))).not.toThrow()
+
+    expect(await screen.findByText(/columns must be an array/)).toBeTruthy()
+  })
 })
 
 function uploadSchema(spreadsheet: Record<string, unknown>): JsonSchema {
@@ -295,7 +350,7 @@ describe('SpreadsheetControl when it may not save', () => {
     // Readonly gates PERSISTING, never computing. Without somewhere to put the
     // result, the effect recomputed the right numbers and threw them away, so a
     // readonly field showed stale derivations — or none.
-    const { writes } = renderForm(makeSchema({ columnHeader: true }), written(RECORDS), true)
+    const { writes } = renderForm(makeSchema({ columnHeader: true, columns: ITEM_QTY_COLUMNS }), written(RECORDS), true)
 
     await waitFor(() => expect(screen.queryByText('30')).toBeTruthy())
     // …and wrote nothing while doing it.
@@ -308,7 +363,9 @@ describe('SpreadsheetControl renders one grid whatever shape the data is in', ()
     // Fresh upload and reload used to take different preview branches, so the
     // same sheet rendered two different ways depending on whether the page had
     // been refreshed. Both now flatten to the same matrix.
-    renderForm(uploadSchema({ columnHeader: true }), { totals: { sheet: RECORDS, derivations: {} } })
+    renderForm(uploadSchema({ columnHeader: true, columns: ITEM_QTY_COLUMNS }), {
+      totals: { sheet: RECORDS, derivations: {} },
+    })
 
     await waitFor(() => expect(grid()).toBeTruthy())
     expect(grid()).toEqual({
@@ -342,8 +399,16 @@ describe('SpreadsheetControl renders one grid whatever shape the data is in', ()
   it('reloads a rowHeader sheet with its labels still down column A', async () => {
     // shapeSheet's rowHeader branch builds one record per original COLUMN, so
     // reading it back needs the quarter turn or the labels come out along row 1.
-    const persisted = shapeSheet(MATRIX, { rowHeader: true })
-    renderForm(uploadSchema({ rowHeader: true }), { totals: { sheet: persisted, derivations: {} } })
+    // Row 0 of MATRIX is skipped unread (rowHeader: true) — its former text
+    // ('Item'/'Widget'/'Gadget') no longer comes FROM the file; it's declared
+    // here instead, one field per MATRIX row.
+    const rows = [
+      { id: 'item', label: 'Item' },
+      { id: 'widget', label: 'Widget' },
+      { id: 'gadget', label: 'Gadget' },
+    ]
+    const persisted = shapeSheet(MATRIX, { rowHeader: true, rows })
+    renderForm(uploadSchema({ rowHeader: true, rows }), { totals: { sheet: persisted, derivations: {} } })
 
     await waitFor(() => expect(grid()).toBeTruthy())
     expect(grid()).toEqual({
@@ -356,5 +421,54 @@ describe('SpreadsheetControl renders one grid whatever shape the data is in', ()
         ['Gadget', '20'],
       ],
     })
+  })
+})
+
+describe('SpreadsheetControl shaping a FRESH upload into records', () => {
+  it('shapes a fresh upload into records immediately, keyed by declared columns', async () => {
+    // Row 1 of this file is decorative/wrong-looking on purpose — it must be
+    // discarded unread (columnHeader: true), never matched against `columns`.
+    const { totals } = renderForm(uploadSchema({ columnHeader: true, columns: ITEM_QTY_COLUMNS }), {
+      totals: undefined,
+    })
+
+    uploadCsv('X,Y\nWidget,10\nGadget,20\n')
+
+    await waitFor(() => expect(grid()).toBeTruthy())
+    expect(grid()).toEqual({
+      head: ['', 'Item', 'Qty'],
+      rows: [
+        ['', 'Widget', '10'],
+        ['', 'Gadget', '20'],
+      ],
+    })
+    await waitFor(() =>
+      expect(totals()?.sheet).toEqual([
+        { Item: 'Widget', Qty: 10 },
+        { Item: 'Gadget', Qty: 20 },
+      ]),
+    )
+  })
+
+  it('shapes a FRESH upload with no header row at all when columnHeader is false (headerless positional mode)', async () => {
+    const { totals } = renderForm(uploadSchema({ columns: ITEM_QTY_COLUMNS }), { totals: undefined })
+
+    // No decorative row here — the very first line is real data.
+    uploadCsv('Widget,10\nGadget,20\n')
+
+    await waitFor(() => expect(grid()).toBeTruthy())
+    expect(grid()).toEqual({
+      head: ['', 'Item', 'Qty'],
+      rows: [
+        ['', 'Widget', '10'],
+        ['', 'Gadget', '20'],
+      ],
+    })
+    await waitFor(() =>
+      expect(totals()?.sheet).toEqual([
+        { Item: 'Widget', Qty: 10 },
+        { Item: 'Gadget', Qty: 20 },
+      ]),
+    )
   })
 })
