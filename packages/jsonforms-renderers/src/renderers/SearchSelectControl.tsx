@@ -1,8 +1,8 @@
-import { type ControlProps, type JsonSchema } from '@jsonforms/core'
-import { withJsonFormsControlProps } from '@jsonforms/react'
+import { type ControlProps, type JsonSchema, Resolve } from '@jsonforms/core'
+import { useJsonForms, withJsonFormsControlProps } from '@jsonforms/react'
 import { Box, Button, Flex, ScrollArea, Spinner, Text, TextField } from '@radix-ui/themes'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
-import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, type KeyboardEvent } from 'react'
 import { useSearchService, type SearchOption } from '../contexts/SearchServiceContext'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { getErrorMessage } from '../utils/error'
@@ -16,6 +16,17 @@ interface XSearchOptions {
   // fixed extra arguments forwarded to the service's search/resolve calls — lets one registered service back
   // several fields hitting the same endpoint with different filters (e.g. category: 'books' vs category: 'movies')
   params?: Record<string, unknown>
+  // sibling property name; its current value is sent to the service as params.parent
+  dependsOn?: string
+}
+
+function dependsOnConst(raw: unknown): string | undefined {
+  if (typeof raw === 'string' && raw.length > 0) return raw
+  if (raw && typeof raw === 'object' && typeof (raw as { value?: unknown }).value === 'string') {
+    const v = (raw as { value: string }).value
+    return v.length > 0 ? v : undefined
+  }
+  return undefined
 }
 
 // shape of `data` for an object-typed `x-search` field (`type: "object"`); string-typed fields keep `data` as the raw id
@@ -53,7 +64,16 @@ const SearchSelectControl = ({
   const mode = xSearch.mode ?? 'large-paginated-list'
   const modeConfig = MODE_CONFIG[mode]
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
-  const searchParams = xSearch.params
+  const dependsOnProp = xSearch.dependsOn
+  const ctx = useJsonForms()
+  const parentPath = path.split('.').slice(0, -1).join('.')
+  const parentValue = dependsOnProp
+    ? dependsOnConst(Resolve.data(ctx.core?.data, parentPath ? `${parentPath}.${dependsOnProp}` : dependsOnProp))
+    : undefined
+  const searchParams = useMemo(() => {
+    if (!dependsOnProp) return xSearch.params
+    return { ...xSearch.params, parent: parentValue }
+  }, [dependsOnProp, xSearch.params, parentValue])
   const service = useSearchService(serviceName)
 
   const isObjectMode = schema.type === 'object'
@@ -92,6 +112,16 @@ const SearchSelectControl = ({
   const containerRef = useRef<HTMLDivElement>(null)
   // tracks which value+label has already been resolved so the effect doesn't re-run when selectedOption changes
   const lastResolvedRef = useRef<{ value: string; label?: string } | undefined>(undefined)
+  const lastParentRef = useRef<string | undefined>(undefined)
+
+  useEffect(() => {
+    if (!dependsOnProp) return
+    const prev = lastParentRef.current
+    lastParentRef.current = parentValue
+    if (prev !== undefined && prev !== parentValue && currentValue) {
+      handleChange(path, isObjectMode ? undefined : null)
+    }
+  }, [dependsOnProp, parentValue, currentValue, handleChange, path, isObjectMode])
 
   useEffect(() => {
     if (!currentValue) {
@@ -199,6 +229,14 @@ const SearchSelectControl = ({
   useEffect(() => {
     if (!open) return
 
+    if (dependsOnProp && !parentValue) {
+      setOptions([])
+      setHasMore(false)
+      setError(null)
+      cursorRef.current = undefined
+      return
+    }
+
     if (!inputValue && !fetchOnOpen) {
       setOptions([])
       setHasMore(false)
@@ -219,7 +257,7 @@ const SearchSelectControl = ({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [inputValue, open, fetchOnOpen, runSearch])
+  }, [inputValue, open, fetchOnOpen, runSearch, dependsOnProp, parentValue])
 
   // `undefined` in both modes — the scalar branch used to clear with `null`,
   // but the underlying schema is `type: 'string'` there, which null doesn't
@@ -353,7 +391,11 @@ const SearchSelectControl = ({
                     {!loading && !error && options.length === 0 && (
                       <Box px="3" py="2">
                         <Text size="2" color="gray">
-                          {inputValue || fetchOnOpen ? 'No results found.' : 'Type to search…'}
+                          {dependsOnProp && !parentValue
+                            ? 'Select the related field first.'
+                            : inputValue || fetchOnOpen
+                              ? 'No results found.'
+                              : 'Type to search…'}
                         </Text>
                       </Box>
                     )}

@@ -20,10 +20,17 @@ const PAGE_SIZE = 5
 
 export const searchServices: SearchServiceRegistry = {
   countries: {
-    // `params.continent`, when set, lets several fields reuse this one registered service to search the
-    // same endpoint scoped to different fixed subsets (e.g. an "Asian country" field vs a "European country" field).
+    // `params.continent` (fixed, from x-search.params) or `params.parent` (live sibling, from
+    // x-search.dependsOn) scopes this one registered service to a continent subset.
     async search({ query, cursor, params }) {
-      const continent = (params as { continent?: string } | undefined)?.continent
+      // `parent` is the live sibling value SearchSelectControl sends when the field has
+      // x-search.dependsOn. Same filter as the fixed `params.continent` the params fixture uses.
+      const continent =
+        typeof params?.parent === 'string' && params.parent
+          ? params.parent
+          : typeof params?.continent === 'string'
+            ? params.continent
+            : undefined
       const scoped = continent ? COUNTRIES.filter((c) => c.continent === continent) : COUNTRIES
       const matches = query ? scoped.filter((c) => c.name.toLowerCase().includes(query.toLowerCase())) : scoped
 
