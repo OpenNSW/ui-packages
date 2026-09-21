@@ -182,6 +182,10 @@ const SearchSelectControl = ({
           params: searchParams,
         })
 
+        // Services are asked to throw on abort, but a slower one may still resolve. Don't
+        // let that stale payload overwrite a newer search (typed query or a new sibling).
+        if (controller.signal.aborted) return
+
         const newItems = result.options ?? []
         if (isLoadMore) setOptions((prev) => [...prev, ...newItems])
         else setOptions(newItems)
