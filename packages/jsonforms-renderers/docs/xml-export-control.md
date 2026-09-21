@@ -46,6 +46,8 @@ Given `data.invoice = { "customer": "Acme", "total": 1200 }`, clicking the butto
 
 An array _nested inside_ an object scope (e.g. `invoice.lines`) needs no extra config — the builder already repeats that array's own key as the sibling tag per entry.
 
+**`rootElement` is only added when `data` doesn't already have it.** `data` is wrapped as `{ [rootElement]: data }` UNLESS it's already a single-key object whose one key is exactly `rootElement` — which is precisely what a co-located `XmlControl`'s own value looks like (see below): "the field's value IS the parsed document ... its own root element already names it." Wrapping that again would double the root (`<salesData><salesData>...`) instead of re-exporting the document as uploaded, so it's passed through unwrapped in that one case.
+
 ## Array scope — export a list of records
 
 ```jsonc
@@ -98,3 +100,5 @@ Unlike `SpreadsheetControl` (whose persisted value has a `sheet` sub-property an
 ```
 
 Without the `export` option, both elements would resolve to the same renderer — `XmlControlTester` and `XmlExportControlTester` are both schema-only testers at rank 10, so two elements at the same scope would tie and @jsonforms/react's tie-break (registration order) would render the **same** control for both. `XmlControlTester` carries an additive `not(optionIs('export', true))` clause specifically so it steps aside for the element marked this way, letting `XmlExportControlTester` win only that one. This is a supported, documented pattern — not a fixture-only trick — for pairing an upload control with a "download what's here" button on the same field.
+
+Set `rootElement` to the actual root tag of whatever `XmlControl` uploads (e.g. `rootElement: 'salesData'` for a document rooted at `<salesData>`). Because of the "already has its own root" rule above, the export button then re-exports exactly what was parsed — a **round trip**, matching the parsed tree, not a second wrapper added on top of it. It's a round trip rather than a byte-identical copy: attribute/namespace handling differs between `fast-xml-parser`'s parse and build directions.

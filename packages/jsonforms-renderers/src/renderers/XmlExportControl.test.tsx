@@ -223,4 +223,29 @@ describe('XmlControl and XmlExportControl co-located at the same scope', () => {
     await waitFor(() => expect(screen.queryByLabelText('Remove document')).toBeTruthy())
     expect(downloadButton()).toBeTruthy()
   })
+
+  // The value above (`{ customer: 'Acme' }`) never had a `salesData` key to
+  // begin with, so it can't catch a double-wrap — the bug only shows up when
+  // `data` is ALREADY shaped the way XmlControl itself persists it. See
+  // hasOwnRoot in XmlExportControl.tsx.
+  it('re-exports a co-located XmlControl value with ONE root, not a nested one', async () => {
+    renderForm(
+      makeSchema(),
+      // Exactly what XmlControl's own docs say its persisted value looks
+      // like: "the field's value IS the parsed document ... keyed by its own
+      // root element name" — no wrapper of ours to add on top of that.
+      { sales_data: { salesData: { sale: [{ Item: 'Widget A', Quantity: 500 }] } } },
+      coLocatedUischema,
+    )
+
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+
+    await waitFor(() => expect(downloadTextFile).toHaveBeenCalledTimes(1))
+    const [xml] = vi.mocked(downloadTextFile).mock.calls[0]
+    // Exactly one <salesData>, not <salesData><salesData>.
+    expect((xml.match(/<salesData>/g) ?? []).length).toBe(1)
+    expect(xml).toContain('<Item>Widget A</Item>')
+    expect(xml).toContain('<Quantity>500</Quantity>')
+  })
 })

@@ -34,6 +34,21 @@ function isEmpty(data: unknown): boolean {
   return false
 }
 
+// True when `data` is ALREADY shaped the way XMLBuilder wants its input —
+// a single-key object whose one key is exactly `rootElement`. That's what
+// XmlControl's own persisted value looks like: "the field's value IS the
+// parsed document ... its own root element already names it" (see
+// docs/xml-control.md). Wrapping a value like that AGAIN would double the
+// root (`<salesData><salesData>...`), not re-export the document that was
+// uploaded. A plain data object with no such key (the common case, e.g. an
+// ordinary `{ customer, total }` field with no XmlControl involved) has no
+// existing root to reuse, so it still gets wrapped below.
+function hasOwnRoot(data: unknown, rootElement: string): data is Record<string, unknown> {
+  if (data == null || typeof data !== 'object' || Array.isArray(data)) return false
+  const keys = Object.keys(data)
+  return keys.length === 1 && keys[0] === rootElement
+}
+
 const XmlExportControl = ({ data, label, schema, visible = true }: XmlExportControlProps) => {
   const xXmlExport: XXmlExportOptions = schema?.['x-xml-export'] ?? {}
   const rootElement = xXmlExport.rootElement ?? DEFAULT_ROOT_ELEMENT
@@ -49,12 +64,23 @@ const XmlExportControl = ({ data, label, schema, visible = true }: XmlExportCont
   // XMLParser (never imported at module top level).
   const handleDownload = useCallback(async () => {
     const { XMLBuilder } = await import('fast-xml-parser')
-    // XMLBuilder needs one top-level key as the root tag, so `data` is
-    // wrapped before building. A bare array has no key of its own to repeat,
-    // so the array case additionally wraps each entry under `itemElement`;
-    // an array NESTED inside an object needs no such treatment — XMLBuilder
-    // already repeats an array's own key as the sibling tag per entry.
-    const wrapped = schema.type === 'array' ? { [rootElement]: { [itemElement]: data } } : { [rootElement]: data }
+    // XMLBuilder needs one top-level key as the root tag. A bare array has no
+    // key of its own to repeat, so the array case always wraps each entry
+    // under `itemElement` — an array NESTED inside an object needs no such
+    // treatment, since XMLBuilder already repeats an array's own key as the
+    // sibling tag per entry.
+    //
+    // The object case wraps too, UNLESS `data` already carries `rootElement`
+    // as its sole key — which is exactly what a co-located XmlControl's own
+    // value looks like (same scope, same field). Wrapping that again would
+    // double the root instead of re-exporting the document as uploaded; see
+    // hasOwnRoot above.
+    const wrapped =
+      schema.type === 'array'
+        ? { [rootElement]: { [itemElement]: data } }
+        : hasOwnRoot(data, rootElement)
+          ? data
+          : { [rootElement]: data }
 
     const builder = new XMLBuilder({ format: true, indentBy: '  ', ignoreAttributes: true })
     const xml = builder.build(wrapped) as string
