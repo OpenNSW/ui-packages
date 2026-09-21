@@ -10,10 +10,10 @@ import { recordsToMatrix } from '../utils/records'
 // exposing today. @e965/xlsx's own BookType union covers many more (xlsm,
 // xlsb, html, dbf, ...) — widening this is a one-line type change plus an
 // options-table update, since writeFile already forwards whatever bookType
-// it's given (see the "Behavior" note in docs/excel-export-control.md).
-export type ExcelExportFileType = 'xlsx' | 'xls' | 'csv' | 'ods'
+// it's given (see the "Behavior" note in docs/spreadsheet-export-control.md).
+export type SpreadsheetExportFileType = 'xlsx' | 'xls' | 'csv' | 'ods'
 
-interface XExcelExportOptions {
+interface XSpreadsheetExportOptions {
   /**
    * Declared column id/label list, in order — same shape as
    * x-spreadsheet.columns. `id` pins column identity/order. Only meaningful
@@ -27,17 +27,17 @@ interface XExcelExportOptions {
   /** Worksheet name. Ignored when fileType is a non-sheeted format (e.g. csv). */
   sheetName?: string
   /** Output format, passed straight through as @e965/xlsx's own `bookType`. */
-  fileType?: ExcelExportFileType
+  fileType?: SpreadsheetExportFileType
   /** Downloaded file's name. Defaults to `export.${fileType}`, so the two never mismatch. */
   fileName?: string
 }
 
-type ExcelExportControlProps = ControlProps & {
-  schema: JsonSchema & { 'x-excel-export'?: XExcelExportOptions }
+type SpreadsheetExportControlProps = ControlProps & {
+  schema: JsonSchema & { 'x-spreadsheet-export'?: XSpreadsheetExportOptions }
 }
 
 const DEFAULT_SHEET_NAME = 'Sheet1'
-const DEFAULT_FILE_TYPE: ExcelExportFileType = 'xlsx'
+const DEFAULT_FILE_TYPE: SpreadsheetExportFileType = 'xlsx'
 
 // Same shape SpreadsheetControl's own validateSpreadsheetConfig enforces for
 // x-spreadsheet.columns/rows (see utils/spreadsheet/process.ts's
@@ -93,18 +93,18 @@ function toMatrix(data: SheetData, columns: SpreadsheetFieldSpec[] | undefined):
   return [header.map((id) => labelById.get(String(id)) ?? id), ...rows]
 }
 
-const ExcelExportControl = ({ data, label, schema, visible = true }: ExcelExportControlProps) => {
+const SpreadsheetExportControl = ({ data, label, schema, visible = true }: SpreadsheetExportControlProps) => {
   const [error, setError] = useState<string | null>(null)
 
   if (visible === false) {
     return null
   }
 
-  const xExcelExport: XExcelExportOptions = schema?.['x-excel-export'] ?? {}
-  const columns = xExcelExport.columns
-  const sheetName = xExcelExport.sheetName ?? DEFAULT_SHEET_NAME
-  const fileType = xExcelExport.fileType ?? DEFAULT_FILE_TYPE
-  const fileName = xExcelExport.fileName ?? `export.${fileType}`
+  const xSpreadsheetExport: XSpreadsheetExportOptions = schema?.['x-spreadsheet-export'] ?? {}
+  const columns = xSpreadsheetExport.columns
+  const sheetName = xSpreadsheetExport.sheetName ?? DEFAULT_SHEET_NAME
+  const fileType = xSpreadsheetExport.fileType ?? DEFAULT_FILE_TYPE
+  const fileName = xSpreadsheetExport.fileName ?? `export.${fileType}`
 
   // Checked before anything else renders — the same rule SpreadsheetControl
   // follows for its own x-spreadsheet config: a misconfigured field shows
@@ -117,7 +117,7 @@ const ExcelExportControl = ({ data, label, schema, visible = true }: ExcelExport
           {label}
         </Text>
         <Text size="2" color="red" style={{ display: 'block' }}>
-          Invalid x-excel-export config: {configError}
+          Invalid x-spreadsheet-export config: {configError}
         </Text>
       </Box>
     )
@@ -132,7 +132,7 @@ const ExcelExportControl = ({ data, label, schema, visible = true }: ExcelExport
   //
   // Deliberately the generic writeFile (which accepts any bookType), not the
   // xlsx-only writeFileXLSX shortcut — that's what makes widening
-  // ExcelExportFileType to more of BookType later a config change rather than
+  // SpreadsheetExportFileType to more of BookType later a config change rather than
   // a rewrite. writeFile triggers the browser download itself (Blob + anchor
   // internally), so no separate download utility is needed here.
   //
@@ -163,7 +163,7 @@ const ExcelExportControl = ({ data, label, schema, visible = true }: ExcelExport
         {label}
       </Text>
       <Button type="button" variant="soft" disabled={!hasValue} onClick={() => void handleDownload()}>
-        <DownloadIcon /> Download Excel
+        <DownloadIcon /> Download Spreadsheet
       </Button>
       {error && (
         <Text size="2" color="red" style={{ display: 'block', marginTop: 'var(--space-2)' }}>
@@ -174,4 +174,4 @@ const ExcelExportControl = ({ data, label, schema, visible = true }: ExcelExport
   )
 }
 
-export default withJsonFormsControlProps(ExcelExportControl)
+export default withJsonFormsControlProps(SpreadsheetExportControl)

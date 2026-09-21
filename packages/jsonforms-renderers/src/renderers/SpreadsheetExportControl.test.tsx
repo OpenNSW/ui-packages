@@ -7,16 +7,15 @@ import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
 import { utils, writeFile } from '@e965/xlsx'
 import { radixRenderers } from './index'
 
-// Exercises ExcelExportControl through a real JsonForms tree, the same
+// Exercises SpreadsheetExportControl through a real JsonForms tree, the same
 // harness pattern SpreadsheetControl.test.tsx uses — Theme + JsonForms +
 // radixRenderers — rather than calling the component directly, since the
 // tester's schema-matching is itself part of what's under test.
 
 // jsdom doesn't implement the download machinery @e965/xlsx's writeFile
 // drives internally (Blob + anchor click), and there's no reason to exercise
-// the real SheetJS write path in a unit test — mocking it the way the plan
-// calls for keeps this test about what ExcelExportControl HANDS to xlsx, not
-// about xlsx itself.
+// the real SheetJS write path in a unit test — mocking it keeps this test
+// about what SpreadsheetExportControl HANDS to xlsx, not about xlsx itself.
 vi.mock('@e965/xlsx', () => ({
   utils: {
     aoa_to_sheet: vi.fn((matrix: unknown) => ({ __matrix: matrix })),
@@ -31,11 +30,11 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function makeSchema(xExcelExport: Record<string, unknown>): JsonSchema {
+function makeSchema(xSpreadsheetExport: Record<string, unknown>): JsonSchema {
   return {
     type: 'object',
     properties: {
-      rows: { type: 'array', 'x-excel-export': xExcelExport },
+      rows: { type: 'array', 'x-spreadsheet-export': xSpreadsheetExport },
     },
   } as unknown as JsonSchema
 }
@@ -54,7 +53,7 @@ function renderControl(schema: JsonSchema, data: Record<string, unknown>) {
 }
 
 function downloadButton(): HTMLButtonElement {
-  return screen.getByRole('button', { name: /download excel/i }) as HTMLButtonElement
+  return screen.getByRole('button', { name: /download spreadsheet/i }) as HTMLButtonElement
 }
 
 // The click handler lazy-imports @e965/xlsx (`await import(...)`), so its
@@ -81,7 +80,7 @@ const COLUMNS = [
   { id: 'qty', label: 'Quantity' },
 ]
 
-describe('ExcelExportControl disabled state', () => {
+describe('SpreadsheetExportControl disabled state', () => {
   it('disables the button when there is no data', () => {
     renderControl(makeSchema({}), { rows: undefined })
 
@@ -101,7 +100,7 @@ describe('ExcelExportControl disabled state', () => {
   })
 })
 
-describe('ExcelExportControl writing a workbook', () => {
+describe('SpreadsheetExportControl writing a workbook', () => {
   it('writes a records sheet flattened to a matrix, sheet name and bookType defaulted', async () => {
     renderControl(makeSchema({}), { rows: RECORDS })
 
@@ -154,19 +153,19 @@ describe('ExcelExportControl writing a workbook', () => {
   })
 })
 
-describe('ExcelExportControl config validation', () => {
+describe('SpreadsheetExportControl config validation', () => {
   it('shows an inline config error instead of a button when columns is not an array', () => {
     renderControl(makeSchema({ columns: 'nope' }), { rows: MATRIX })
 
-    expect(screen.queryByRole('button', { name: /download excel/i })).toBeNull()
-    expect(screen.getByText(/Invalid x-excel-export config/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /download spreadsheet/i })).toBeNull()
+    expect(screen.getByText(/Invalid x-spreadsheet-export config/)).toBeTruthy()
     expect(screen.getByText(/columns must be an array/)).toBeTruthy()
   })
 
   it('shows an inline config error when a column entry is missing id/label', () => {
     renderControl(makeSchema({ columns: [{ id: 'a', label: 'A' }, { label: 'no id' }] }), { rows: MATRIX })
 
-    expect(screen.queryByRole('button', { name: /download excel/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /download spreadsheet/i })).toBeNull()
     expect(screen.getByText(/columns\[1\] must be a \{ id, label \} object/)).toBeTruthy()
   })
 
@@ -177,7 +176,7 @@ describe('ExcelExportControl config validation', () => {
   })
 })
 
-describe('ExcelExportControl download failure', () => {
+describe('SpreadsheetExportControl download failure', () => {
   it('shows an error next to the button instead of an uncaught rejection', async () => {
     vi.mocked(utils.aoa_to_sheet).mockImplementationOnce(() => {
       throw new Error('workbook rejected: too many rows')
@@ -193,7 +192,7 @@ describe('ExcelExportControl download failure', () => {
   })
 })
 
-describe('ExcelExportControl co-located with an editable ArrayControl', () => {
+describe('SpreadsheetExportControl co-located with an editable ArrayControl', () => {
   function makeCoLocatedSchema(): JsonSchema {
     return {
       type: 'object',
@@ -201,7 +200,7 @@ describe('ExcelExportControl co-located with an editable ArrayControl', () => {
         rows: {
           type: 'array',
           items: { type: 'object', properties: { id: { type: 'string' } } },
-          'x-excel-export': { fileName: 'rows.xlsx' },
+          'x-spreadsheet-export': { fileName: 'rows.xlsx' },
         },
       },
     } as unknown as JsonSchema
@@ -226,17 +225,17 @@ describe('ExcelExportControl co-located with an editable ArrayControl', () => {
       </Theme>,
     )
 
-    expect(screen.getByRole('button', { name: /download excel/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /download spreadsheet/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /add item/i })).toBeTruthy()
   })
 })
 
-describe('ExcelExportControl visibility', () => {
+describe('SpreadsheetExportControl visibility', () => {
   it('renders nothing when a uischema rule hides it', () => {
     const schema = {
       type: 'object',
       properties: {
-        rows: { type: 'array', 'x-excel-export': {} },
+        rows: { type: 'array', 'x-spreadsheet-export': {} },
         hideExport: { type: 'boolean' },
       },
     } as unknown as JsonSchema
@@ -262,6 +261,6 @@ describe('ExcelExportControl visibility', () => {
       </Theme>,
     )
 
-    expect(screen.queryByRole('button', { name: /download excel/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /download spreadsheet/i })).toBeNull()
   })
 })
