@@ -346,7 +346,7 @@ export const fixtures: Fixture[] = [
         budget: {
           type: 'object',
           description:
-            "Upload dev/sample-files/spreadsheet-sample.xlsx (regenerate via generate-spreadsheet-sample.cjs) — a tea-auction report with data in rows 2-6, columns A (Date of Sale), B (Sale Code), C (BR Code), D (Lot No), E (Inv No), F (Garden Mark), G (Grade), H (Rate per KG), I (Qty in KG), J (Total Value Rs). The x-evaluate entries below exercise all 5 original functions (SUM/AVERAGE/MIN/MAX/COUNT) plus arithmetic, a nested function call, and multi-range pooling — the v2 additions (ROUND, IF, INDEX/MATCH, CONCATENATE) — and the fast-formula-parser + formulajs rewrite's expanded coverage: VLOOKUP, COUNTA, AND, and TEXTJOIN. Toggle x-spreadsheet.columnHeader/rowHeader to show row 1 / column A as headers instead of A/B/C, 1/2/3 — formulas still address raw cell coordinates either way. Set showSheet: false to hide the grid entirely and show only the computed values. Set sheetName to a sheet name to read a specific tab instead of the first one.",
+            "Upload dev/sample-files/spreadsheet-sample.xlsx (regenerate via generate-spreadsheet-sample.cjs) — a tea-auction report with data in rows 2-6, columns A (Date of Sale), B (Sale Code), C (BR Code), D (Lot No), E (Inv No), F (Garden Mark), G (Grade), H (Rate per KG), I (Qty in KG), J (Total Value Rs). The x-evaluate entries below exercise all 5 original functions (SUM/AVERAGE/MIN/MAX/COUNT) plus arithmetic, a nested function call, and multi-range pooling — the v2 additions (ROUND, IF, INDEX/MATCH, CONCATENATE) — and the fast-formula-parser + formulajs rewrite's expanded coverage: VLOOKUP, COUNTA, AND, and TEXTJOIN. Toggle x-spreadsheet.columnHeader/rowHeader to show row 1 / column A as headers instead of A/B/C, 1/2/3 — formulas still address raw cell coordinates either way. Set showSheet: false to hide the grid entirely and show only the computed values. Set sheetName to a sheet name to read a specific tab instead of the first one. The Download Excel button below the grid (x-excel-export, on the nested budget.sheet field) re-exports whatever this control persisted at data.budget.sheet — with columnHeader/rowHeader both false here, that's the plain matrix path, not the records path, so x-excel-export.columns isn't set on this fixture (it only relabels a records sheet's header row; a matrix has no header row to relabel).",
           'x-spreadsheet': {
             accept: '.xlsx,.xls,.csv',
             maxSize: 10485760,
@@ -413,7 +413,7 @@ export const fixtures: Fixture[] = [
             },
           ],
           properties: {
-            sheet: { type: 'array' },
+            sheet: { type: 'array', 'x-excel-export': { fileName: 'budget-reexport.xlsx' } },
             // Keyed by each x-evaluate entry's id (see SpreadsheetValue),
             // not an array — must stay in lockstep with that type whenever
             // the persist shape changes again, or AJV rejects an otherwise
@@ -436,7 +436,10 @@ export const fixtures: Fixture[] = [
     } as unknown as JsonSchema,
     uischema: {
       type: 'VerticalLayout',
-      elements: [{ type: 'Control', scope: '#/properties/budget' }],
+      elements: [
+        { type: 'Control', scope: '#/properties/budget' },
+        { type: 'Control', scope: '#/properties/budget/properties/sheet' },
+      ],
     } as UISchemaElement,
   },
   {
