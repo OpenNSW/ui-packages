@@ -25,6 +25,8 @@ import SpreadsheetExportControl from './SpreadsheetExportControl'
 import { SpreadsheetExportControlTester } from './SpreadsheetExportControlTester'
 import XmlControl from './XmlControl'
 import { XmlControlTester } from './XmlControlTester'
+import XmlExportControl from './XmlExportControl'
+import { XmlExportControlTester } from './XmlExportControlTester'
 import ComputedControl from './ComputedControl'
 import { ComputedControlTester } from './ComputedControlTester'
 import ArrayControl from './ArrayControl'
@@ -52,6 +54,10 @@ export const radixRenderers = [
   // After SpreadsheetControl on purpose: both testers rank 10, and a tie is
   // resolved by registration order (see XmlControlTester's comment).
   { tester: XmlControlTester, renderer: XmlControl },
+  // Also rank 10, and matches the same `x-xml` schema — XmlControlTester's
+  // own `not(optionIs('export', true))` clause is what keeps the two from
+  // colliding on one uischema element (see that tester's comment).
+  { tester: XmlExportControlTester, renderer: XmlExportControl },
   { tester: ComputedControlTester, renderer: ComputedControl },
   { tester: ArrayControlTester, renderer: ArrayControl },
   { tester: PrimitiveArrayControlTester, renderer: ArrayControl },
@@ -74,6 +80,8 @@ export { default as SpreadsheetExportControl } from './SpreadsheetExportControl'
 export * from './SpreadsheetExportControlTester'
 export { default as XmlControl } from './XmlControl'
 export * from './XmlControlTester'
+export { default as XmlExportControl } from './XmlExportControl'
+export * from './XmlExportControlTester'
 export { default as ComputedControl } from './ComputedControl'
 export * from './ComputedControlTester'
 export { default as SearchSelectControl } from './SearchSelectControl'
