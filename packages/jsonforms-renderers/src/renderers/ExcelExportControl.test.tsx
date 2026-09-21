@@ -154,6 +154,83 @@ describe('ExcelExportControl writing a workbook', () => {
   })
 })
 
+describe('ExcelExportControl config validation', () => {
+  it('shows an inline config error instead of a button when columns is not an array', () => {
+    renderControl(makeSchema({ columns: 'nope' }), { rows: MATRIX })
+
+    expect(screen.queryByRole('button', { name: /download excel/i })).toBeNull()
+    expect(screen.getByText(/Invalid x-excel-export config/)).toBeTruthy()
+    expect(screen.getByText(/columns must be an array/)).toBeTruthy()
+  })
+
+  it('shows an inline config error when a column entry is missing id/label', () => {
+    renderControl(makeSchema({ columns: [{ id: 'a', label: 'A' }, { label: 'no id' }] }), { rows: MATRIX })
+
+    expect(screen.queryByRole('button', { name: /download excel/i })).toBeNull()
+    expect(screen.getByText(/columns\[1\] must be a \{ id, label \} object/)).toBeTruthy()
+  })
+
+  it('shows an inline config error when columns is declared but empty', () => {
+    renderControl(makeSchema({ columns: [] }), { rows: MATRIX })
+
+    expect(screen.getByText(/columns is declared but empty/)).toBeTruthy()
+  })
+})
+
+describe('ExcelExportControl download failure', () => {
+  it('shows an error next to the button instead of an uncaught rejection', async () => {
+    vi.mocked(utils.aoa_to_sheet).mockImplementationOnce(() => {
+      throw new Error('workbook rejected: too many rows')
+    })
+    renderControl(makeSchema({}), { rows: RECORDS })
+
+    fireEvent.click(downloadButton())
+
+    await waitFor(() => expect(screen.getByText('workbook rejected: too many rows')).toBeTruthy())
+    // The button itself is unaffected — clicking again should be possible,
+    // not left permanently disabled by the failed attempt.
+    expect(downloadButton().disabled).toBe(false)
+  })
+})
+
+describe('ExcelExportControl co-located with an editable ArrayControl', () => {
+  function makeCoLocatedSchema(): JsonSchema {
+    return {
+      type: 'object',
+      properties: {
+        rows: {
+          type: 'array',
+          items: { type: 'object', properties: { id: { type: 'string' } } },
+          'x-excel-export': { fileName: 'rows.xlsx' },
+        },
+      },
+    } as unknown as JsonSchema
+  }
+  const coLocatedUischema = {
+    type: 'VerticalLayout',
+    elements: [
+      { type: 'Control', scope: '#/properties/rows' },
+      { type: 'Control', scope: '#/properties/rows', options: { editable: true } },
+    ],
+  } as UISchemaElement
+
+  it('renders the export button for the plain element and ArrayControl for the editable-marked one', () => {
+    render(
+      <Theme>
+        <JsonForms
+          schema={makeCoLocatedSchema()}
+          uischema={coLocatedUischema}
+          data={{ rows: [{ id: 'a' }] }}
+          renderers={radixRenderers}
+        />
+      </Theme>,
+    )
+
+    expect(screen.getByRole('button', { name: /download excel/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /add item/i })).toBeTruthy()
+  })
+})
+
 describe('ExcelExportControl visibility', () => {
   it('renders nothing when a uischema rule hides it', () => {
     const schema = {

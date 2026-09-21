@@ -632,6 +632,45 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'excel-export-records',
+    name: 'Excel Export (records)',
+    schema: {
+      type: 'object',
+      properties: {
+        salesRows: {
+          type: 'array',
+          description:
+            "The x-excel-export issue #65 example, verbatim — a plain records array (not a SpreadsheetControl field; there's no upload/x-spreadsheet here at all) with a declared columns id/label list. Edit the data pane's salesRows array and click Download Excel: the workbook's header row should read the declared labels (Date of Sale, Amount), not the raw ids, and the column ORDER should match the declared list regardless of each record's own key order. Contrast with the 'Spreadsheet' fixture's Download Excel button below its upload, which re-exports whatever matrix SpreadsheetControl itself persisted — this fixture exercises the records+columns path standalone, the one the 'Spreadsheet' fixture's columnHeader: false data never touches.",
+          items: {
+            type: 'object',
+            properties: {
+              date: { type: 'string' },
+              amount: { type: 'number' },
+            },
+          },
+          'x-excel-export': {
+            columns: [
+              { id: 'date', label: 'Date of Sale' },
+              { id: 'amount', label: 'Amount' },
+            ],
+            sheetName: 'Sales',
+            fileName: 'sales-export.xlsx',
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/salesRows' }],
+    } as UISchemaElement,
+    data: {
+      salesRows: [
+        { date: '2026-09-01', amount: 120 },
+        { date: '2026-09-02', amount: 80 },
+      ],
+    },
+  },
+  {
     id: 'xml',
     name: 'XML',
     schema: {

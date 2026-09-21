@@ -2,6 +2,7 @@ import { withJsonFormsControlProps } from '@jsonforms/react'
 import type { ControlProps, JsonSchema } from '@jsonforms/core'
 import { Box, Button, Text } from '@radix-ui/themes'
 import { DownloadIcon } from '@radix-ui/react-icons'
+import { useState } from 'react'
 import { isRecordsSheet, type CellValue, type SheetData, type SpreadsheetFieldSpec } from '../utils/spreadsheet'
 import { recordsToMatrix } from '../utils/records'
 
@@ -38,6 +39,31 @@ type ExcelExportControlProps = ControlProps & {
 const DEFAULT_SHEET_NAME = 'Sheet1'
 const DEFAULT_FILE_TYPE: ExcelExportFileType = 'xlsx'
 
+// Same shape SpreadsheetControl's own validateSpreadsheetConfig enforces for
+// x-spreadsheet.columns/rows (see utils/spreadsheet/process.ts's
+// isValidField) — a malformed columns list (not an array, or entries missing
+// id/label) must surface as a config error at render time, the same way a
+// misconfigured SpreadsheetControl does, rather than throwing when the
+// button is clicked with no visible error at all.
+function validateColumns(columns: SpreadsheetFieldSpec[] | undefined): string | null {
+  if (columns === undefined) return null
+  if (!Array.isArray(columns)) return 'columns must be an array of { id, label } objects.'
+  if (columns.length === 0) {
+    return 'columns is declared but empty — declare at least one field, or omit it entirely.'
+  }
+  const badIndex = columns.findIndex(
+    (c) =>
+      !c ||
+      typeof c !== 'object' ||
+      typeof c.id !== 'string' ||
+      c.id === '' ||
+      typeof c.label !== 'string' ||
+      c.label === '',
+  )
+  if (badIndex !== -1) return `columns[${badIndex}] must be a { id, label } object with non-empty string fields.`
+  return null
+}
+
 // Builds the matrix @e965/xlsx's aoa_to_sheet expects from whichever shape
 // SpreadsheetControl itself would persist at this same scope — told apart the
 // same way SpreadsheetControl's own asMatrix does, with isRecordsSheet.
@@ -68,6 +94,8 @@ function toMatrix(data: SheetData, columns: SpreadsheetFieldSpec[] | undefined):
 }
 
 const ExcelExportControl = ({ data, label, schema, visible = true }: ExcelExportControlProps) => {
+  const [error, setError] = useState<string | null>(null)
+
   if (visible === false) {
     return null
   }
@@ -77,6 +105,23 @@ const ExcelExportControl = ({ data, label, schema, visible = true }: ExcelExport
   const sheetName = xExcelExport.sheetName ?? DEFAULT_SHEET_NAME
   const fileType = xExcelExport.fileType ?? DEFAULT_FILE_TYPE
   const fileName = xExcelExport.fileName ?? `export.${fileType}`
+
+  // Checked before anything else renders — the same rule SpreadsheetControl
+  // follows for its own x-spreadsheet config: a misconfigured field shows
+  // only the error box, not a button that would throw when clicked.
+  const configError = validateColumns(columns)
+  if (configError) {
+    return (
+      <Box mb="4">
+        <Text as="label" size="2" weight="bold">
+          {label}
+        </Text>
+        <Text size="2" color="red" style={{ display: 'block' }}>
+          Invalid x-excel-export config: {configError}
+        </Text>
+      </Box>
+    )
+  }
 
   const hasValue = Array.isArray(data) && data.length > 0
 
@@ -90,14 +135,26 @@ const ExcelExportControl = ({ data, label, schema, visible = true }: ExcelExport
   // ExcelExportFileType to more of BookType later a config change rather than
   // a rewrite. writeFile triggers the browser download itself (Blob + anchor
   // internally), so no separate download utility is needed here.
+  //
+  // Wrapped in try/catch — unlike XmlExportControl's pure string-building,
+  // this goes through a third-party library's own sheet/workbook/file-write
+  // pipeline and ends in a real browser download side effect, so a failure
+  // here (a workbook the library itself rejects, a blocked download, ...) is
+  // realistic enough to need a visible error rather than an uncaught
+  // rejection with nothing shown next to the button.
   const handleDownload = async () => {
     if (!hasValue) return
-    const XLSX = await import('@e965/xlsx')
-    const matrix = toMatrix(data as SheetData, columns)
-    const worksheet = XLSX.utils.aoa_to_sheet(matrix)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
-    XLSX.writeFile(workbook, fileName, { bookType: fileType })
+    setError(null)
+    try {
+      const XLSX = await import('@e965/xlsx')
+      const matrix = toMatrix(data as SheetData, columns)
+      const worksheet = XLSX.utils.aoa_to_sheet(matrix)
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+      XLSX.writeFile(workbook, fileName, { bookType: fileType })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to build the workbook.')
+    }
   }
 
   return (
@@ -108,6 +165,11 @@ const ExcelExportControl = ({ data, label, schema, visible = true }: ExcelExport
       <Button type="button" variant="soft" disabled={!hasValue} onClick={() => void handleDownload()}>
         <DownloadIcon /> Download Excel
       </Button>
+      {error && (
+        <Text size="2" color="red" style={{ display: 'block', marginTop: 'var(--space-2)' }}>
+          {error}
+        </Text>
+      )}
     </Box>
   )
 }
