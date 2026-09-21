@@ -167,7 +167,12 @@ describe('XmlExportControl bound to an array scope', () => {
   it('wraps each entry under itemElement inside rootElement', async () => {
     renderForm(
       makeArraySchema({ rootElement: 'orders', itemElement: 'order' }),
-      { orders: [{ id: '1', qty: 2 }, { id: '2', qty: 5 }] },
+      {
+        orders: [
+          { id: '1', qty: 2 },
+          { id: '2', qty: 5 },
+        ],
+      },
       arrayUischema,
     )
 

@@ -9,10 +9,10 @@ The bound schema node must be `type: 'object'` or `type: 'array'` and declare a 
 ## Options
 
 | Option        | Type     | Default        | Meaning                                                                      |
-| ------------- | -------- | -------------- | ----------------------------------------------------------------------------- |
-| `rootElement` | `string` | `'root'`       | Top-level wrapping element name.                                            |
+| ------------- | -------- | -------------- | ---------------------------------------------------------------------------- |
+| `rootElement` | `string` | `'root'`       | Top-level wrapping element name.                                             |
 | `itemElement` | `string` | `'item'`       | Element name per entry — only used when the bound schema is `type: 'array'`. |
-| `fileName`    | `string` | `'export.xml'` | Downloaded file's name.                                                     |
+| `fileName`    | `string` | `'export.xml'` | Downloaded file's name.                                                      |
 
 ## Object scope — export a single subtree
 
@@ -24,23 +24,27 @@ The bound schema node must be `type: 'object'` or `type: 'array'` and declare a 
     "invoice": {
       "type": "object",
       "properties": { "customer": { "type": "string" }, "total": { "type": "number" } },
-      "x-xml-export": { "rootElement": "invoice", "fileName": "invoice.xml" }
-    }
-  }
+      "x-xml-export": { "rootElement": "invoice", "fileName": "invoice.xml" },
+    },
+  },
 }
 ```
+
 ```jsonc
 // uischema
 { "type": "Control", "scope": "#/properties/invoice" }
 ```
+
 Given `data.invoice = { "customer": "Acme", "total": 1200 }`, clicking the button downloads:
+
 ```xml
 <invoice>
   <customer>Acme</customer>
   <total>1200</total>
 </invoice>
 ```
-An array *nested inside* an object scope (e.g. `invoice.lines`) needs no extra config — the builder already repeats that array's own key as the sibling tag per entry.
+
+An array _nested inside_ an object scope (e.g. `invoice.lines`) needs no extra config — the builder already repeats that array's own key as the sibling tag per entry.
 
 ## Array scope — export a list of records
 
@@ -52,22 +56,26 @@ An array *nested inside* an object scope (e.g. `invoice.lines`) needs no extra c
     "orders": {
       "type": "array",
       "items": { "type": "object", "properties": { "id": { "type": "string" }, "qty": { "type": "number" } } },
-      "x-xml-export": { "rootElement": "orders", "itemElement": "order", "fileName": "orders.xml" }
-    }
-  }
+      "x-xml-export": { "rootElement": "orders", "itemElement": "order", "fileName": "orders.xml" },
+    },
+  },
 }
 ```
+
 ```jsonc
 // uischema
 { "type": "Control", "scope": "#/properties/orders" }
 ```
+
 Given `data.orders = [{ "id": "1", "qty": 2 }, { "id": "2", "qty": 5 }]`, clicking downloads:
+
 ```xml
 <orders>
   <order><id>1</id><qty>2</qty></order>
   <order><id>2</id><qty>5</qty></order>
 </orders>
 ```
+
 A bare array has no key of its own to repeat, which is why the array case wraps each entry under `itemElement` first, then the whole thing under `rootElement` — unlike the object case, where `data` is wrapped just once.
 
 ## Behavior notes
@@ -79,13 +87,13 @@ A bare array has no key of its own to repeat, which is why the array case wraps 
 
 ## Placing it next to another control at the same scope
 
-Unlike `SpreadsheetControl` (whose persisted value has a `sheet` sub-property an export button can point at instead of the parent), `XmlControl`'s whole field *is* the parsed document — there's no sub-property to give a second control a different scope. To show "here's what was uploaded, and here's a re-export of it" side by side, use **two** `Control` elements at the identical `scope`, and mark the second one with `options: { export: true }`:
+Unlike `SpreadsheetControl` (whose persisted value has a `sheet` sub-property an export button can point at instead of the parent), `XmlControl`'s whole field _is_ the parsed document — there's no sub-property to give a second control a different scope. To show "here's what was uploaded, and here's a re-export of it" side by side, use **two** `Control` elements at the identical `scope`, and mark the second one with `options: { export: true }`:
 
 ```jsonc
 // uischema.elements
 [
   { "type": "Control", "scope": "#/properties/sales_data" },
-  { "type": "Control", "scope": "#/properties/sales_data", "options": { "export": true } }
+  { "type": "Control", "scope": "#/properties/sales_data", "options": { "export": true } },
 ]
 ```
 
