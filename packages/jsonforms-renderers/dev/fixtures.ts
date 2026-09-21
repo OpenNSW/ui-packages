@@ -222,6 +222,45 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'search-select-depends-on',
+    name: 'Search Select (Depends on sibling)',
+    schema: {
+      type: 'object',
+      properties: {
+        continent: {
+          type: 'string',
+          description:
+            'Pick a continent first. The country field below sends this value as params.parent to the same "countries" service.',
+          oneOf: [
+            { const: 'asia', title: 'Asia' },
+            { const: 'europe', title: 'Europe' },
+            { const: 'oceania', title: 'Oceania' },
+            { const: 'north-america', title: 'North America' },
+          ],
+        },
+        country: {
+          type: 'string',
+          description:
+            'x-search.dependsOn: continent. Opens with "Select the related field first." until a continent is set; ' +
+            'then the countries list is filtered to that continent. Changing continent clears this field.',
+          'x-search': { service: 'countries', mode: 'small-list', dependsOn: 'continent' },
+        },
+      },
+      required: ['continent', 'country'],
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/continent' },
+        {
+          type: 'Control',
+          scope: '#/properties/country',
+          options: { placeholder: 'Pick a country…' },
+        },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'search-select-object',
     name: 'Search Select (Object shape)',
     schema: {

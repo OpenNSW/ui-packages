@@ -40,8 +40,37 @@ fixed filters, via `x-search.params`:
 `params` is forwarded as-is to both `search({ query, cursor, signal, params })` and
 `resolve(value, params)` — the service decides what to do with it (e.g. append it as a
 query filter). `params` is fixed per field: it comes from the schema, not from other
-fields' live values, so it can't express "filter this field by what was picked in that
-other field."
+fields' live values.
+
+## Live sibling filter (`dependsOn`)
+
+To filter this field by what was picked in another field on the same object, set
+`x-search.dependsOn` to that sibling's property name. The control reads the sibling's
+current value (a string, or `{ value, label }`) and merges it into `params.parent` on
+every `search`/`resolve` call. Changing the sibling clears this field. Until a sibling
+value is set, the dropdown shows "Select the related field first." instead of fetching.
+
+```jsonc
+{
+  "commodity_common_name": {
+    "type": "object",
+    "x-search": {
+      "service": "static-data",
+      "mode": "large-searchable-list",
+      "params": { "id": "commodities", "version": "1" },
+    },
+  },
+  "commodity_botanical_name": {
+    "type": "string",
+    "x-search": {
+      "service": "static-data",
+      "mode": "small-list",
+      "dependsOn": "commodity_common_name",
+      "params": { "id": "scientific-names", "version": "1" },
+    },
+  },
+}
+```
 
 ## The three modes
 
