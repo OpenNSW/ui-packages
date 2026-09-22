@@ -249,3 +249,136 @@ describe('XmlControl and XmlExportControl co-located at the same scope', () => {
     expect(xml).toContain('<Quantity>500</Quantity>')
   })
 })
+
+describe('XmlExportControl with writeTo (root-relative, the default)', () => {
+  function makeSchema(xXmlExport: Record<string, unknown>): JsonSchema {
+    return {
+      type: 'object',
+      properties: {
+        customer: { type: 'object', properties: { name: { type: 'string' } } },
+        total: { type: 'number' },
+        // Deliberately unrelated to what's mapped — proves the export reads
+        // from writeTo's own from paths, not this field's own value.
+        invoiceExport: { type: 'object', 'x-xml-export': xXmlExport },
+      },
+    } as unknown as JsonSchema
+  }
+  const ui = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/invoiceExport' }],
+  } as UISchemaElement
+
+  it('assembles the document from writeTo, ignoring the scoped field itself', async () => {
+    renderForm(
+      makeSchema({
+        rootElement: 'Invoice',
+        writeTo: [
+          { from: 'customer.name', to: 'Party.Name' },
+          { from: 'total', to: 'Amount' },
+        ],
+      }),
+      { customer: { name: 'Acme' }, total: 120, invoiceExport: {} },
+      ui,
+    )
+
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+
+    await waitFor(() => expect(downloadTextFile).toHaveBeenCalledTimes(1))
+    const [xml] = vi.mocked(downloadTextFile).mock.calls[0]
+    expect(xml).toContain('<Invoice>')
+    expect(xml).toContain('<Party>')
+    expect(xml).toContain('<Name>Acme</Name>')
+    expect(xml).toContain('<Amount>120</Amount>')
+  })
+
+  it('is disabled when the whole form is empty, not just the scoped field', async () => {
+    renderForm(makeSchema({ writeTo: [{ from: 'customer.name', to: 'Party.Name' }] }), {}, ui)
+
+    await waitFor(() => expect(downloadButton()).toBeTruthy())
+    expect(downloadButton()?.disabled).toBe(true)
+  })
+
+  it('shows an inline error instead of downloading when an entry cannot be resolved', async () => {
+    renderForm(
+      makeSchema({ rootElement: 'Invoice', writeTo: [{ to: 'Amount' }] }),
+      { customer: { name: 'Acme' }, invoiceExport: {} },
+      ui,
+    )
+
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+
+    await waitFor(() => expect(screen.getByText(/needs either "from" or "formula"/)).toBeTruthy())
+    expect(downloadTextFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('XmlExportControl with writeTo and writeBase: parent', () => {
+  function makeArraySchema(): JsonSchema {
+    return {
+      type: 'object',
+      properties: {
+        orders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              qty: { type: 'number' },
+              exporter: {
+                type: 'object',
+                'x-xml-export': {
+                  rootElement: 'Order',
+                  writeBase: 'parent',
+                  writeTo: [
+                    { from: 'id', to: 'Id' },
+                    { from: 'qty', to: 'Qty' },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as JsonSchema
+  }
+  const ui = {
+    type: 'VerticalLayout',
+    elements: [
+      {
+        type: 'Control',
+        scope: '#/properties/orders',
+        options: {
+          detail: { type: 'VerticalLayout', elements: [{ type: 'Control', scope: '#/properties/exporter' }] },
+        },
+      },
+    ],
+  } as UISchemaElement
+
+  it('rebases from paths onto the item the control sits in, not the form root', async () => {
+    renderForm(
+      makeArraySchema(),
+      {
+        orders: [
+          { id: '1', qty: 2, exporter: {} },
+          { id: '2', qty: 5, exporter: {} },
+        ],
+      },
+      ui,
+    )
+
+    const buttons = await waitFor(() => {
+      const found = screen.getAllByRole('button', { name: /Download XML/ })
+      expect(found).toHaveLength(2)
+      return found
+    })
+
+    fireEvent.click(buttons[1])
+    await waitFor(() => expect(downloadTextFile).toHaveBeenCalledTimes(1))
+    const [xml] = vi.mocked(downloadTextFile).mock.calls[0]
+    expect(xml).toContain('<Id>2</Id>')
+    expect(xml).toContain('<Qty>5</Qty>')
+    expect(xml).not.toContain('<Id>1</Id>')
+  })
+})

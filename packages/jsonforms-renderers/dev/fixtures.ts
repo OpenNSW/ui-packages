@@ -902,6 +902,79 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'xml-export-writeto',
+    name: 'XML Export → writeTo',
+    schema: {
+      type: 'object',
+      properties: {
+        customer_name: { type: 'string', title: 'Customer Name' },
+        order_total: { type: 'number', title: 'Order Total' },
+        invoice_export: {
+          type: 'object',
+          title: 'Invoice Export',
+          description:
+            "x-xml-export.writeTo assembles a document from elsewhere in the form instead of serializing this field verbatim — the mirror image of the XML → writeTo fixture's importer. Edit Customer Name / Order Total above, then click Download XML: the file is <Invoice><Party><Name>...</Name></Party><Amount>...</Amount></Invoice>, built entirely from writeTo's from/to pairs. invoice_export itself is never read from and never appears in the output — it exists only to place the button and carry the x-xml-export config, exactly the role x-xml.writeTo leaves an importer's own scoped field playing when persistDocument: false.",
+          'x-xml-export': {
+            rootElement: 'Invoice',
+            fileName: 'invoice.xml',
+            writeTo: [
+              { from: 'customer_name', to: 'Party.Name' },
+              { from: 'order_total', to: 'Amount' },
+            ],
+          },
+        },
+        orders: {
+          type: 'array',
+          title: 'Orders',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', title: 'Order ID' },
+              qty: { type: 'number', title: 'Quantity' },
+              order_export: {
+                type: 'object',
+                title: 'Order Export',
+                description:
+                  'writeBase: "parent" rebases writeTo\'s from paths onto this order, the same base x-computed.inputs and an importer\'s own writeBase: "parent" use. Add a second order, give the two different ids/quantities, and download each one\'s XML: order 2\'s file reads order 2\'s own id/qty, never order 1\'s — which an absolute (default "root") path could not do, since every item shares one schema.',
+                'x-xml-export': {
+                  rootElement: 'Order',
+                  fileName: 'order-export.xml',
+                  writeBase: 'parent',
+                  writeTo: [
+                    { from: 'id', to: 'Id' },
+                    { from: 'qty', to: 'Qty' },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/customer_name' },
+        { type: 'Control', scope: '#/properties/order_total' },
+        { type: 'Control', scope: '#/properties/invoice_export' },
+        {
+          type: 'Control',
+          scope: '#/properties/orders',
+          options: {
+            detail: {
+              type: 'VerticalLayout',
+              elements: [
+                { type: 'Control', scope: '#/properties/id' },
+                { type: 'Control', scope: '#/properties/qty' },
+                { type: 'Control', scope: '#/properties/order_export' },
+              ],
+            },
+          },
+        },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'array',
     name: 'Array (objects)',
     schema: {

@@ -13,13 +13,15 @@ import { evaluateFormulaWithVariables, describeFormulaError, type CellValue } fr
 
 export interface WriteToEntry {
   /**
-   * Target data path, dot-joined — `blendsheet_data.0.blendsheet_no`. This is
-   * the representation handleChange/update consume (see @jsonforms/core's
-   * toDataPath), not the JSON Pointer a uischema `scope` uses.
+   * Target path, dot-joined — `blendsheet_data.0.blendsheet_no` for an
+   * importer (the representation handleChange/update consume, see
+   * @jsonforms/core's toDataPath), or `Party.Name` for an exporter (nested
+   * keys in the object buildFromWrites assembles). Not the JSON Pointer a
+   * uischema `scope` uses, either way.
    *
    * Resolved verbatim here: this module is form-agnostic and returns whatever
    * `to` says. Whether that is absolute from the form root or relative to the
-   * importer's own record is the caller's choice, via `x-xml.writeBase`.
+   * control's own record is the caller's choice, via `writeBase`.
    */
   to: string
   /** Source path within the parsed document. Mutually exclusive with inputs/formula. */
@@ -125,6 +127,33 @@ async function resolveOne(document: unknown, entry: WriteToEntry): Promise<Resol
   }
   if (entry.from === undefined) throw new Error(`x-xml.writeTo "${entry.to}" needs either "from" or "formula".`)
   return present(Resolve.data(document, entry.from))
+}
+
+// The write half of an exporter: assembles resolved writes into one plain
+// object, `to`'s dot-joined segments becoming nested keys — the mirror image
+// of an importer's writes, which land on form-data paths via handleChange
+// instead of an in-memory object built up here. Later entries win on a
+// collision, the same left-to-right precedence resolveWrites/coerce already
+// give the entries array elsewhere.
+export function buildFromWrites(writes: ResolvedWrite[]): Record<string, unknown> {
+  const root: Record<string, unknown> = {}
+  for (const { to, value } of writes) {
+    const segments = to.split('.').filter(Boolean)
+    if (segments.length === 0) continue
+    let cursor = root
+    for (const segment of segments.slice(0, -1)) {
+      const next = cursor[segment]
+      if (next && typeof next === 'object' && !Array.isArray(next)) {
+        cursor = next as Record<string, unknown>
+      } else {
+        const created: Record<string, unknown> = {}
+        cursor[segment] = created
+        cursor = created
+      }
+    }
+    cursor[segments[segments.length - 1]] = value
+  }
+  return root
 }
 
 // Document in, writes out. Entries whose source is absent and which declare no

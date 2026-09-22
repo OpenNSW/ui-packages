@@ -1,9 +1,11 @@
-import { withJsonFormsControlProps } from '@jsonforms/react'
+import { useJsonForms, withJsonFormsControlProps } from '@jsonforms/react'
+import { Resolve } from '@jsonforms/core'
 import type { ControlProps, JsonSchema } from '@jsonforms/core'
 import { Box, Button, Text } from '@radix-ui/themes'
 import { DownloadIcon } from '@radix-ui/react-icons'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { downloadTextFile } from '../utils/download'
+import { buildFromWrites, resolveWrites, type WriteToEntry } from '../utils/mapping'
 
 interface XXmlExportOptions {
   /** Top-level wrapping element name. Default 'root'. */
@@ -12,6 +14,23 @@ interface XXmlExportOptions {
   itemElement?: string
   /** Downloaded file's name. Default 'export.xml'. */
   fileName?: string
+  /**
+   * Assemble the exported document from elsewhere in the form instead of
+   * serializing the scoped `data` verbatim — the mirror image of `x-xml`'s
+   * own `writeTo`. Each entry's `from` is a form-data path (resolved from the
+   * form root or this control's own record depending on `writeBase`) and
+   * `to` is a dot-joined path into the document being built — see
+   * utils/mapping.ts and docs/xml-export-control.md.
+   */
+  writeTo?: WriteToEntry[]
+  /**
+   * Where `writeTo`'s `from` paths are resolved from. Default 'root' —
+   * absolute from the form data root, the same default and the same
+   * `'parent'` rebasing `x-xml.writeBase` gives an importer, for the same
+   * reason: without it, an exporter sitting inside each array item would read
+   * the same absolute paths for every item.
+   */
+  writeBase?: 'root' | 'parent'
 }
 
 type XmlExportControlProps = ControlProps & {
@@ -42,50 +61,92 @@ function isEmpty(data: unknown): boolean {
 // root (`<salesData><salesData>...`), not re-export the document that was
 // uploaded. A plain data object with no such key (the common case, e.g. an
 // ordinary `{ customer, total }` field with no XmlControl involved) has no
-// existing root to reuse, so it still gets wrapped below.
+// existing root to reuse, so it still gets wrapped below. Only relevant to
+// the verbatim (no writeTo) path — a mapping always assembles a fresh object
+// of its own shape, never one that coincidentally already IS the document.
 function hasOwnRoot(data: unknown, rootElement: string): data is Record<string, unknown> {
   if (data == null || typeof data !== 'object' || Array.isArray(data)) return false
   const keys = Object.keys(data)
   return keys.length === 1 && keys[0] === rootElement
 }
 
-const XmlExportControl = ({ data, label, schema, visible = true }: XmlExportControlProps) => {
+const XmlExportControl = ({ data, path, label, schema, visible = true }: XmlExportControlProps) => {
   const xXmlExport: XXmlExportOptions = schema?.['x-xml-export'] ?? {}
   const rootElement = xXmlExport.rootElement ?? DEFAULT_ROOT_ELEMENT
   const itemElement = xXmlExport.itemElement ?? DEFAULT_ITEM_ELEMENT
   const fileName = xXmlExport.fileName ?? DEFAULT_FILE_NAME
+  const writeTo = xXmlExport.writeTo
+  const writeBase = xXmlExport.writeBase ?? 'root'
 
-  const disabled = isEmpty(data)
+  // Reading outside this control's own scope is the whole point of writeTo,
+  // so it needs the raw tree rather than the scoped `data` prop — same
+  // mechanism XmlControl's importer side and ComputedControl both use.
+  const ctx = useJsonForms()
+  const isMapper = writeTo !== undefined && writeTo.length > 0
+
+  // `path` is this control's own field, so its parent is the record writeTo
+  // reads relative to. At the form root that is '', which is exactly the
+  // absolute behaviour — so 'parent' on a top-level control is a no-op, the
+  // same as x-xml.writeBase.
+  const base = writeBase === 'parent' ? path.split('.').slice(0, -1).join('.') : ''
+  const baseData: unknown = isMapper ? (base ? Resolve.data(ctx.core?.data, base) : ctx.core?.data) : undefined
+
+  const [error, setError] = useState<string | null>(null)
+
+  // Without a mapping, disabled tracks the scoped field's own value, same as
+  // before. With one, the scoped field may be unrelated to what's actually
+  // being assembled, so this checks the data writeTo reads from instead — a
+  // cheap, synchronous stand-in for "will there be anything to write" that
+  // doesn't require resolving every entry (formula evaluation is async) just
+  // to render a button.
+  const disabled = isMapper ? isEmpty(baseData) : isEmpty(data)
 
   // Building XML from already-valid in-memory form data isn't a realistic
   // failure mode the way parsing untrusted uploaded content is (see
-  // XmlControl), so there's no error/status state machine here — just the
-  // lazy import + build, same on-demand pattern utils/xml/parse.ts uses for
-  // XMLParser (never imported at module top level).
+  // XmlControl) — UNLESS a mapping is configured, where a formula can still
+  // fail against real data. resolveWrites is the only part of this that can
+  // throw, so the try/catch stays scoped to it rather than wrapping the
+  // whole handler.
   const handleDownload = useCallback(async () => {
+    setError(null)
+    let exportData: unknown = data
+    if (isMapper && writeTo) {
+      try {
+        const writes = await resolveWrites(baseData, writeTo)
+        exportData = buildFromWrites(writes)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'This mapping could not be resolved.')
+        return
+      }
+    }
+
     const { XMLBuilder } = await import('fast-xml-parser')
     // XMLBuilder needs one top-level key as the root tag. A bare array has no
     // key of its own to repeat, so the array case always wraps each entry
     // under `itemElement` — an array NESTED inside an object needs no such
     // treatment, since XMLBuilder already repeats an array's own key as the
-    // sibling tag per entry.
+    // sibling tag per entry. A mapping (writeTo) always assembles a fresh
+    // plain object (buildFromWrites), so neither the array/itemElement case
+    // nor the hasOwnRoot unwrap applies to it — only to the verbatim,
+    // no-mapping path.
     //
-    // The object case wraps too, UNLESS `data` already carries `rootElement`
-    // as its sole key — which is exactly what a co-located XmlControl's own
-    // value looks like (same scope, same field). Wrapping that again would
-    // double the root instead of re-exporting the document as uploaded; see
-    // hasOwnRoot above.
-    const wrapped =
-      schema.type === 'array'
-        ? { [rootElement]: { [itemElement]: data } }
-        : hasOwnRoot(data, rootElement)
-          ? data
-          : { [rootElement]: data }
+    // In the verbatim object case, `data` wraps under `rootElement` UNLESS it
+    // already carries that as its sole key — exactly what a co-located
+    // XmlControl's own value looks like (same scope, same field). Wrapping
+    // that again would double the root instead of re-exporting the document
+    // as uploaded; see hasOwnRoot above.
+    const wrapped = isMapper
+      ? { [rootElement]: exportData }
+      : schema.type === 'array'
+        ? { [rootElement]: { [itemElement]: exportData } }
+        : hasOwnRoot(exportData, rootElement)
+          ? exportData
+          : { [rootElement]: exportData }
 
     const builder = new XMLBuilder({ format: true, indentBy: '  ', ignoreAttributes: true })
     const xml = builder.build(wrapped) as string
     downloadTextFile(xml, fileName, 'application/xml')
-  }, [data, schema.type, rootElement, itemElement, fileName])
+  }, [data, isMapper, writeTo, baseData, schema.type, rootElement, itemElement, fileName])
 
   if (visible === false) {
     return null
@@ -100,6 +161,11 @@ const XmlExportControl = ({ data, label, schema, visible = true }: XmlExportCont
         <DownloadIcon />
         Download XML
       </Button>
+      {error && (
+        <Text size="2" color="red" style={{ display: 'block', marginTop: 'var(--space-2)' }}>
+          {error}
+        </Text>
+      )}
     </Box>
   )
 }
