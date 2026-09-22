@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveWrites } from './mapping'
+import { buildFromWrites, resolveWrites } from './mapping'
 
 // A document shaped like the ones importers actually meet: values nested at
 // different depths, a date in a local format, an enum as a number, an
@@ -155,5 +155,55 @@ describe('resolveWrites', () => {
 
   it('requires a source', async () => {
     await expect(run([{ to: 'x' }])).rejects.toThrow(/needs either "from" or "formula"/)
+  })
+})
+
+describe('buildFromWrites', () => {
+  it('nests dot-joined segments into an object', () => {
+    expect(buildFromWrites([{ to: 'Party.Name', value: 'Acme' }])).toEqual({ Party: { Name: 'Acme' } })
+  })
+
+  it('groups sibling writes under a shared parent', () => {
+    expect(
+      buildFromWrites([
+        { to: 'Party.Name', value: 'Acme' },
+        { to: 'Party.Code', value: 'A-1' },
+        { to: 'Amount', value: 120 },
+      ]),
+    ).toEqual({ Party: { Name: 'Acme', Code: 'A-1' }, Amount: 120 })
+  })
+
+  it('writes a top-level key with no dots as-is', () => {
+    expect(buildFromWrites([{ to: 'Amount', value: 120 }])).toEqual({ Amount: 120 })
+  })
+
+  it('carries an array value through unchanged, for XMLBuilder to repeat', () => {
+    expect(buildFromWrites([{ to: 'Lines', value: [{ sku: 'A-1' }, { sku: 'B-2' }] }])).toEqual({
+      Lines: [{ sku: 'A-1' }, { sku: 'B-2' }],
+    })
+  })
+
+  it('lets a later write win on a colliding leaf', () => {
+    expect(
+      buildFromWrites([
+        { to: 'Amount', value: 100 },
+        { to: 'Amount', value: 120 },
+      ]),
+    ).toEqual({ Amount: 120 })
+  })
+
+  it('replaces a scalar with an object when a later write needs to nest under it', () => {
+    // Deliberately permissive rather than throwing — a schema author's own
+    // ordering mistake, not something this pure function should police.
+    expect(
+      buildFromWrites([
+        { to: 'Party', value: 'flat' },
+        { to: 'Party.Name', value: 'Acme' },
+      ]),
+    ).toEqual({ Party: { Name: 'Acme' } })
+  })
+
+  it('returns an empty object for no writes', () => {
+    expect(buildFromWrites([])).toEqual({})
   })
 })
