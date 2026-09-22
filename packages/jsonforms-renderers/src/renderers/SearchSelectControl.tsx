@@ -29,17 +29,34 @@ function dependsOnConst(raw: unknown): string | undefined {
   return undefined
 }
 
-// string form is the original one-sibling API: dependsOn: "commodity" → { parent: "commodity" }
+// string form is the original one-sibling API: dependsOn: "commodity" → { parent: "commodity" }.
+// An empty object means the map was declared but had no usable entries — still "configured",
+// so the control gates forever instead of treating dependsOn as absent and fetching immediately.
 function dependsOnSpec(raw: XSearchOptions['dependsOn']): Record<string, string> | undefined {
   if (typeof raw === 'string') return raw.length > 0 ? { parent: raw } : undefined
   if (!raw || typeof raw !== 'object') return undefined
+
+  const entries = Object.entries(raw)
+  if (entries.length === 0) return undefined
+
   const spec: Record<string, string> = {}
-  for (const [key, sibling] of Object.entries(raw)) {
+  const dropped: string[] = []
+  for (const [key, sibling] of entries) {
     if (typeof sibling === 'string' && sibling.length > 0) spec[key] = sibling
+    else dropped.push(key)
   }
-  return Object.keys(spec).length > 0 ? spec : undefined
+  if (dropped.length > 0) {
+    console.warn(`x-search.dependsOn: ignoring invalid entries [${dropped.join(', ')}]`)
+  }
+  if (Object.keys(spec).length === 0) {
+    console.warn('x-search.dependsOn: map has no valid entries; search will not fetch until fixed')
+    return {}
+  }
+  return spec
 }
 
+// Same Resolve.data / parentPath convention as resolveComputedInputs, but keeps per-key
+// unset values (compute short-circuits the whole map) and unwraps search-select { value, label }.
 function resolveDependsOnValues(
   spec: Record<string, string>,
   data: unknown,
@@ -87,22 +104,22 @@ const SearchSelectControl = ({
   const mode = xSearch.mode ?? 'large-paginated-list'
   const modeConfig = MODE_CONFIG[mode]
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
-  const spec = dependsOnSpec(xSearch.dependsOn)
   const ctx = useJsonForms()
   const parentPath = path.split('.').slice(0, -1).join('.')
-  const parentValues = spec ? resolveDependsOnValues(spec, ctx.core?.data, parentPath) : undefined
-  const missingParent = !!parentValues && Object.values(parentValues).some((v) => !v)
-  // stable by contents — parentValues is a new object every render
-  const parentValuesKey = parentValues
-    ? Object.keys(parentValues)
-        .sort()
-        .map((k) => `${k}:${parentValues[k] ?? ''}`)
-        .join('|')
-    : ''
+  // Memoized the same way ComputedControl caches resolveComputedInputs: form-wide data
+  // changes re-render this control even when its own siblings haven't moved.
+  const { parentValues, parentValuesKey, missingParent } = useMemo(() => {
+    const spec = dependsOnSpec(xSearch.dependsOn)
+    if (!spec) return { parentValues: undefined, parentValuesKey: '', missingParent: false }
+    const parentValues = resolveDependsOnValues(spec, ctx.core?.data, parentPath)
+    // Empty spec (invalid map) → never ready. Otherwise wait until every sibling is set.
+    const missingParent = Object.keys(parentValues).length === 0 || Object.values(parentValues).some((v) => !v)
+    return { parentValues, parentValuesKey: JSON.stringify(parentValues), missingParent }
+  }, [xSearch.dependsOn, ctx.core?.data, parentPath])
   const searchParams = useMemo(() => {
     if (!parentValues) return xSearch.params
     return { ...xSearch.params, ...parentValues }
-  }, [parentValuesKey, xSearch.params])
+  }, [parentValues, parentValuesKey, xSearch.params])
   const service = useSearchService(serviceName)
 
   const isObjectMode = schema.type === 'object'

@@ -174,4 +174,99 @@ describe('SearchSelectControl dependsOn', () => {
       expect(latest()?.country == null).toBe(true)
     })
   })
+
+  it('does not clear when a sibling goes from unset to set', async () => {
+    const { latest, writes } = renderForm({ country: 'lk' }, async () => ({
+      options: [{ id: 'lk', name: 'Sri Lanka' }],
+    }))
+
+    const before = writes.length
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'asia' } })
+
+    await waitFor(() => {
+      expect(latest()?.continent).toBe('asia')
+    })
+    expect(latest()?.country).toBe('lk')
+    // continent write only — the clear effect must not also wipe country
+    expect(writes.slice(before).every((w) => w.country === 'lk')).toBe(true)
+  })
+
+  it('merges mapped siblings into fixed x-search.params', async () => {
+    const searches: Array<{ params?: Record<string, unknown> }> = []
+    const schemaWithParams = {
+      type: 'object',
+      properties: {
+        continent: { type: 'string', title: 'Continent' },
+        region: { type: 'string', title: 'Region' },
+        country: {
+          type: 'string',
+          title: 'Country',
+          'x-search': {
+            service: 'countries',
+            mode: 'small-list',
+            dependsOn: { continent: 'continent', region: 'region' },
+            params: { id: 'scientific-names', version: '1' },
+          },
+        },
+      },
+    } as unknown as JsonSchema
+
+    renderForm(
+      { continent: 'asia', region: 'west' },
+      async (args) => {
+        searches.push(args)
+        return { options: [{ id: 'lk', name: 'Sri Lanka' }] }
+      },
+      schemaWithParams,
+      mapUi,
+    )
+
+    fireEvent.focus(screen.getAllByRole('textbox')[2])
+
+    await waitFor(() => {
+      expect(searches.length).toBeGreaterThan(0)
+    })
+    expect(searches[searches.length - 1]?.params).toEqual({
+      id: 'scientific-names',
+      version: '1',
+      continent: 'asia',
+      region: 'west',
+    })
+  })
+
+  it('does not fetch when a dependsOn map has no valid entries', async () => {
+    const searches: unknown[] = []
+    const brokenSchema = {
+      type: 'object',
+      properties: {
+        country: {
+          type: 'string',
+          title: 'Country',
+          'x-search': {
+            service: 'countries',
+            mode: 'small-list',
+            dependsOn: { continent: '', region: 3 },
+          },
+        },
+      },
+    } as unknown as JsonSchema
+    const brokenUi = {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/country' }],
+    } as UISchemaElement
+
+    renderForm(
+      {},
+      async (args) => {
+        searches.push(args)
+        return { options: [{ id: 'lk', name: 'Sri Lanka' }] }
+      },
+      brokenSchema,
+      brokenUi,
+    )
+
+    fireEvent.focus(screen.getByRole('textbox'))
+    expect(await screen.findByText('Select the related field first.')).toBeTruthy()
+    expect(searches).toHaveLength(0)
+  })
 })
