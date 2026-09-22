@@ -54,9 +54,9 @@ export const radixRenderers = [
   // After SpreadsheetControl on purpose: both testers rank 10, and a tie is
   // resolved by registration order (see XmlControlTester's comment).
   { tester: XmlControlTester, renderer: XmlControl },
-  // Also rank 10, and matches the same `x-xml` schema — XmlControlTester's
-  // own `not(optionIs('export', true))` clause is what keeps the two from
-  // colliding on one uischema element (see that tester's comment).
+  // Also rank 10, but matches the distinct `x-xml-export` keyword rather
+  // than `x-xml`, so it never ties with XmlControlTester on the same schema
+  // node (see XmlExportControlTester's own comment).
   { tester: XmlExportControlTester, renderer: XmlExportControl },
   { tester: ComputedControlTester, renderer: ComputedControl },
   { tester: ArrayControlTester, renderer: ArrayControl },

@@ -1,88 +1,21 @@
 # XML export button (`x-xml-export`)
 
-`XmlExportControl` is the reverse of [`XmlControl`](./xml-control.md): instead of parsing an uploaded file into form data, it serializes the data already at its scope into an XML file and downloads it. It's selected the same way every keyword-driven control in this package is — a plain `Control` pointing at a scope whose schema node declares `x-xml-export` — no custom uischema `type` needed.
+`XmlExportControl` is the reverse of [`XmlControl`](./xml-control.md): instead of parsing an uploaded file into form data, it assembles a document from elsewhere in the form and downloads it as XML. It's selected the same way every keyword-driven control in this package is — a plain `Control` pointing at a scope whose schema node declares `x-xml-export` — no custom uischema `type` needed. Unlike most other controls, though, it never reads the data at the scope it's bound to: that scope only hosts this config and places the button, the same way an importer's own field does when `x-xml.writeTo` distributes everything it parses elsewhere.
 
 ## What triggers it
 
-The bound schema node must be `type: 'object'` or `type: 'array'` and declare a (non-null) `x-xml-export` object. `XmlExportControlTester` ranks 10, clearing the rank-3 array renderers outright.
+The bound schema node must be `type: 'object'` and declare a (non-null) `x-xml-export` object. `XmlExportControlTester` ranks 10, clearing the rank-3 array renderers and the default object/Group renderer outright.
 
 ## Options
 
-| Option        | Type      | Default        | Meaning                                                                                           |
-| ------------- | --------- | -------------- | ------------------------------------------------------------------------------------------------- |
-| `rootElement` | `string`  | `'root'`       | Top-level wrapping element name.                                                                  |
-| `itemElement` | `string`  | `'item'`       | Element name per entry — only used when the bound schema is `type: 'array'`.                      |
-| `fileName`    | `string`  | `'export.xml'` | Downloaded file's name.                                                                           |
-| `writeTo`     | `entry[]` | `[]`           | Assemble the document from elsewhere in the form instead of the scoped data verbatim — see below. |
-| `writeBase`   | `string`  | `'root'`       | Where `writeTo`'s `from` paths are resolved from — see below.                                     |
+| Option        | Type      | Default        | Meaning                                                        |
+| ------------- | --------- | -------------- | -------------------------------------------------------------- |
+| `rootElement` | `string`  | `'root'`       | Top-level wrapping element name.                               |
+| `fileName`    | `string`  | `'export.xml'` | Downloaded file's name.                                        |
+| `writeTo`     | `entry[]` | _(required)_   | Assembles the document from elsewhere in the form — see below. |
+| `writeBase`   | `string`  | `'root'`       | Where `writeTo`'s `from` paths are resolved from — see below.  |
 
-## Object scope — export a single subtree
-
-```jsonc
-// schema
-{
-  "type": "object",
-  "properties": {
-    "invoice": {
-      "type": "object",
-      "properties": { "customer": { "type": "string" }, "total": { "type": "number" } },
-      "x-xml-export": { "rootElement": "invoice", "fileName": "invoice.xml" },
-    },
-  },
-}
-```
-
-```jsonc
-// uischema
-{ "type": "Control", "scope": "#/properties/invoice" }
-```
-
-Given `data.invoice = { "customer": "Acme", "total": 1200 }`, clicking the button downloads:
-
-```xml
-<invoice>
-  <customer>Acme</customer>
-  <total>1200</total>
-</invoice>
-```
-
-An array _nested inside_ an object scope (e.g. `invoice.lines`) needs no extra config — the builder already repeats that array's own key as the sibling tag per entry.
-
-**`rootElement` is only added when `data` doesn't already have it.** `data` is wrapped as `{ [rootElement]: data }` UNLESS it's already a single-key object whose one key is exactly `rootElement` — which is precisely what a co-located `XmlControl`'s own value looks like (see below): "the field's value IS the parsed document ... its own root element already names it." Wrapping that again would double the root (`<salesData><salesData>...`) instead of re-exporting the document as uploaded, so it's passed through unwrapped in that one case. This check only applies without `writeTo` — a mapping always assembles a fresh object of its own shape, never one that could coincidentally already be the document.
-
-## Array scope — export a list of records
-
-```jsonc
-// schema
-{
-  "type": "object",
-  "properties": {
-    "orders": {
-      "type": "array",
-      "items": { "type": "object", "properties": { "id": { "type": "string" }, "qty": { "type": "number" } } },
-      "x-xml-export": { "rootElement": "orders", "itemElement": "order", "fileName": "orders.xml" },
-    },
-  },
-}
-```
-
-```jsonc
-// uischema
-{ "type": "Control", "scope": "#/properties/orders" }
-```
-
-Given `data.orders = [{ "id": "1", "qty": 2 }, { "id": "2", "qty": 5 }]`, clicking downloads:
-
-```xml
-<orders>
-  <order><id>1</id><qty>2</qty></order>
-  <order><id>2</id><qty>5</qty></order>
-</orders>
-```
-
-A bare array has no key of its own to repeat, which is why the array case wraps each entry under `itemElement` first, then the whole thing under `rootElement` — unlike the object case, where `data` is wrapped just once.
-
-## Assembling the document from elsewhere (`writeTo`)
+## Assembling the document (`writeTo`)
 
 A target XML format almost never matches the form's own JSON shape: different element names, different nesting, values gathered from parts of the form that have nothing to do with each other. `writeTo` maps values _out of_ the form and _into_ the document being built, the mirror image of [`XmlControl`'s own `writeTo`](./xml-control.md#filling-a-form-from-one-upload-writeto), which maps values out of an uploaded document and into the form.
 
@@ -121,7 +54,7 @@ Given `data = { customer: { name: "Acme" }, total: 120 }`, clicking the button d
 </Invoice>
 ```
 
-Note that `invoiceExport` itself never appears in the output, and is never read from — once `writeTo` is configured, the scoped field is only where the button lives, not a source of data. `scope` still does the two things it always does: places the Control in the uischema tree, and is what `XmlExportControlTester` matches its `x-xml-export` keyword against.
+Note that `invoiceExport` itself never appears in the output, and is never read from — the scoped field is only where the button lives. `scope` still does the two things it always does: places the Control in the uischema tree, and is what `XmlExportControlTester` matches its `x-xml-export` keyword against.
 
 | Key                  | Meaning                                                                              |
 | -------------------- | ------------------------------------------------------------------------------------ |
@@ -158,25 +91,24 @@ Item 2's button now reads item 2's own `id`/`qty`, never item 1's. As with `x-xm
 | `"root"`    | the form data root (default)        |
 | `"parent"`  | the control's own containing object |
 
-## Behavior notes
+## Limitations
 
-- The button reads "Download XML" and is disabled whenever there's nothing worth exporting: without `writeTo`, whenever the scoped `data` is `null`/`undefined`, an empty object, or an empty array; with `writeTo`, the same check runs against whatever `writeTo`'s `from` paths read from instead (root data, or the rebased parent under `writeBase: "parent"`) — a cheap, synchronous stand-in for "is there anything to write" that doesn't require resolving every entry just to render a button.
-- `fast-xml-parser`'s `XMLBuilder` is lazy-imported on click, never at module load — an app whose forms never export XML doesn't pay to download the builder.
-- Output is always pretty-printed (`format: true, indentBy: '  '`) and never emits attributes (`ignoreAttributes: true`) — a download is for a human to read, and exported form data has no `@_`-style attribute keys to worry about.
-- This control never writes to form data. Without `writeTo` it has no error state either: building XML from already-valid in-memory data isn't a realistic failure mode the way parsing an untrusted upload is. With `writeTo`, a formula can still fail against real data (the same way `x-xml.writeTo`'s can) — that failure shows as red text next to the button instead of an uncaught rejection, and nothing downloads. It renders nothing when `visible` is `false`, and otherwise renders for a read-only form exactly as it would for an editable one — exporting isn't an edit.
-
-## Placing it next to another control at the same scope
-
-Unlike `SpreadsheetControl` (whose persisted value has a `sheet` sub-property an export button can point at instead of the parent), `XmlControl`'s whole field _is_ the parsed document — there's no sub-property to give a second control a different scope. To show "here's what was uploaded, and here's a re-export of it" side by side, use **two** `Control` elements at the identical `scope`, and mark the second one with `options: { export: true }`:
+`writeTo` gathers **one value from one `from` path into one `to` path** — it has no way to reach inside an array's own elements and rename their fields. When `from` resolves to an array (e.g. a `SpreadsheetControl`-backed set of line-item records), it's carried through to `to` **verbatim**, original field names and all — there's no per-element remapping.
 
 ```jsonc
-// uischema.elements
-[
-  { "type": "Control", "scope": "#/properties/sales_data" },
-  { "type": "Control", "scope": "#/properties/sales_data", "options": { "export": true } },
-]
+{ "from": "lines.sheet", "to": "Lines.Line" }
 ```
 
-Without the `export` option, both elements would resolve to the same renderer — `XmlControlTester` and `XmlExportControlTester` are both schema-only testers at rank 10, so two elements at the same scope would tie and @jsonforms/react's tie-break (registration order) would render the **same** control for both. `XmlControlTester` carries an additive `not(optionIs('export', true))` clause specifically so it steps aside for the element marked this way, letting `XmlExportControlTester` win only that one. This is a supported, documented pattern — not a fixture-only trick — for pairing an upload control with a "download what's here" button on the same field.
+If `lines.sheet` holds `[{ "sku": "A-1", "qty": 10 }]`, the output is `<Lines><Line><sku>A-1</sku><qty>10</qty></Line></Lines>` — not `<SKU>`/`<Quantity>`, even if that's what the target format needs. There is currently no way to express "for each element in this array, also rename its own fields."
 
-Set `rootElement` to the actual root tag of whatever `XmlControl` uploads (e.g. `rootElement: 'salesData'` for a document rooted at `<salesData>`). Because of the "already has its own root" rule above, the export button then re-exports exactly what was parsed — a **round trip**, matching the parsed tree, not a second wrapper added on top of it. It's a round trip rather than a byte-identical copy: attribute/namespace handling differs between `fast-xml-parser`'s parse and build directions.
+**Workaround:** configure the naming further upstream, at the source of the array — e.g. `SpreadsheetControl`'s own `x-spreadsheet.columns[].id` — so the _stored_ records already use the names the export needs. `writeTo` then passes them through already correct.
+
+This is a real gap for the common "repeated line items with renamed elements" case, tracked as follow-up work in a separate issue.
+
+## Behavior notes
+
+- The button reads "Download XML." A missing, non-array, or empty `writeTo` is a config error, shown as a red inline box (`Invalid x-xml-export config: …`) in place of the button — checked before anything else renders, the same "config problem vs. runtime problem" split `SpreadsheetControl` follows for its own `x-spreadsheet.columns`/`rows`.
+- Past that, the button is disabled whenever there's nothing worth exporting: the data `writeTo`'s `from` paths read from (root data, or the rebased parent under `writeBase: "parent"`) is `null`/`undefined`, an empty object, or an empty array — a cheap, synchronous stand-in for "is there anything to write" that doesn't require resolving every entry (formula evaluation is async) just to render a button.
+- `fast-xml-parser`'s `XMLBuilder` is lazy-imported on click, never at module load — an app whose forms never export XML doesn't pay to download the builder.
+- Output is always pretty-printed (`format: true, indentBy: '  '`) and never emits attributes (`ignoreAttributes: true`) — a download is for a human to read, and exported form data has no `@_`-style attribute keys to worry about.
+- This control never writes to form data. A formula that fails against real data shows as red text next to the button instead of an uncaught rejection, and nothing downloads. It renders nothing when `visible` is `false`, and otherwise renders for a read-only form exactly as it would for an editable one — exporting isn't an edit.
