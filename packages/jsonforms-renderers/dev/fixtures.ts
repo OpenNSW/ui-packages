@@ -261,6 +261,59 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'search-select-depends-on-map',
+    name: 'Search Select (Depends on several siblings)',
+    schema: {
+      type: 'object',
+      properties: {
+        continent: {
+          type: 'string',
+          description:
+            'First sibling. Sent as params.continent (map key), not params.parent — contrast with the string dependsOn fixture above.',
+          oneOf: [
+            { const: 'asia', title: 'Asia' },
+            { const: 'europe', title: 'Europe' },
+            { const: 'oceania', title: 'Oceania' },
+            { const: 'north-america', title: 'North America' },
+          ],
+        },
+        size: {
+          type: 'string',
+          description: 'Second sibling. Sent as params.size. Country stays gated until both siblings are set.',
+          oneOf: [
+            { const: 'large', title: 'Large' },
+            { const: 'small', title: 'Small' },
+          ],
+        },
+        country: {
+          type: 'string',
+          description:
+            'x-search.dependsOn as a map: { continent: "continent", size: "size" }. Opens with ' +
+            '"Select the related field first." until both are set; then the list is filtered by both. ' +
+            'Changing either sibling that already had a value clears this field.',
+          'x-search': {
+            service: 'countries',
+            mode: 'small-list',
+            dependsOn: { continent: 'continent', size: 'size' },
+          },
+        },
+      },
+      required: ['continent', 'size', 'country'],
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/continent' },
+        { type: 'Control', scope: '#/properties/size' },
+        {
+          type: 'Control',
+          scope: '#/properties/country',
+          options: { placeholder: 'Pick a country…' },
+        },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'search-select-object',
     name: 'Search Select (Object shape)',
     schema: {
