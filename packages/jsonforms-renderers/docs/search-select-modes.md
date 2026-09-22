@@ -72,6 +72,12 @@ value is set, the dropdown shows "Select the related field first." instead of fe
 }
 ```
 
+A string `dependsOn: "commodity_common_name"` is the same as
+`{ "parent": "commodity_common_name" }`. For more than one live filter, use a map of
+query-param name → sibling property (`dependsOn: { "commodity": "commodity_common_name", "origin": "country" }`).
+Fetching waits until every listed sibling has a value; changing any sibling that already
+had a value clears this field.
+
 ## The three modes
 
 | mode                    | fetch on open | typing          | pagination  |

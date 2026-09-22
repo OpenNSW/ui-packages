@@ -16,8 +16,8 @@ interface XSearchOptions {
   // fixed extra arguments forwarded to the service's search/resolve calls — lets one registered service back
   // several fields hitting the same endpoint with different filters (e.g. category: 'books' vs category: 'movies')
   params?: Record<string, unknown>
-  // sibling property name; its current value is sent to the service as params.parent
-  dependsOn?: string
+  // sibling property name (sent as params.parent), or param-key → sibling property for several live filters
+  dependsOn?: string | Record<string, string>
 }
 
 function dependsOnConst(raw: unknown): string | undefined {
@@ -27,6 +27,46 @@ function dependsOnConst(raw: unknown): string | undefined {
     return v.length > 0 ? v : undefined
   }
   return undefined
+}
+
+// string form is the original one-sibling API: dependsOn: "commodity" → { parent: "commodity" }.
+// An empty object means the map was declared but had no usable entries — still "configured",
+// so the control gates forever instead of treating dependsOn as absent and fetching immediately.
+function dependsOnSpec(raw: XSearchOptions['dependsOn']): Record<string, string> | undefined {
+  if (typeof raw === 'string') return raw.length > 0 ? { parent: raw } : undefined
+  if (!raw || typeof raw !== 'object') return undefined
+
+  const entries = Object.entries(raw)
+  if (entries.length === 0) return undefined
+
+  const spec: Record<string, string> = {}
+  const dropped: string[] = []
+  for (const [key, sibling] of entries) {
+    if (typeof sibling === 'string' && sibling.length > 0) spec[key] = sibling
+    else dropped.push(key)
+  }
+  if (dropped.length > 0) {
+    console.warn(`x-search.dependsOn: ignoring invalid entries [${dropped.join(', ')}]`)
+  }
+  if (Object.keys(spec).length === 0) {
+    console.warn('x-search.dependsOn: map has no valid entries; search will not fetch until fixed')
+    return {}
+  }
+  return spec
+}
+
+// Same Resolve.data / parentPath convention as resolveComputedInputs, but keeps per-key
+// unset values (compute short-circuits the whole map) and unwraps search-select { value, label }.
+function resolveDependsOnValues(
+  spec: Record<string, string>,
+  data: unknown,
+  parentPath: string,
+): Record<string, string | undefined> {
+  const values: Record<string, string | undefined> = {}
+  for (const [paramKey, siblingProp] of Object.entries(spec)) {
+    values[paramKey] = dependsOnConst(Resolve.data(data, parentPath ? `${parentPath}.${siblingProp}` : siblingProp))
+  }
+  return values
 }
 
 // shape of `data` for an object-typed `x-search` field (`type: "object"`); string-typed fields keep `data` as the raw id
@@ -64,16 +104,22 @@ const SearchSelectControl = ({
   const mode = xSearch.mode ?? 'large-paginated-list'
   const modeConfig = MODE_CONFIG[mode]
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
-  const dependsOnProp = xSearch.dependsOn
   const ctx = useJsonForms()
   const parentPath = path.split('.').slice(0, -1).join('.')
-  const parentValue = dependsOnProp
-    ? dependsOnConst(Resolve.data(ctx.core?.data, parentPath ? `${parentPath}.${dependsOnProp}` : dependsOnProp))
-    : undefined
+  // Memoized the same way ComputedControl caches resolveComputedInputs: form-wide data
+  // changes re-render this control even when its own siblings haven't moved.
+  const { parentValues, parentValuesKey, missingParent } = useMemo(() => {
+    const spec = dependsOnSpec(xSearch.dependsOn)
+    if (!spec) return { parentValues: undefined, parentValuesKey: '', missingParent: false }
+    const parentValues = resolveDependsOnValues(spec, ctx.core?.data, parentPath)
+    // Empty spec (invalid map) → never ready. Otherwise wait until every sibling is set.
+    const missingParent = Object.keys(parentValues).length === 0 || Object.values(parentValues).some((v) => !v)
+    return { parentValues, parentValuesKey: JSON.stringify(parentValues), missingParent }
+  }, [xSearch.dependsOn, ctx.core?.data, parentPath])
   const searchParams = useMemo(() => {
-    if (!dependsOnProp) return xSearch.params
-    return { ...xSearch.params, parent: parentValue }
-  }, [dependsOnProp, xSearch.params, parentValue])
+    if (!parentValues) return xSearch.params
+    return { ...xSearch.params, ...parentValues }
+  }, [parentValues, parentValuesKey, xSearch.params])
   const service = useSearchService(serviceName)
 
   const isObjectMode = schema.type === 'object'
@@ -112,16 +158,18 @@ const SearchSelectControl = ({
   const containerRef = useRef<HTMLDivElement>(null)
   // tracks which value+label has already been resolved so the effect doesn't re-run when selectedOption changes
   const lastResolvedRef = useRef<{ value: string; label?: string } | undefined>(undefined)
-  const lastParentRef = useRef<string | undefined>(undefined)
+  const lastParentRef = useRef<Record<string, string | undefined> | undefined>(undefined)
 
   useEffect(() => {
-    if (!dependsOnProp) return
+    if (!parentValues) return
     const prev = lastParentRef.current
-    lastParentRef.current = parentValue
-    if (prev !== undefined && prev !== parentValue && currentValue) {
-      handleChange(path, isObjectMode ? undefined : null)
-    }
-  }, [dependsOnProp, parentValue, currentValue, handleChange, path, isObjectMode])
+    lastParentRef.current = parentValues
+    if (!prev || !currentValue) return
+    // same rule as the original single-sibling check: only a previously-set value
+    // changing (including to unset) clears; going from unset → set does not
+    const changed = Object.keys(parentValues).some((k) => prev[k] !== undefined && prev[k] !== parentValues[k])
+    if (changed) handleChange(path, isObjectMode ? undefined : null)
+  }, [parentValuesKey, currentValue, handleChange, path, isObjectMode])
 
   useEffect(() => {
     if (!currentValue) {
@@ -233,7 +281,7 @@ const SearchSelectControl = ({
   useEffect(() => {
     if (!open) return
 
-    if (dependsOnProp && !parentValue) {
+    if (missingParent) {
       setOptions([])
       setHasMore(false)
       setError(null)
@@ -261,7 +309,7 @@ const SearchSelectControl = ({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [inputValue, open, fetchOnOpen, runSearch, dependsOnProp, parentValue])
+  }, [inputValue, open, fetchOnOpen, runSearch, missingParent, parentValuesKey])
 
   // `undefined` in both modes — the scalar branch used to clear with `null`,
   // but the underlying schema is `type: 'string'` there, which null doesn't
@@ -395,7 +443,7 @@ const SearchSelectControl = ({
                     {!loading && !error && options.length === 0 && (
                       <Box px="3" py="2">
                         <Text size="2" color="gray">
-                          {dependsOnProp && !parentValue
+                          {missingParent
                             ? 'Select the related field first.'
                             : inputValue || fetchOnOpen
                               ? 'No results found.'
