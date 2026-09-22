@@ -31,9 +31,10 @@ export const ArrayControl = ({
 
   const items = Array.isArray(data) ? data : []
   const title = actualArraySchema.title || 'Array Items'
-  const options = (uischema.options ?? {}) as { addable?: boolean; removable?: boolean }
+  const options = (uischema.options ?? {}) as { addable?: boolean; removable?: boolean; itemLabel?: string }
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
+  const itemLabel = options.itemLabel || 'Item'
 
   const handleAddItem = () => {
     const newItem = createDefaultValue(validItemsSchema, rootSchema)
@@ -69,7 +70,7 @@ export const ArrayControl = ({
               <Flex direction="column" gap="4">
                 <Flex justify="between" align="center">
                   <Text size="3" weight="bold">
-                    Item {index + 1}
+                    {itemLabel} {index + 1}
                   </Text>
                   {canRemove && (
                     <Button

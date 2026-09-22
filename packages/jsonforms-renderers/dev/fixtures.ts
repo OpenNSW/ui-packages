@@ -924,6 +924,43 @@ export const fixtures: Fixture[] = [
     data: { items: [{ description: 'First item', qty: 1 }] },
   },
   {
+    id: 'array-item-label',
+    name: 'Array (itemLabel)',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          description: 'Same as Array (objects), with options.itemLabel so cards read Container N instead of Item N',
+          items: {
+            type: 'object',
+            properties: {
+              description: { type: 'string' },
+              qty: { type: 'integer', minimum: 1 },
+            },
+            required: ['description'],
+          },
+        },
+      },
+    },
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/items',
+          options: { itemLabel: 'Container' },
+        },
+      ],
+    } as UISchemaElement,
+    data: {
+      items: [
+        { description: 'First item', qty: 1 },
+        { description: 'Second item', qty: 2 },
+      ],
+    },
+  },
+  {
     id: 'horizontal',
     name: 'Horizontal layout',
     schema: {
