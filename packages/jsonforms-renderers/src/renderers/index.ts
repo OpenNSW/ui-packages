@@ -21,6 +21,8 @@ import FileControl from './FileControl'
 import { FileControlTester } from './FileControlTester'
 import SpreadsheetControl from './SpreadsheetControl'
 import { SpreadsheetControlTester } from './SpreadsheetControlTester'
+import SpreadsheetExportControl from './SpreadsheetExportControl'
+import { SpreadsheetExportControlTester } from './SpreadsheetExportControlTester'
 import XmlControl from './XmlControl'
 import { XmlControlTester } from './XmlControlTester'
 import ComputedControl from './ComputedControl'
@@ -46,6 +48,7 @@ export const radixRenderers = [
   { tester: CategorizationLayoutTester, renderer: CategorizationLayoutRenderer },
   { tester: FileControlTester, renderer: FileControl },
   { tester: SpreadsheetControlTester, renderer: SpreadsheetControl },
+  { tester: SpreadsheetExportControlTester, renderer: SpreadsheetExportControl },
   // After SpreadsheetControl on purpose: both testers rank 10, and a tie is
   // resolved by registration order (see XmlControlTester's comment).
   { tester: XmlControlTester, renderer: XmlControl },
@@ -67,6 +70,8 @@ export { default as FileControl } from './FileControl'
 export * from './FileControlTester'
 export { default as SpreadsheetControl } from './SpreadsheetControl'
 export * from './SpreadsheetControlTester'
+export { default as SpreadsheetExportControl } from './SpreadsheetExportControl'
+export * from './SpreadsheetExportControlTester'
 export { default as XmlControl } from './XmlControl'
 export * from './XmlControlTester'
 export { default as ComputedControl } from './ComputedControl'

@@ -346,7 +346,7 @@ export const fixtures: Fixture[] = [
         budget: {
           type: 'object',
           description:
-            "Upload dev/sample-files/spreadsheet-sample.xlsx (regenerate via generate-spreadsheet-sample.cjs) — a tea-auction report with data in rows 2-6, columns A (Date of Sale), B (Sale Code), C (BR Code), D (Lot No), E (Inv No), F (Garden Mark), G (Grade), H (Rate per KG), I (Qty in KG), J (Total Value Rs). The x-evaluate entries below exercise all 5 original functions (SUM/AVERAGE/MIN/MAX/COUNT) plus arithmetic, a nested function call, and multi-range pooling — the v2 additions (ROUND, IF, INDEX/MATCH, CONCATENATE) — and the fast-formula-parser + formulajs rewrite's expanded coverage: VLOOKUP, COUNTA, AND, and TEXTJOIN. Toggle x-spreadsheet.columnHeader/rowHeader to show row 1 / column A as headers instead of A/B/C, 1/2/3 — formulas still address raw cell coordinates either way. Set showSheet: false to hide the grid entirely and show only the computed values. Set sheetName to a sheet name to read a specific tab instead of the first one.",
+            "Upload dev/sample-files/spreadsheet-sample.xlsx (regenerate via generate-spreadsheet-sample.cjs) — a tea-auction report with data in rows 2-6, columns A (Date of Sale), B (Sale Code), C (BR Code), D (Lot No), E (Inv No), F (Garden Mark), G (Grade), H (Rate per KG), I (Qty in KG), J (Total Value Rs). The x-evaluate entries below exercise all 5 original functions (SUM/AVERAGE/MIN/MAX/COUNT) plus arithmetic, a nested function call, and multi-range pooling — the v2 additions (ROUND, IF, INDEX/MATCH, CONCATENATE) — and the fast-formula-parser + formulajs rewrite's expanded coverage: VLOOKUP, COUNTA, AND, and TEXTJOIN. Toggle x-spreadsheet.columnHeader/rowHeader to show row 1 / column A as headers instead of A/B/C, 1/2/3 — formulas still address raw cell coordinates either way. Set showSheet: false to hide the grid entirely and show only the computed values. Set sheetName to a sheet name to read a specific tab instead of the first one. The Download Spreadsheet button below the grid (x-spreadsheet-export, on the nested budget.sheet field) re-exports whatever this control persisted at data.budget.sheet — with columnHeader/rowHeader both false here, that's the plain matrix path, not the records path, so x-spreadsheet-export.columns isn't set on this fixture (it only relabels a records sheet's header row; a matrix has no header row to relabel).",
           'x-spreadsheet': {
             accept: '.xlsx,.xls,.csv',
             maxSize: 10485760,
@@ -413,7 +413,7 @@ export const fixtures: Fixture[] = [
             },
           ],
           properties: {
-            sheet: { type: 'array' },
+            sheet: { type: 'array', 'x-spreadsheet-export': { fileName: 'budget-reexport.xlsx' } },
             // Keyed by each x-evaluate entry's id (see SpreadsheetValue),
             // not an array — must stay in lockstep with that type whenever
             // the persist shape changes again, or AJV rejects an otherwise
@@ -436,7 +436,10 @@ export const fixtures: Fixture[] = [
     } as unknown as JsonSchema,
     uischema: {
       type: 'VerticalLayout',
-      elements: [{ type: 'Control', scope: '#/properties/budget' }],
+      elements: [
+        { type: 'Control', scope: '#/properties/budget' },
+        { type: 'Control', scope: '#/properties/budget/properties/sheet' },
+      ],
     } as UISchemaElement,
   },
   {
@@ -627,6 +630,45 @@ export const fixtures: Fixture[] = [
       type: 'VerticalLayout',
       elements: [{ type: 'Control', scope: '#/properties/stock' }],
     } as UISchemaElement,
+  },
+  {
+    id: 'spreadsheet-export-records',
+    name: 'Spreadsheet Export (records)',
+    schema: {
+      type: 'object',
+      properties: {
+        salesRows: {
+          type: 'array',
+          description:
+            "The x-spreadsheet-export issue #65 example, verbatim — a plain records array (not a SpreadsheetControl field; there's no upload/x-spreadsheet here at all) with a declared columns id/label list. Edit the data pane's salesRows array and click Download Spreadsheet: the workbook's header row should read the declared labels (Date of Sale, Amount), not the raw ids, and the column ORDER should match the declared list regardless of each record's own key order. Contrast with the 'Spreadsheet' fixture's Download Spreadsheet button below its upload, which re-exports whatever matrix SpreadsheetControl itself persisted — this fixture exercises the records+columns path standalone, the one the 'Spreadsheet' fixture's columnHeader: false data never touches.",
+          items: {
+            type: 'object',
+            properties: {
+              date: { type: 'string' },
+              amount: { type: 'number' },
+            },
+          },
+          'x-spreadsheet-export': {
+            columns: [
+              { id: 'date', label: 'Date of Sale' },
+              { id: 'amount', label: 'Amount' },
+            ],
+            sheetName: 'Sales',
+            fileName: 'sales-export.xlsx',
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/salesRows' }],
+    } as UISchemaElement,
+    data: {
+      salesRows: [
+        { date: '2026-09-01', amount: 120 },
+        { date: '2026-09-02', amount: 80 },
+      ],
+    },
   },
   {
     id: 'xml',
