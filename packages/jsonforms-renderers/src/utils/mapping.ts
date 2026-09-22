@@ -122,10 +122,10 @@ async function resolveOne(document: unknown, entry: WriteToEntry): Promise<Resol
     try {
       return found(await evaluateFormulaWithVariables(variables, entry.formula))
     } catch (err) {
-      throw new Error(`x-xml.writeTo "${entry.to}": ${describeFormulaError(err)}`)
+      throw new Error(`writeTo "${entry.to}": ${describeFormulaError(err)}`)
     }
   }
-  if (entry.from === undefined) throw new Error(`x-xml.writeTo "${entry.to}" needs either "from" or "formula".`)
+  if (entry.from === undefined) throw new Error(`writeTo "${entry.to}" needs either "from" or "formula".`)
   return present(Resolve.data(document, entry.from))
 }
 
