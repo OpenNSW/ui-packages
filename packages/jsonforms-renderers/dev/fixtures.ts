@@ -348,6 +348,56 @@ export const fixtures: Fixture[] = [
     data: { country: { value: 'au', label: 'Australia' } },
   },
   {
+    id: 'search-select-templates',
+    name: 'Search Select (Display / value templates)',
+    schema: {
+      type: 'object',
+      properties: {
+        countryDefault: {
+          type: 'string',
+          description: 'No templates — dropdown shows the service name, stores the service id.',
+          'x-search': { service: 'countries', mode: 'large-searchable-list' },
+        },
+        countryTemplated: {
+          type: 'object',
+          description:
+            'displayTemplate "{const}-{title}" is the dropdown label; valueTemplate "{const}" is stored as value. ' +
+            'The countries service attaches source { const, title } so those tokens resolve. Clear and re-pick to see both fields.',
+          'x-search': {
+            service: 'countries',
+            mode: 'large-searchable-list',
+            displayTemplate: '{const}-{title}',
+            valueTemplate: '{const}',
+          },
+          properties: {
+            value: { type: 'string', minLength: 1 },
+            label: { type: 'string' },
+          },
+          required: ['value'],
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/countryDefault',
+          options: { placeholder: 'Service default…' },
+        },
+        {
+          type: 'Control',
+          scope: '#/properties/countryTemplated',
+          options: { placeholder: 'Templated {const}-{title}…' },
+        },
+      ],
+    } as UISchemaElement,
+    data: {
+      countryDefault: 'au',
+      countryTemplated: { value: 'au', label: 'au-Australia' },
+    },
+  },
+  {
     id: 'date',
     name: 'Date / Time',
     schema: {

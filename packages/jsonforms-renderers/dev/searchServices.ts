@@ -19,6 +19,12 @@ const COUNTRIES: (SearchOption & { continent: string; size: 'large' | 'small' })
 
 const PAGE_SIZE = 5
 
+function toSearchOption(c: (typeof COUNTRIES)[number]): SearchOption {
+  // const/title mirror a static_data row so displayTemplate/valueTemplate fixtures
+  // can use the same tokens a deployer would write in an artifact (`{const}-{title}`).
+  return { id: c.id, name: c.name, source: { const: c.id, title: c.name } }
+}
+
 export const searchServices: SearchServiceRegistry = {
   countries: {
     // Live sibling filters arrive via x-search.dependsOn:
@@ -40,15 +46,16 @@ export const searchServices: SearchServiceRegistry = {
       // An empty query means "browse everything" — the only fetch small-list ever makes, and
       // large-searchable-list's initial one. Neither mode renders "Load more", so paging here would hide
       // items with no way to reach them. Only page once there's an actual query, like a real search API would.
-      if (!query) return { options: matches, nextCursor: undefined }
+      if (!query) return { options: matches.map(toSearchOption), nextCursor: undefined }
 
       const offset = typeof cursor === 'number' ? cursor : 0
       const page = matches.slice(offset, offset + PAGE_SIZE)
       const nextOffset = offset + PAGE_SIZE
-      return { options: page, nextCursor: nextOffset < matches.length ? nextOffset : undefined }
+      return { options: page.map(toSearchOption), nextCursor: nextOffset < matches.length ? nextOffset : undefined }
     },
     async resolve(value) {
-      return COUNTRIES.find((c) => c.id === value)
+      const match = COUNTRIES.find((c) => c.id === value)
+      return match ? toSearchOption(match) : undefined
     },
   },
 }
