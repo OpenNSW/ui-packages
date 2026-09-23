@@ -195,6 +195,11 @@ const SearchSelectControl = ({
   }, [parentValuesKey, currentValue, handleChange, path, isObjectMode])
 
   useEffect(() => {
+    if (configError) {
+      setSelectedOption(undefined)
+      lastResolvedRef.current = undefined
+      return
+    }
     if (!currentValue) {
       setSelectedOption(undefined)
       lastResolvedRef.current = undefined
@@ -225,10 +230,11 @@ const SearchSelectControl = ({
     return () => {
       cancelled = true
     }
-  }, [currentValue, currentLabel, isObjectMode, service, searchParams, displayTemplate])
+  }, [configError, currentValue, currentLabel, isObjectMode, service, searchParams, displayTemplate])
 
   const runSearch = useCallback(
     async (q: string, isLoadMore = false) => {
+      if (configError) return
       if (!service) {
         setError('Search service not configured.')
         return
@@ -274,7 +280,7 @@ const SearchSelectControl = ({
         }
       }
     },
-    [service, modeConfig?.paginated, searchParams, displayTemplate],
+    [configError, service, modeConfig?.paginated, searchParams, displayTemplate],
   )
 
   useEffect(() => {

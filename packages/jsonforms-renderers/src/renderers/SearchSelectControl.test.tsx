@@ -44,6 +44,7 @@ function renderForm(
   formUi: UISchemaElement = uischema,
 ) {
   const writes: Data[] = []
+  const resolves: string[] = []
   let live = true
   finishers.push(() => {
     live = false
@@ -53,6 +54,7 @@ function renderForm(
     countries: {
       search,
       async resolve(value: string) {
+        resolves.push(value)
         return { id: value, name: value }
       },
     },
@@ -78,7 +80,7 @@ function renderForm(
   }
 
   render(<Harness />)
-  return { writes, latest: () => writes[writes.length - 1] }
+  return { writes, latest: () => writes[writes.length - 1], resolves }
 }
 
 describe('SearchSelectControl dependsOn', () => {
@@ -308,6 +310,30 @@ describe('SearchSelectControl displayTemplate', () => {
     fireEvent.focus(screen.getByRole('textbox'))
     expect(await screen.findByText('x-search.displayTemplate is required.')).toBeTruthy()
     expect(screen.queryByText('ALTHEIMER')).toBeNull()
+    expect(searches).toHaveLength(0)
+  })
+
+  it('does not resolve a stored value when displayTemplate is omitted', async () => {
+    const formSchema = {
+      type: 'object',
+      properties: {
+        port: {
+          type: 'string',
+          title: 'Port',
+          'x-search': { service: 'countries', mode: 'small-list' },
+        },
+      },
+    } as unknown as JsonSchema
+
+    const { resolves } = renderForm(
+      { port: 'USTMR' },
+      async () => ({ options: [portOption] }),
+      formSchema,
+      stringUi,
+    )
+
+    await screen.findByRole('textbox')
+    expect(resolves).toHaveLength(0)
   })
 
   it('shows displayTemplate in the dropdown and stores the service id', async () => {
