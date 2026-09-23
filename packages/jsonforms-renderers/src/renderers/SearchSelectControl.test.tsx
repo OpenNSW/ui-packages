@@ -325,12 +325,7 @@ describe('SearchSelectControl displayTemplate', () => {
       },
     } as unknown as JsonSchema
 
-    const { resolves } = renderForm(
-      { port: 'USTMR' },
-      async () => ({ options: [portOption] }),
-      formSchema,
-      stringUi,
-    )
+    const { resolves } = renderForm({ port: 'USTMR' }, async () => ({ options: [portOption] }), formSchema, stringUi)
 
     await screen.findByRole('textbox')
     expect(resolves).toHaveLength(0)
