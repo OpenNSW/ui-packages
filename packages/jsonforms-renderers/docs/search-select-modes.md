@@ -96,9 +96,9 @@ tokens resolve. Either key may be omitted — that side stays on the service def
       "mode": "large-paginated-list",
       "displayTemplate": "{const}-{title}",
       "valueTemplate": "{const}",
-      "params": { "id": "port-of-entry", "version": "1" }
-    }
-  }
+      "params": { "id": "port-of-entry", "version": "1" },
+    },
+  },
 }
 ```
 
