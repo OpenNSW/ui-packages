@@ -206,6 +206,8 @@ const SearchSelectControl = ({
       lastResolvedRef.current = undefined
       return
     }
+    const templateChanged =
+      lastResolvedRef.current !== undefined && lastResolvedRef.current.displayTemplate !== displayTemplate
     if (
       lastResolvedRef.current?.value === currentValue &&
       lastResolvedRef.current?.label === currentLabel &&
@@ -215,8 +217,9 @@ const SearchSelectControl = ({
     // mark as resolving immediately — prevents re-runs if resolve is absent, rejects, or returns undefined
     lastResolvedRef.current = { value: currentValue, label: currentLabel, displayTemplate }
 
-    // object-shaped fields already carry the label from submission time — no need to re-resolve it
-    if (isObjectMode && currentLabel) {
+    // object-shaped fields already carry the label from submission time — no need to re-resolve it.
+    // A new display-template has to go through resolve so presentOption can rebuild that label.
+    if (isObjectMode && currentLabel && !templateChanged) {
       setSelectedOption({ id: currentValue, name: currentLabel })
       return
     }

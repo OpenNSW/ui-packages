@@ -441,4 +441,60 @@ describe('SearchSelectControl display-template', () => {
       expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('USTMR-ALTHEIMER')
     })
   })
+
+  it('re-presents an object field label when display-template changes', async () => {
+    const xSearch = { service: 'countries', mode: 'small-list', 'display-template': '{name}' }
+    function schemaWith(template: string) {
+      return {
+        type: 'object',
+        properties: {
+          port: {
+            type: 'object',
+            title: 'Port',
+            'x-search': { ...xSearch, 'display-template': template },
+            properties: {
+              value: { type: 'string' },
+              label: { type: 'string' },
+            },
+            required: ['value'],
+          },
+        },
+      } as unknown as JsonSchema
+    }
+
+    function Harness() {
+      const [formSchema, setFormSchema] = useState(schemaWith('{name}'))
+      return (
+        <Theme>
+          <button type="button" onClick={() => setFormSchema(schemaWith('{id}-{name}'))}>
+            retarget
+          </button>
+          <SearchServiceProvider
+            services={{
+              countries: {
+                search: () => Promise.resolve({ options: [portOption] }),
+                resolve: () => Promise.resolve(portOption),
+              },
+            }}
+          >
+            <JsonForms
+              schema={formSchema}
+              uischema={stringUi}
+              data={{ port: { value: 'USTMR', label: 'ALTHEIMER' } }}
+              renderers={radixRenderers}
+            />
+          </SearchServiceProvider>
+        </Theme>
+      )
+    }
+
+    render(<Harness />)
+    await waitFor(() => {
+      expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('ALTHEIMER')
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'retarget' }))
+    await waitFor(() => {
+      expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('USTMR-ALTHEIMER')
+    })
+  })
 })
