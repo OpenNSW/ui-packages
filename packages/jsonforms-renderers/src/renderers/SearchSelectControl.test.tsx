@@ -393,4 +393,52 @@ describe('SearchSelectControl displayTemplate', () => {
       expect(latest()?.port).toEqual({ value: 'USTMR', label: 'USTMR-ALTHEIMER' })
     })
   })
+
+  it('re-presents the selected label when displayTemplate changes', async () => {
+    const xSearch = { service: 'countries', mode: 'small-list', displayTemplate: '{name}' }
+    function schemaWith(template: string) {
+      return {
+        type: 'object',
+        properties: {
+          port: {
+            type: 'string',
+            title: 'Port',
+            'x-search': { ...xSearch, displayTemplate: template },
+          },
+        },
+      } as unknown as JsonSchema
+    }
+
+    function Harness() {
+      const [formSchema, setFormSchema] = useState(schemaWith('{name}'))
+      return (
+        <Theme>
+          <button type="button" onClick={() => setFormSchema(schemaWith('{id}-{name}'))}>
+            retarget
+          </button>
+          <SearchServiceProvider
+            services={{
+              countries: {
+                search: async () => ({ options: [portOption] }),
+                async resolve() {
+                  return portOption
+                },
+              },
+            }}
+          >
+            <JsonForms schema={formSchema} uischema={stringUi} data={{ port: 'USTMR' }} renderers={radixRenderers} />
+          </SearchServiceProvider>
+        </Theme>
+      )
+    }
+
+    render(<Harness />)
+    await waitFor(() => {
+      expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('ALTHEIMER')
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'retarget' }))
+    await waitFor(() => {
+      expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('USTMR-ALTHEIMER')
+    })
+  })
 })

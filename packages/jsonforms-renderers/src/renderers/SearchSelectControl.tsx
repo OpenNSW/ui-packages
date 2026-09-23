@@ -179,8 +179,9 @@ const SearchSelectControl = ({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  // tracks which value+label has already been resolved so the effect doesn't re-run when selectedOption changes
-  const lastResolvedRef = useRef<{ value: string; label?: string } | undefined>(undefined)
+  // tracks which value+label+template has already been resolved so the effect
+  // re-runs when displayTemplate changes and presentOption can refresh the label
+  const lastResolvedRef = useRef<{ value: string; label?: string; displayTemplate: string } | undefined>(undefined)
   const lastParentRef = useRef<Record<string, string | undefined> | undefined>(undefined)
 
   useEffect(() => {
@@ -205,9 +206,14 @@ const SearchSelectControl = ({
       lastResolvedRef.current = undefined
       return
     }
-    if (lastResolvedRef.current?.value === currentValue && lastResolvedRef.current?.label === currentLabel) return
+    if (
+      lastResolvedRef.current?.value === currentValue &&
+      lastResolvedRef.current?.label === currentLabel &&
+      lastResolvedRef.current?.displayTemplate === displayTemplate
+    )
+      return
     // mark as resolving immediately — prevents re-runs if resolve is absent, rejects, or returns undefined
-    lastResolvedRef.current = { value: currentValue, label: currentLabel }
+    lastResolvedRef.current = { value: currentValue, label: currentLabel, displayTemplate }
 
     // object-shaped fields already carry the label from submission time — no need to re-resolve it
     if (isObjectMode && currentLabel) {
@@ -363,7 +369,11 @@ const SearchSelectControl = ({
     handleChange(path, isObjectMode ? { value: option.id, label: option.name } : option.id)
     setSelectedOption(option)
     // prevent resolve effect from re-running for the just-selected value
-    lastResolvedRef.current = { value: option.id, label: isObjectMode ? option.name : undefined }
+    lastResolvedRef.current = {
+      value: option.id,
+      label: isObjectMode ? option.name : undefined,
+      displayTemplate,
+    }
     setOpen(false)
   }
 
