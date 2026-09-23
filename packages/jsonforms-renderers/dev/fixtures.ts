@@ -253,7 +253,12 @@ export const fixtures: Fixture[] = [
           description:
             'x-search.dependsOn: continent. Opens with "Select the related field first." until a continent is set; ' +
             'then the countries list is filtered to that continent. Changing continent clears this field.',
-          'x-search': { service: 'countries', mode: 'small-list', dependsOn: 'continent', 'display-template': '{name}' },
+          'x-search': {
+            service: 'countries',
+            mode: 'small-list',
+            dependsOn: 'continent',
+            'display-template': '{name}',
+          },
         },
       },
       required: ['continent', 'country'],

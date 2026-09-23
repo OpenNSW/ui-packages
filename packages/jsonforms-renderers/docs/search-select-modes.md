@@ -100,22 +100,22 @@ instead of fetching.
 
 ```jsonc
 {
-  "importing_country": {
+  "country": {
     "type": "object",
     "x-search": {
       "service": "static-data",
       "mode": "large-searchable-list",
       "display-template": "{name}",
-      "params": { "id": "importing-countries", "version": "1" },
+      "params": { "id": "countries", "version": "1" },
     },
   },
-  "point_of_entry_port": {
+  "place": {
     "type": "object",
     "x-search": {
       "service": "static-data",
       "mode": "large-paginated-list",
       "display-template": "{id}-{name}",
-      "params": { "id": "port-of-entry", "version": "1" },
+      "params": { "id": "places", "version": "1" },
     },
   },
 }
