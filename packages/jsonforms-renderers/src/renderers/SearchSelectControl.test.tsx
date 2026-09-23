@@ -24,7 +24,7 @@ const schema = {
     country: {
       type: 'string',
       title: 'Country',
-      'x-search': { service: 'countries', mode: 'small-list', dependsOn: 'continent' },
+      'x-search': { service: 'countries', mode: 'small-list', dependsOn: 'continent', displayTemplate: '{name}' },
     },
   },
 } as unknown as JsonSchema
@@ -121,6 +121,7 @@ describe('SearchSelectControl dependsOn', () => {
           service: 'countries',
           mode: 'small-list',
           dependsOn: { continent: 'continent', region: 'region' },
+          displayTemplate: '{name}',
         },
       },
     },
@@ -206,6 +207,7 @@ describe('SearchSelectControl dependsOn', () => {
             mode: 'small-list',
             dependsOn: { continent: 'continent', region: 'region' },
             params: { id: 'scientific-names', version: '1' },
+            displayTemplate: '{name}',
           },
         },
       },
@@ -246,6 +248,7 @@ describe('SearchSelectControl dependsOn', () => {
             service: 'countries',
             mode: 'small-list',
             dependsOn: { continent: '', region: 3 },
+            displayTemplate: '{name}',
           },
         },
       },
@@ -279,7 +282,7 @@ describe('SearchSelectControl displayTemplate', () => {
     elements: [{ type: 'Control', scope: '#/properties/port' }],
   } as UISchemaElement
 
-  it('keeps the service id and name when displayTemplate is omitted', async () => {
+  it('shows a config error when displayTemplate is omitted', async () => {
     const formSchema = {
       type: 'object',
       properties: {
@@ -291,14 +294,20 @@ describe('SearchSelectControl displayTemplate', () => {
       },
     } as unknown as JsonSchema
 
-    const { latest } = renderForm({}, async () => ({ options: [portOption] }), formSchema, stringUi)
+    const searches: unknown[] = []
+    renderForm(
+      {},
+      async (args) => {
+        searches.push(args)
+        return { options: [portOption] }
+      },
+      formSchema,
+      stringUi,
+    )
 
     fireEvent.focus(screen.getByRole('textbox'))
-    fireEvent.click(await screen.findByText('ALTHEIMER'))
-
-    await waitFor(() => {
-      expect(latest()?.port).toBe('USTMR')
-    })
+    expect(await screen.findByText('x-search.displayTemplate is required.')).toBeTruthy()
+    expect(screen.queryByText('ALTHEIMER')).toBeNull()
   })
 
   it('shows displayTemplate in the dropdown and stores the service id', async () => {

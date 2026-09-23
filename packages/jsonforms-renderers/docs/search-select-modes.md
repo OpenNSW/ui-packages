@@ -9,7 +9,7 @@ below.
 ```jsonc
 {
   "type": "string",
-  "x-search": { "service": "countries", "mode": "large-searchable-list" },
+  "x-search": { "service": "countries", "mode": "large-searchable-list", "displayTemplate": "{name}" },
 }
 ```
 
@@ -28,11 +28,21 @@ fixed filters, via `x-search.params`:
 {
   "asianCountry": {
     "type": "string",
-    "x-search": { "service": "countries", "mode": "large-searchable-list", "params": { "continent": "asia" } },
+    "x-search": {
+      "service": "countries",
+      "mode": "large-searchable-list",
+      "displayTemplate": "{name}",
+      "params": { "continent": "asia" },
+    },
   },
   "europeanCountry": {
     "type": "string",
-    "x-search": { "service": "countries", "mode": "large-searchable-list", "params": { "continent": "europe" } },
+    "x-search": {
+      "service": "countries",
+      "mode": "large-searchable-list",
+      "displayTemplate": "{name}",
+      "params": { "continent": "europe" },
+    },
   },
 }
 ```
@@ -57,6 +67,7 @@ value is set, the dropdown shows "Select the related field first." instead of fe
     "x-search": {
       "service": "static-data",
       "mode": "large-searchable-list",
+      "displayTemplate": "{name}",
       "params": { "id": "commodities", "version": "1" },
     },
   },
@@ -66,6 +77,7 @@ value is set, the dropdown shows "Select the related field first." instead of fe
       "service": "static-data",
       "mode": "small-list",
       "dependsOn": "commodity_common_name",
+      "displayTemplate": "{name}",
       "params": { "id": "scientific-names", "version": "1" },
     },
   },
@@ -80,13 +92,23 @@ had a value clears this field.
 
 ## Display template
 
-Optional `displayTemplate` lets a deployer choose the dropdown label without a
-per-field search service. `{id}` and `{name}` are replaced from the option the
-service already returns. The stored value is always `id`. Omit the key to keep
-today's behaviour (`name` shown).
+`displayTemplate` is required on every `x-search` field. `{id}` and `{name}` are
+replaced from the option the service already returns. The stored value is always
+`id`. `"displayTemplate": "{name}"` is the usual label; `"{id}-{name}"` shows
+both. A missing or empty template renders as inline config text in the dropdown
+instead of fetching.
 
 ```jsonc
 {
+  "importing_country": {
+    "type": "object",
+    "x-search": {
+      "service": "static-data",
+      "mode": "large-searchable-list",
+      "displayTemplate": "{name}",
+      "params": { "id": "importing-countries", "version": "1" },
+    },
+  },
   "point_of_entry_port": {
     "type": "object",
     "x-search": {
@@ -99,9 +121,8 @@ today's behaviour (`name` shown).
 }
 ```
 
-A field with no `displayTemplate` is unchanged. Object-typed fields store
-`{ value: id, label: templated name }` (or `name` when the template is absent),
-so a later open uses the saved label and does not need to re-resolve.
+Object-typed fields store `{ value: id, label: templated name }`, so a later open
+uses the saved label and does not need to re-resolve.
 
 ## The three modes
 

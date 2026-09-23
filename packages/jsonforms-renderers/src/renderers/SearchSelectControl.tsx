@@ -18,9 +18,9 @@ interface XSearchOptions {
   params?: Record<string, unknown>
   // sibling property name (sent as params.parent), or param-key → sibling property for several live filters
   dependsOn?: string | Record<string, string>
-  // optional `{id}` / `{name}` string used as the dropdown / selected label.
-  // Omit to keep the service's `name`. The stored value is always `id`.
-  displayTemplate?: string
+  // `{id}` / `{name}` string used as the dropdown / selected label. Required —
+  // a missing or empty value shows a config error instead of falling back to `name`.
+  displayTemplate: string
 }
 
 function dependsOnConst(raw: unknown): string | undefined {
@@ -89,9 +89,9 @@ function applyDisplayTemplate(template: string, option: SearchOption): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => fields[key] ?? '')
 }
 
-// Missing displayTemplate → keep the service name. Applied after search and
-// resolve so every x-search field can opt in without each service formatting rows.
-function presentOption(option: SearchOption, displayTemplate: string | undefined): SearchOption {
+function presentOption(option: SearchOption, displayTemplate: string): SearchOption {
+  // configError already blocks the dropdown; skip interpolation so resolve
+  // cannot blank a selected label when the schema forgot the key.
   if (!displayTemplate) return option
   return { ...option, name: applyDisplayTemplate(displayTemplate, option) }
 }
@@ -115,13 +115,16 @@ const SearchSelectControl = ({
   schema,
   uischema,
 }: SearchSelectProps) => {
-  const xSearch = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? { service: '' }
+  const xSearch = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? {
+    service: '',
+    displayTemplate: '',
+  }
   const serviceName = xSearch.service ?? ''
   // unconfigured mode defaults to the "search before fetching" lifecycle — the safest choice for an unknown data size
   const mode = xSearch.mode ?? 'large-paginated-list'
   const modeConfig = MODE_CONFIG[mode]
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
-  const displayTemplate = xSearch.displayTemplate
+  const displayTemplate = typeof xSearch.displayTemplate === 'string' ? xSearch.displayTemplate : ''
   const ctx = useJsonForms()
   const parentPath = path.split('.').slice(0, -1).join('.')
   // Memoized the same way ComputedControl caches resolveComputedInputs: form-wide data
@@ -156,7 +159,9 @@ const SearchSelectControl = ({
       ? `Search service "${serviceName}" is not registered.`
       : !modeConfig
         ? `Invalid x-search.mode "${mode}". Expected "small-list", "large-searchable-list", or "large-paginated-list".`
-        : null
+        : !displayTemplate
+          ? 'x-search.displayTemplate is required.'
+          : null
 
   const isEnabled = enabled !== false
   const isValid = !errors || errors.length === 0
