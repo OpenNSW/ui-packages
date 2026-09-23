@@ -462,8 +462,10 @@ describe('SearchSelectControl displayTemplate', () => {
       } as unknown as JsonSchema
     }
 
+    const writes: Data[] = []
     function Harness() {
       const [formSchema, setFormSchema] = useState(schemaWith('{name}'))
+      const [data, setData] = useState<Data>({ port: { value: 'USTMR', label: 'ALTHEIMER' } })
       return (
         <Theme>
           <button type="button" onClick={() => setFormSchema(schemaWith('{id}-{name}'))}>
@@ -480,8 +482,13 @@ describe('SearchSelectControl displayTemplate', () => {
             <JsonForms
               schema={formSchema}
               uischema={stringUi}
-              data={{ port: { value: 'USTMR', label: 'ALTHEIMER' } }}
+              data={data}
               renderers={radixRenderers}
+              onChange={({ data: next }) => {
+                const saved = next as Data
+                writes.push(saved)
+                setData(saved)
+              }}
             />
           </SearchServiceProvider>
         </Theme>
@@ -495,6 +502,7 @@ describe('SearchSelectControl displayTemplate', () => {
     fireEvent.click(screen.getByRole('button', { name: 'retarget' }))
     await waitFor(() => {
       expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('USTMR-ALTHEIMER')
+      expect(writes[writes.length - 1]?.port).toEqual({ value: 'USTMR', label: 'USTMR-ALTHEIMER' })
     })
   })
 })

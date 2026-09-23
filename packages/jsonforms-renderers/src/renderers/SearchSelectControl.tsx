@@ -231,7 +231,15 @@ const SearchSelectControl = ({
     void service
       .resolve(currentValue, searchParams)
       .then((opt) => {
-        if (!cancelled && opt) setSelectedOption(presentOption(opt, displayTemplate))
+        if (cancelled || !opt) return
+        const presented = presentOption(opt, displayTemplate)
+        setSelectedOption(presented)
+        // Object fields persist the label. A template change refreshes the input
+        // here; write that label back so the saved { value, label } matches it.
+        if (isObjectMode && templateChanged && presented.name !== currentLabel) {
+          lastResolvedRef.current = { value: currentValue, label: presented.name, displayTemplate }
+          handleChange(path, { value: currentValue, label: presented.name })
+        }
       })
       .catch(() => {
         /* keep raw-value fallback */
@@ -239,7 +247,17 @@ const SearchSelectControl = ({
     return () => {
       cancelled = true
     }
-  }, [configError, currentValue, currentLabel, isObjectMode, service, searchParams, displayTemplate])
+  }, [
+    configError,
+    currentValue,
+    currentLabel,
+    isObjectMode,
+    service,
+    searchParams,
+    displayTemplate,
+    handleChange,
+    path,
+  ])
 
   const runSearch = useCallback(
     async (q: string, isLoadMore = false) => {
