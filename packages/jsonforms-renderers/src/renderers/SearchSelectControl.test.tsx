@@ -24,7 +24,7 @@ const schema = {
     country: {
       type: 'string',
       title: 'Country',
-      'x-search': { service: 'countries', mode: 'small-list', dependsOn: 'continent', 'display-template': '{name}' },
+      'x-search': { service: 'countries', mode: 'small-list', dependsOn: 'continent', displayTemplate: '{name}' },
     },
   },
 } as unknown as JsonSchema
@@ -123,7 +123,7 @@ describe('SearchSelectControl dependsOn', () => {
           service: 'countries',
           mode: 'small-list',
           dependsOn: { continent: 'continent', region: 'region' },
-          'display-template': '{name}',
+          displayTemplate: '{name}',
         },
       },
     },
@@ -209,7 +209,7 @@ describe('SearchSelectControl dependsOn', () => {
             mode: 'small-list',
             dependsOn: { continent: 'continent', region: 'region' },
             params: { id: 'scientific-names', version: '1' },
-            'display-template': '{name}',
+            displayTemplate: '{name}',
           },
         },
       },
@@ -250,7 +250,7 @@ describe('SearchSelectControl dependsOn', () => {
             service: 'countries',
             mode: 'small-list',
             dependsOn: { continent: '', region: 3 },
-            'display-template': '{name}',
+            displayTemplate: '{name}',
           },
         },
       },
@@ -276,7 +276,7 @@ describe('SearchSelectControl dependsOn', () => {
   })
 })
 
-describe('SearchSelectControl display-template', () => {
+describe('SearchSelectControl displayTemplate', () => {
   const portOption = { id: 'USTMR', name: 'ALTHEIMER' }
 
   const stringUi = {
@@ -284,7 +284,7 @@ describe('SearchSelectControl display-template', () => {
     elements: [{ type: 'Control', scope: '#/properties/port' }],
   } as UISchemaElement
 
-  it('shows a config error when display-template is omitted', async () => {
+  it('shows a config error when displayTemplate is omitted', async () => {
     const formSchema = {
       type: 'object',
       properties: {
@@ -308,12 +308,12 @@ describe('SearchSelectControl display-template', () => {
     )
 
     fireEvent.focus(screen.getByRole('textbox'))
-    expect(await screen.findByText('x-search.display-template is required.')).toBeTruthy()
+    expect(await screen.findByText('x-search.displayTemplate is required.')).toBeTruthy()
     expect(screen.queryByText('ALTHEIMER')).toBeNull()
     expect(searches).toHaveLength(0)
   })
 
-  it('does not resolve a stored value when display-template is omitted', async () => {
+  it('does not resolve a stored value when displayTemplate is omitted', async () => {
     const formSchema = {
       type: 'object',
       properties: {
@@ -336,7 +336,7 @@ describe('SearchSelectControl display-template', () => {
     expect(resolves).toHaveLength(0)
   })
 
-  it('shows display-template in the dropdown and stores the service id', async () => {
+  it('shows displayTemplate in the dropdown and stores the service id', async () => {
     const formSchema = {
       type: 'object',
       properties: {
@@ -346,7 +346,7 @@ describe('SearchSelectControl display-template', () => {
           'x-search': {
             service: 'countries',
             mode: 'small-list',
-            'display-template': '{id}-{name}',
+            displayTemplate: '{id}-{name}',
           },
         },
       },
@@ -373,7 +373,7 @@ describe('SearchSelectControl display-template', () => {
           'x-search': {
             service: 'countries',
             mode: 'small-list',
-            'display-template': '{id}-{name}',
+            displayTemplate: '{id}-{name}',
           },
           properties: {
             value: { type: 'string' },
@@ -394,8 +394,8 @@ describe('SearchSelectControl display-template', () => {
     })
   })
 
-  it('re-presents the selected label when display-template changes', async () => {
-    const xSearch = { service: 'countries', mode: 'small-list', 'display-template': '{name}' }
+  it('re-presents the selected label when displayTemplate changes', async () => {
+    const xSearch = { service: 'countries', mode: 'small-list', displayTemplate: '{name}' }
     function schemaWith(template: string) {
       return {
         type: 'object',
@@ -403,7 +403,7 @@ describe('SearchSelectControl display-template', () => {
           port: {
             type: 'string',
             title: 'Port',
-            'x-search': { ...xSearch, 'display-template': template },
+            'x-search': { ...xSearch, displayTemplate: template },
           },
         },
       } as unknown as JsonSchema
@@ -442,8 +442,8 @@ describe('SearchSelectControl display-template', () => {
     })
   })
 
-  it('re-presents an object field label when display-template changes', async () => {
-    const xSearch = { service: 'countries', mode: 'small-list', 'display-template': '{name}' }
+  it('re-presents an object field label when displayTemplate changes', async () => {
+    const xSearch = { service: 'countries', mode: 'small-list', displayTemplate: '{name}' }
     function schemaWith(template: string) {
       return {
         type: 'object',
@@ -451,7 +451,7 @@ describe('SearchSelectControl display-template', () => {
           port: {
             type: 'object',
             title: 'Port',
-            'x-search': { ...xSearch, 'display-template': template },
+            'x-search': { ...xSearch, displayTemplate: template },
             properties: {
               value: { type: 'string' },
               label: { type: 'string' },

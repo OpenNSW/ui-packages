@@ -9,7 +9,7 @@ below.
 ```jsonc
 {
   "type": "string",
-  "x-search": { "service": "countries", "mode": "large-searchable-list", "display-template": "{name}" },
+  "x-search": { "service": "countries", "mode": "large-searchable-list", "displayTemplate": "{name}" },
 }
 ```
 
@@ -31,7 +31,7 @@ fixed filters, via `x-search.params`:
     "x-search": {
       "service": "countries",
       "mode": "large-searchable-list",
-      "display-template": "{name}",
+      "displayTemplate": "{name}",
       "params": { "continent": "asia" },
     },
   },
@@ -40,7 +40,7 @@ fixed filters, via `x-search.params`:
     "x-search": {
       "service": "countries",
       "mode": "large-searchable-list",
-      "display-template": "{name}",
+      "displayTemplate": "{name}",
       "params": { "continent": "europe" },
     },
   },
@@ -67,7 +67,7 @@ value is set, the dropdown shows "Select the related field first." instead of fe
     "x-search": {
       "service": "static-data",
       "mode": "large-searchable-list",
-      "display-template": "{name}",
+      "displayTemplate": "{name}",
       "params": { "id": "commodities", "version": "1" },
     },
   },
@@ -77,7 +77,7 @@ value is set, the dropdown shows "Select the related field first." instead of fe
       "service": "static-data",
       "mode": "small-list",
       "dependsOn": "commodity_common_name",
-      "display-template": "{name}",
+      "displayTemplate": "{name}",
       "params": { "id": "scientific-names", "version": "1" },
     },
   },
@@ -92,9 +92,9 @@ had a value clears this field.
 
 ## Display template
 
-`display-template` is required on every `x-search` field. `{id}` and `{name}` are
+`displayTemplate` is required on every `x-search` field. `{id}` and `{name}` are
 replaced from the option the service already returns. The stored value is always
-`id`. `"display-template": "{name}"` is the usual label; `"{id}-{name}"` shows
+`id`. `"displayTemplate": "{name}"` is the usual label; `"{id}-{name}"` shows
 both. A missing or empty template renders as inline config text in the dropdown
 instead of fetching.
 
@@ -105,7 +105,7 @@ instead of fetching.
     "x-search": {
       "service": "static-data",
       "mode": "large-searchable-list",
-      "display-template": "{name}",
+      "displayTemplate": "{name}",
       "params": { "id": "countries", "version": "1" },
     },
   },
@@ -114,7 +114,7 @@ instead of fetching.
     "x-search": {
       "service": "static-data",
       "mode": "large-paginated-list",
-      "display-template": "{id}-{name}",
+      "displayTemplate": "{id}-{name}",
       "params": { "id": "places", "version": "1" },
     },
   },

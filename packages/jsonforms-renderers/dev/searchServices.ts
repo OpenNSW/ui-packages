@@ -18,7 +18,7 @@ const COUNTRIES: (SearchOption & { continent: string; size: 'large' | 'small' })
 ]
 
 // A few UN/LOCODE rows from the NPQS port list. Several share the title HAMPTON,
-// so a display-template of "{id}-{name}" is what tells them apart.
+// so a displayTemplate of "{id}-{name}" is what tells them apart.
 const PORTS: SearchOption[] = [
   { id: 'USUJS', name: 'HAMPTON' },
   { id: 'USHPF', name: 'HAMPTON' },

@@ -20,7 +20,7 @@ interface XSearchOptions {
   dependsOn?: string | Record<string, string>
   // `{id}` / `{name}` string used as the dropdown / selected label. Required —
   // a missing or empty value shows a config error instead of falling back to `name`.
-  'display-template': string
+  displayTemplate: string
 }
 
 function dependsOnConst(raw: unknown): string | undefined {
@@ -117,14 +117,14 @@ const SearchSelectControl = ({
 }: SearchSelectProps) => {
   const xSearch = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? {
     service: '',
-    'display-template': '',
+    displayTemplate: '',
   }
   const serviceName = xSearch.service ?? ''
   // unconfigured mode defaults to the "search before fetching" lifecycle — the safest choice for an unknown data size
   const mode = xSearch.mode ?? 'large-paginated-list'
   const modeConfig = MODE_CONFIG[mode]
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
-  const displayTemplate = typeof xSearch['display-template'] === 'string' ? xSearch['display-template'] : ''
+  const displayTemplate = typeof xSearch.displayTemplate === 'string' ? xSearch.displayTemplate : ''
   const ctx = useJsonForms()
   const parentPath = path.split('.').slice(0, -1).join('.')
   // Memoized the same way ComputedControl caches resolveComputedInputs: form-wide data
@@ -160,7 +160,7 @@ const SearchSelectControl = ({
       : !modeConfig
         ? `Invalid x-search.mode "${mode}". Expected "small-list", "large-searchable-list", or "large-paginated-list".`
         : !displayTemplate
-          ? 'x-search.display-template is required.'
+          ? 'x-search.displayTemplate is required.'
           : null
 
   const isEnabled = enabled !== false
@@ -218,7 +218,7 @@ const SearchSelectControl = ({
     lastResolvedRef.current = { value: currentValue, label: currentLabel, displayTemplate }
 
     // object-shaped fields already carry the label from submission time — no need to re-resolve it.
-    // A new display-template has to go through resolve so presentOption can rebuild that label.
+    // A new displayTemplate has to go through resolve so presentOption can rebuild that label.
     if (isObjectMode && currentLabel && !templateChanged) {
       setSelectedOption({ id: currentValue, name: currentLabel })
       return
