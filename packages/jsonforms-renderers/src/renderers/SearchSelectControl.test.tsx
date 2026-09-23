@@ -325,7 +325,12 @@ describe('SearchSelectControl display-template', () => {
       },
     } as unknown as JsonSchema
 
-    const { resolves } = renderForm({ port: 'USTMR' }, async () => ({ options: [portOption] }), formSchema, stringUi)
+    const { resolves } = renderForm(
+      { port: 'USTMR' },
+      () => Promise.resolve({ options: [portOption] }),
+      formSchema,
+      stringUi,
+    )
 
     await screen.findByRole('textbox')
     expect(resolves).toHaveLength(0)
@@ -347,7 +352,7 @@ describe('SearchSelectControl display-template', () => {
       },
     } as unknown as JsonSchema
 
-    const { latest } = renderForm({}, async () => ({ options: [portOption] }), formSchema, stringUi)
+    const { latest } = renderForm({}, () => Promise.resolve({ options: [portOption] }), formSchema, stringUi)
 
     fireEvent.focus(screen.getByRole('textbox'))
     fireEvent.click(await screen.findByText('USTMR-ALTHEIMER'))
@@ -379,7 +384,7 @@ describe('SearchSelectControl display-template', () => {
       },
     } as unknown as JsonSchema
 
-    const { latest } = renderForm({}, async () => ({ options: [portOption] }), formSchema, stringUi)
+    const { latest } = renderForm({}, () => Promise.resolve({ options: [portOption] }), formSchema, stringUi)
 
     fireEvent.focus(screen.getByRole('textbox'))
     fireEvent.click(await screen.findByText('USTMR-ALTHEIMER'))
