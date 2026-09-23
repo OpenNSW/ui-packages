@@ -78,6 +78,35 @@ query-param name → sibling property (`dependsOn: { "commodity": "commodity_com
 Fetching waits until every listed sibling has a value; changing any sibling that already
 had a value clears this field.
 
+## Display and stored-value templates
+
+Optional `displayTemplate` / `valueTemplate` let a deployer choose the dropdown label
+and the value written to form data, without a per-field search service. `{token}` is
+replaced from `{ id, name, ...option.source }`. The service keeps returning `{ id, name }`
+as today; it may attach `source` (e.g. `{ const, title }` from a static-data row) so those
+tokens resolve. Either key may be omitted — that side stays on the service default
+(`name` shown, `id` stored).
+
+```jsonc
+{
+  "point_of_entry_port": {
+    "type": "object",
+    "x-search": {
+      "service": "static-data",
+      "mode": "large-paginated-list",
+      "displayTemplate": "{const}-{title}",
+      "valueTemplate": "{const}",
+      "params": { "id": "port-of-entry", "version": "1" }
+    }
+  }
+}
+```
+
+A field with no templates is unchanged. `valueTemplate` on a string-typed field becomes
+the stored id that `resolve` must look up; `{const}` (or `{id}`) matches the usual
+service lookup. Object-typed fields already store `{ value, label }`, so a later open
+uses the saved label and does not need to re-resolve.
+
 ## The three modes
 
 | mode                    | fetch on open | typing          | pagination  |
