@@ -3,11 +3,6 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 export interface SearchOption {
   id: string
   name: string
-  // extra fields from the looked-up row. The control interpolates
-  // x-search.displayTemplate / valueTemplate against { id, name, ...source },
-  // so a static-data service can expose { const, title } without changing the
-  // { id, name } contract. Omit when the field has no templates.
-  source?: Record<string, unknown>
 }
 
 export interface SearchResult {

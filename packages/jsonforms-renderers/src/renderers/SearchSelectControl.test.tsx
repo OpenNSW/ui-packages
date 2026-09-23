@@ -271,19 +271,15 @@ describe('SearchSelectControl dependsOn', () => {
   })
 })
 
-describe('SearchSelectControl displayTemplate and valueTemplate', () => {
-  const portOption = {
-    id: 'USTMR',
-    name: 'ALTHEIMER',
-    source: { const: 'USTMR', title: 'ALTHEIMER' },
-  }
+describe('SearchSelectControl displayTemplate', () => {
+  const portOption = { id: 'USTMR', name: 'ALTHEIMER' }
 
   const stringUi = {
     type: 'VerticalLayout',
     elements: [{ type: 'Control', scope: '#/properties/port' }],
   } as UISchemaElement
 
-  it('keeps the service id and name when templates are omitted', async () => {
+  it('keeps the service id and name when displayTemplate is omitted', async () => {
     const formSchema = {
       type: 'object',
       properties: {
@@ -315,7 +311,7 @@ describe('SearchSelectControl displayTemplate and valueTemplate', () => {
           'x-search': {
             service: 'countries',
             mode: 'small-list',
-            displayTemplate: '{const}-{title}',
+            displayTemplate: '{id}-{name}',
           },
         },
       },
@@ -332,33 +328,7 @@ describe('SearchSelectControl displayTemplate and valueTemplate', () => {
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('USTMR-ALTHEIMER')
   })
 
-  it('stores valueTemplate as the string field value', async () => {
-    const formSchema = {
-      type: 'object',
-      properties: {
-        port: {
-          type: 'string',
-          title: 'Port',
-          'x-search': {
-            service: 'countries',
-            mode: 'small-list',
-            valueTemplate: '{title}',
-          },
-        },
-      },
-    } as unknown as JsonSchema
-
-    const { latest } = renderForm({}, async () => ({ options: [portOption] }), formSchema, stringUi)
-
-    fireEvent.focus(screen.getByRole('textbox'))
-    fireEvent.click(await screen.findByText('ALTHEIMER'))
-
-    await waitFor(() => {
-      expect(latest()?.port).toBe('ALTHEIMER')
-    })
-  })
-
-  it('writes templated value and label for an object-shaped field', async () => {
+  it('writes the service id and templated label for an object-shaped field', async () => {
     const formSchema = {
       type: 'object',
       properties: {
@@ -368,8 +338,7 @@ describe('SearchSelectControl displayTemplate and valueTemplate', () => {
           'x-search': {
             service: 'countries',
             mode: 'small-list',
-            displayTemplate: '{const}-{title}',
-            valueTemplate: '{const}',
+            displayTemplate: '{id}-{name}',
           },
           properties: {
             value: { type: 'string' },

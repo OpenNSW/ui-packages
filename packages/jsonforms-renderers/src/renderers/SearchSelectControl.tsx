@@ -18,12 +18,9 @@ interface XSearchOptions {
   params?: Record<string, unknown>
   // sibling property name (sent as params.parent), or param-key → sibling property for several live filters
   dependsOn?: string | Record<string, string>
-  // optional `{token}` string used as the dropdown / selected label. Tokens resolve
-  // against { id, name, ...option.source }. Omit to keep the service's `name`.
+  // optional `{id}` / `{name}` string used as the dropdown / selected label.
+  // Omit to keep the service's `name`. The stored value is always `id`.
   displayTemplate?: string
-  // optional `{token}` string stored as the field value (or object-mode `value`).
-  // Omit to keep the service's `id`.
-  valueTemplate?: string
 }
 
 function dependsOnConst(raw: unknown): string | undefined {
@@ -85,29 +82,18 @@ type SearchSelectProps = ControlProps & {
   schema: JsonSchema & { 'x-search'?: XSearchOptions }
 }
 
-// `{token}` → fields[token] as a string; unknown tokens become '' so a missing
-// source field does not leave the placeholder in the submitted value.
-function applyTemplate(template: string, fields: Record<string, unknown>): string {
-  return template.replace(/\{(\w+)\}/g, (_, key: string) => {
-    const v = fields[key]
-    return v == null ? '' : String(v)
-  })
+// `{id}` / `{name}` → that field as a string; unknown tokens become '' so a
+// typo does not leave the placeholder in the dropdown.
+function applyDisplayTemplate(template: string, option: SearchOption): string {
+  const fields: Record<string, string> = { id: option.id, name: option.name }
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => fields[key] ?? '')
 }
 
-// Missing template → that side stays on the service default. Applied after search
-// and resolve so every x-search field can opt in without each service formatting rows.
-function presentOption(
-  option: SearchOption,
-  displayTemplate: string | undefined,
-  valueTemplate: string | undefined,
-): SearchOption {
-  if (!displayTemplate && !valueTemplate) return option
-  const fields = { id: option.id, name: option.name, ...option.source }
-  return {
-    ...option,
-    id: valueTemplate ? applyTemplate(valueTemplate, fields) : option.id,
-    name: displayTemplate ? applyTemplate(displayTemplate, fields) : option.name,
-  }
+// Missing displayTemplate → keep the service name. Applied after search and
+// resolve so every x-search field can opt in without each service formatting rows.
+function presentOption(option: SearchOption, displayTemplate: string | undefined): SearchOption {
+  if (!displayTemplate) return option
+  return { ...option, name: applyDisplayTemplate(displayTemplate, option) }
 }
 
 // The only three valid combinations of {fetch on open, typed search, "load more" pagination}.
@@ -136,7 +122,6 @@ const SearchSelectControl = ({
   const modeConfig = MODE_CONFIG[mode]
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
   const displayTemplate = xSearch.displayTemplate
-  const valueTemplate = xSearch.valueTemplate
   const ctx = useJsonForms()
   const parentPath = path.split('.').slice(0, -1).join('.')
   // Memoized the same way ComputedControl caches resolveComputedInputs: form-wide data
@@ -227,7 +212,7 @@ const SearchSelectControl = ({
     void service
       .resolve(currentValue, searchParams)
       .then((opt) => {
-        if (!cancelled && opt) setSelectedOption(presentOption(opt, displayTemplate, valueTemplate))
+        if (!cancelled && opt) setSelectedOption(presentOption(opt, displayTemplate))
       })
       .catch(() => {
         /* keep raw-value fallback */
@@ -235,7 +220,7 @@ const SearchSelectControl = ({
     return () => {
       cancelled = true
     }
-  }, [currentValue, currentLabel, isObjectMode, service, searchParams, displayTemplate, valueTemplate])
+  }, [currentValue, currentLabel, isObjectMode, service, searchParams, displayTemplate])
 
   const runSearch = useCallback(
     async (q: string, isLoadMore = false) => {
@@ -267,7 +252,7 @@ const SearchSelectControl = ({
         // let that stale payload overwrite a newer search (typed query or a new sibling).
         if (controller.signal.aborted) return
 
-        const newItems = (result.options ?? []).map((opt) => presentOption(opt, displayTemplate, valueTemplate))
+        const newItems = (result.options ?? []).map((opt) => presentOption(opt, displayTemplate))
         if (isLoadMore) setOptions((prev) => [...prev, ...newItems])
         else setOptions(newItems)
 
@@ -284,7 +269,7 @@ const SearchSelectControl = ({
         }
       }
     },
-    [service, modeConfig?.paginated, searchParams, displayTemplate, valueTemplate],
+    [service, modeConfig?.paginated, searchParams, displayTemplate],
   )
 
   useEffect(() => {

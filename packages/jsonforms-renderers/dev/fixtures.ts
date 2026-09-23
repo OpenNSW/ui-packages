@@ -349,25 +349,24 @@ export const fixtures: Fixture[] = [
   },
   {
     id: 'search-select-templates',
-    name: 'Search Select (Display / value templates)',
+    name: 'Search Select (Display template)',
     schema: {
       type: 'object',
       properties: {
         countryDefault: {
           type: 'string',
-          description: 'No templates — dropdown shows the service name, stores the service id.',
+          description: 'No displayTemplate — dropdown shows the service name, stores the service id.',
           'x-search': { service: 'countries', mode: 'large-searchable-list' },
         },
         countryTemplated: {
           type: 'object',
           description:
-            'displayTemplate "{const}-{title}" is the dropdown label; valueTemplate "{const}" is stored as value. ' +
-            'The countries service attaches source { const, title } so those tokens resolve. Clear and re-pick to see both fields.',
+            'displayTemplate "{id}-{name}" is the dropdown label; the stored value stays the service id. ' +
+            'Clear and re-pick to see { value, label } with the templated label.',
           'x-search': {
             service: 'countries',
             mode: 'large-searchable-list',
-            displayTemplate: '{const}-{title}',
-            valueTemplate: '{const}',
+            displayTemplate: '{id}-{name}',
           },
           properties: {
             value: { type: 'string', minLength: 1 },
@@ -388,7 +387,7 @@ export const fixtures: Fixture[] = [
         {
           type: 'Control',
           scope: '#/properties/countryTemplated',
-          options: { placeholder: 'Templated {const}-{title}…' },
+          options: { placeholder: 'Templated {id}-{name}…' },
         },
       ],
     } as UISchemaElement,
