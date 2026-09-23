@@ -177,15 +177,15 @@ A document almost never matches the shape a form wants: a date arrives as `7/23/
 }
 ```
 
-| Key                  | Meaning                                                                         |
-| -------------------- | ------------------------------------------------------------------------------- |
-| `to`                 | Target data path, resolved per `x-xml.writeBase`. Required.                     |
-| `from`               | Source path in the parsed document. Mutually exclusive with `inputs`/`formula`. |
-| `inputs` + `formula` | Named sources and an expression over them, for a value the document splits up.  |
-| `as`                 | `string`, `number`, `boolean` or `date`.                                        |
-| `format`             | dayjs parse format, `as: "date"` only.                                          |
-| `map`                | Substitutes matching values. An unmapped value passes through unchanged.        |
-| `default`            | Used when the source is absent.                                                 |
+| Key                  | Meaning                                                                           |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `to`                 | Target data path, resolved per `x-xml.writeBase`. Required.                       |
+| `from`               | Source path in the parsed document. Mutually exclusive with `inputs`/`formula`.   |
+| `inputs` + `formula` | Named sources and an expression over them, for a value the document splits up.    |
+| `as`                 | `string`, `number`, `boolean` or `date`.                                          |
+| `format`             | dayjs parse format, `as: "date"` only.                                            |
+| `map`                | Substitutes matching values. An unmapped value passes through unchanged.          |
+| `default`            | Used when the source is absent.                                                   |
 | `writeTo`            | When `from` resolves to a repeated element, reshapes each repetition — see below. |
 
 Applied in that order: resolve → `map` → `as` → `default`.
@@ -201,8 +201,8 @@ By default a repeated element is written whole — `{ "from": "order.line", "to"
   "writeTo": [
     { "from": "sku", "to": "product.sku" },
     { "from": "qty", "to": "quantity", "as": "number" },
-    { "from": "unit_price", "to": "pricing.unitPrice", "as": "number" }
-  ]
+    { "from": "unit_price", "to": "pricing.unitPrice", "as": "number" },
+  ],
 }
 ```
 

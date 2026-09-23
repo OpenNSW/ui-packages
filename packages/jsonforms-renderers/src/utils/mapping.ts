@@ -177,7 +177,9 @@ export async function resolveWrites(document: unknown, entries: WriteToEntry[]):
     const rows = result.found && Array.isArray(result.value)
     if (result.found && rows && entry.writeTo) {
       const built = await Promise.all(
-        (result.value as unknown[]).map(async (element) => buildFromWrites(await resolveWrites(element, entry.writeTo!))),
+        (result.value as unknown[]).map(async (element) =>
+          buildFromWrites(await resolveWrites(element, entry.writeTo!)),
+        ),
       )
       writes.push({ to: entry.to, value: built })
       continue

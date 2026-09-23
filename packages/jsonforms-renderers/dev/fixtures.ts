@@ -805,7 +805,8 @@ export const fixtures: Fixture[] = [
         order_lines: {
           type: 'array',
           title: 'Order Lines (Mapped)',
-          description: 'The same <line> elements as the table below, reshaped per repetition by a nested writeTo instead of passed through whole.',
+          description:
+            'The same <line> elements as the table below, reshaped per repetition by a nested writeTo instead of passed through whole.',
           items: {
             type: 'object',
             properties: {

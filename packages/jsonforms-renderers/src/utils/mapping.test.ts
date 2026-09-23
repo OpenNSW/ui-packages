@@ -80,9 +80,9 @@ describe('resolveWrites', () => {
     })
 
     it('propagates a bad nested entry the same way a top-level one would', async () => {
-      await expect(
-        run([{ from: 'order.line', to: 'lineItems', writeTo: [{ to: 'sku' } as never] }]),
-      ).rejects.toThrow(/writeTo "sku" needs either "from" or "formula"/)
+      await expect(run([{ from: 'order.line', to: 'lineItems', writeTo: [{ to: 'sku' }] }])).rejects.toThrow(
+        /writeTo "sku" needs either "from" or "formula"/,
+      )
     })
   })
 
