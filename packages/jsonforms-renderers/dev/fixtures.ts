@@ -196,12 +196,22 @@ export const fixtures: Fixture[] = [
         asianCountry: {
           type: 'string',
           description: 'Same "countries" service as the other fixtures, scoped via x-search.params.continent',
-          'x-search': { service: 'countries', mode: 'large-searchable-list', displayTemplate: '{name}', params: { continent: 'asia' } },
+          'x-search': {
+            service: 'countries',
+            mode: 'large-searchable-list',
+            displayTemplate: '{name}',
+            params: { continent: 'asia' },
+          },
         },
         europeanCountry: {
           type: 'string',
           description: 'Same service again, scoped to a different fixed continent',
-          'x-search': { service: 'countries', mode: 'large-searchable-list', displayTemplate: '{name}', params: { continent: 'europe' } },
+          'x-search': {
+            service: 'countries',
+            mode: 'large-searchable-list',
+            displayTemplate: '{name}',
+            params: { continent: 'europe' },
+          },
         },
       },
     } as unknown as JsonSchema,
