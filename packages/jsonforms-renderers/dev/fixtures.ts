@@ -118,7 +118,7 @@ export const fixtures: Fixture[] = [
         country: {
           type: 'string',
           description: 'Fetches once on open — click to pick, no typing, no pagination',
-          'x-search': { service: 'countries', mode: 'small-list', displayTemplate: '{name}' },
+          'x-search': { service: 'countries', mode: 'small-list', 'display-template': '{name}' },
         },
       },
       required: ['country'],
@@ -144,7 +144,7 @@ export const fixtures: Fixture[] = [
         country: {
           type: 'string',
           description: 'Fetches on open, then debounce-searches as you type — no pagination',
-          'x-search': { service: 'countries', mode: 'large-searchable-list', displayTemplate: '{name}' },
+          'x-search': { service: 'countries', mode: 'large-searchable-list', 'display-template': '{name}' },
         },
       },
       required: ['country'],
@@ -170,7 +170,7 @@ export const fixtures: Fixture[] = [
         country: {
           type: 'string',
           description: 'Nothing loads until you search — cursor-paginated, 5 per page',
-          'x-search': { service: 'countries', mode: 'large-paginated-list', displayTemplate: '{name}' },
+          'x-search': { service: 'countries', mode: 'large-paginated-list', 'display-template': '{name}' },
         },
       },
       required: ['country'],
@@ -199,7 +199,7 @@ export const fixtures: Fixture[] = [
           'x-search': {
             service: 'countries',
             mode: 'large-searchable-list',
-            displayTemplate: '{name}',
+            'display-template': '{name}',
             params: { continent: 'asia' },
           },
         },
@@ -209,7 +209,7 @@ export const fixtures: Fixture[] = [
           'x-search': {
             service: 'countries',
             mode: 'large-searchable-list',
-            displayTemplate: '{name}',
+            'display-template': '{name}',
             params: { continent: 'europe' },
           },
         },
@@ -253,7 +253,7 @@ export const fixtures: Fixture[] = [
           description:
             'x-search.dependsOn: continent. Opens with "Select the related field first." until a continent is set; ' +
             'then the countries list is filtered to that continent. Changing continent clears this field.',
-          'x-search': { service: 'countries', mode: 'small-list', dependsOn: 'continent', displayTemplate: '{name}' },
+          'x-search': { service: 'countries', mode: 'small-list', dependsOn: 'continent', 'display-template': '{name}' },
         },
       },
       required: ['continent', 'country'],
@@ -305,7 +305,7 @@ export const fixtures: Fixture[] = [
             service: 'countries',
             mode: 'small-list',
             dependsOn: { continent: 'continent', size: 'size' },
-            displayTemplate: '{name}',
+            'display-template': '{name}',
           },
         },
       },
@@ -336,7 +336,7 @@ export const fixtures: Fixture[] = [
             'Object-shaped x-search (type: "object") — submits { value, label } together, so the label ' +
             '("Australia" below) is already in the data and mount does not need to call resolve(). Clear and ' +
             're-pick to see onSelect write both fields.',
-          'x-search': { service: 'countries', mode: 'large-searchable-list', displayTemplate: '{name}' },
+          'x-search': { service: 'countries', mode: 'large-searchable-list', 'display-template': '{name}' },
           properties: {
             value: { type: 'string', minLength: 1 },
             label: { type: 'string' },
@@ -366,18 +366,19 @@ export const fixtures: Fixture[] = [
       properties: {
         countryDefault: {
           type: 'string',
-          description: 'displayTemplate "{name}" — dropdown shows the service name, stores the service id.',
-          'x-search': { service: 'countries', mode: 'large-searchable-list', displayTemplate: '{name}' },
+          description:
+            'display-template "{name}" — typing "hampton" lists several ports that share that title. The dropdown shows the name and stores the UN/LOCODE.',
+          'x-search': { service: 'ports', mode: 'large-searchable-list', 'display-template': '{name}' },
         },
         countryTemplated: {
           type: 'object',
           description:
-            'displayTemplate "{id}-{name}" is the dropdown label; the stored value stays the service id. ' +
-            'Clear and re-pick to see { value, label } with the templated label.',
+            'display-template "{id}-{name}" is the dropdown label, so duplicate HAMPTON titles stay distinct (USHPF-HAMPTON). ' +
+            'The stored value stays the UN/LOCODE. Clear and re-pick to see { value, label } with the templated label.',
           'x-search': {
-            service: 'countries',
+            service: 'ports',
             mode: 'large-searchable-list',
-            displayTemplate: '{id}-{name}',
+            'display-template': '{id}-{name}',
           },
           properties: {
             value: { type: 'string', minLength: 1 },
@@ -403,8 +404,8 @@ export const fixtures: Fixture[] = [
       ],
     } as UISchemaElement,
     data: {
-      countryDefault: 'au',
-      countryTemplated: { value: 'au', label: 'au-Australia' },
+      countryDefault: 'USUJS',
+      countryTemplated: { value: 'USHPF', label: 'USHPF-HAMPTON' },
     },
   },
   {

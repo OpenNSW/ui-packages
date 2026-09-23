@@ -20,7 +20,7 @@ interface XSearchOptions {
   dependsOn?: string | Record<string, string>
   // `{id}` / `{name}` string used as the dropdown / selected label. Required —
   // a missing or empty value shows a config error instead of falling back to `name`.
-  displayTemplate: string
+  'display-template': string
 }
 
 function dependsOnConst(raw: unknown): string | undefined {
@@ -117,14 +117,14 @@ const SearchSelectControl = ({
 }: SearchSelectProps) => {
   const xSearch = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? {
     service: '',
-    displayTemplate: '',
+    'display-template': '',
   }
   const serviceName = xSearch.service ?? ''
   // unconfigured mode defaults to the "search before fetching" lifecycle — the safest choice for an unknown data size
   const mode = xSearch.mode ?? 'large-paginated-list'
   const modeConfig = MODE_CONFIG[mode]
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
-  const displayTemplate = typeof xSearch.displayTemplate === 'string' ? xSearch.displayTemplate : ''
+  const displayTemplate = typeof xSearch['display-template'] === 'string' ? xSearch['display-template'] : ''
   const ctx = useJsonForms()
   const parentPath = path.split('.').slice(0, -1).join('.')
   // Memoized the same way ComputedControl caches resolveComputedInputs: form-wide data
@@ -160,7 +160,7 @@ const SearchSelectControl = ({
       : !modeConfig
         ? `Invalid x-search.mode "${mode}". Expected "small-list", "large-searchable-list", or "large-paginated-list".`
         : !displayTemplate
-          ? 'x-search.displayTemplate is required.'
+          ? 'x-search.display-template is required.'
           : null
 
   const isEnabled = enabled !== false
