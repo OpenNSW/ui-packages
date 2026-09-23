@@ -84,6 +84,14 @@ describe('resolveWrites', () => {
         /writeTo "sku" needs either "from" or "formula"/,
       )
     })
+
+    it('reports itself loudly rather than silently passing a non-array from through', async () => {
+      // A likely `from`/`arrayPaths` typo, not a value shaped for reshaping —
+      // a mistake worth surfacing rather than a scalar written unreshaped.
+      await expect(
+        run([{ from: 'order.customer.code', to: 'lineItems', writeTo: [{ from: 'sku', to: 'sku' }] }]),
+      ).rejects.toThrow(/writeTo "lineItems": "writeTo" is set, but "from" did not resolve to a repeating element/)
+    })
   })
 
   describe('as', () => {

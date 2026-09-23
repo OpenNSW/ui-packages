@@ -208,6 +208,8 @@ By default a repeated element is written whole — `{ "from": "order.line", "to"
 
 Given three `<line>` elements, this writes `lineItems` as an array of three objects shaped `{ product: { sku }, quantity, pricing: { unitPrice } }` — not the source's own `{ sku, qty, unit_price }`. Omitting the nested `writeTo` is the identity case: today's raw-passthrough behavior, unchanged.
 
+A nested `writeTo` only makes sense once `from` actually resolves to a repeating element. If it resolves to a single value instead — a `from`/`arrayPaths` mismatch is the likely cause — the entry throws rather than silently writing that value unreshaped.
+
 ### How an importer renders
 
 Configuring `writeTo` changes the layout, because it changes what the control _is_: an action that fills other fields rather than a field that holds a document. It renders as a single small right-aligned **Upload** button, with no drop zone and no drag-and-drop.
