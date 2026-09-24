@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { renderTemplate } from './template'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { parseTemplate, renderTemplate } from './template'
 
 describe('renderTemplate', () => {
   it('fills each placeholder from an interface-typed value', () => {
@@ -56,4 +56,69 @@ describe('renderTemplate', () => {
       expect(renderTemplate(format, { value: '1,234.50' })).toBe(format.split('{value}').join('1,234.50'))
     },
   )
+})
+
+describe('renderTemplate function calls', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 4, 23, 30))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('formats today with dayjs tokens, YYYY-MM-DD by default', () => {
+    expect(renderTemplate('{today()}', {})).toBe('2026-05-04')
+    expect(renderTemplate('{today(DD/MM/YYYY)}', {})).toBe('04/05/2026')
+    expect(renderTemplate('{today(YYYYMMDD)}', {})).toBe('20260504')
+    expect(renderTemplate('{today(MMM D, YYYY)}', {})).toBe('May 4, 2026')
+  })
+
+  it('passes the argument to a caller function', () => {
+    const seq = (width: string) => '7'.padStart(Number(width), '0')
+    expect(renderTemplate('{orderNo}-{seq(3)}', { orderNo: 'ORD-77' }, { seq })).toBe('ORD-77-007')
+  })
+
+  it('lets a caller function replace a built-in', () => {
+    expect(renderTemplate('{today()}', {}, { today: () => 'fixed' })).toBe('fixed')
+  })
+
+  it('treats {today} without parentheses as a value', () => {
+    expect(renderTemplate('{today}', {})).toBe('{today}')
+    expect(renderTemplate('{today}', { today: 'from values' })).toBe('from values')
+  })
+
+  it('applies the value rules to a function result', () => {
+    expect(renderTemplate('[{a()}][{b()}]', {}, { a: () => null, b: () => ({}) })).toBe('[][{b()}]')
+  })
+
+  it('leaves unknown, inherited and throwing functions as written', () => {
+    const fail = () => {
+      throw new Error('boom')
+    }
+    expect(renderTemplate('{nope(1)} {constructor()} {fail()}', {}, { fail })).toBe(
+      '{nope(1)} {constructor()} {fail()}',
+    )
+  })
+
+  it('leaves malformed calls as written', () => {
+    expect(renderTemplate('{f(} {f(a(b))} {f()x}', {}, { f: () => 'x' })).toBe('{f(} {f(a(b))} {f()x}')
+  })
+})
+
+describe('parseTemplate', () => {
+  it('splits literal text, values and calls', () => {
+    expect(parseTemplate('{orderNo}-{today(YYYYMMDD)}-{seq(3)}')).toEqual([
+      { name: 'orderNo' },
+      '-',
+      { name: 'today', arg: 'YYYYMMDD' },
+      '-',
+      { name: 'seq', arg: '3' },
+    ])
+  })
+
+  it('keeps an empty argument distinct from a value', () => {
+    expect(parseTemplate('{a}{b()}')).toEqual([{ name: 'a' }, { name: 'b', arg: '' }])
+  })
 })
