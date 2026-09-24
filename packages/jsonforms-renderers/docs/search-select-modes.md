@@ -122,9 +122,8 @@ instead of fetching.
 }
 ```
 
-Object-typed fields store `{ value: id, label: templated name }`. Changing
-`displayTemplate` re-resolves and writes that label back, so the saved value
-matches the input. A later open uses the saved label and does not re-resolve.
+Object-typed fields store `{ value: id, label: templated name }`. A later open
+uses the saved label and does not re-resolve.
 
 ## The three modes
 

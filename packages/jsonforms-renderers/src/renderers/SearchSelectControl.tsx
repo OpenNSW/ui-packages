@@ -173,9 +173,8 @@ const SearchSelectControl = ({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  // tracks which value+label+template has already been resolved so the effect
-  // re-runs when displayTemplate changes and presentOption can refresh the label
-  const lastResolvedRef = useRef<{ value: string; label?: string; displayTemplate: string } | undefined>(undefined)
+  // tracks which value+label has already been resolved so the effect doesn't re-run when selectedOption changes
+  const lastResolvedRef = useRef<{ value: string; label?: string } | undefined>(undefined)
   const lastParentRef = useRef<Record<string, string | undefined> | undefined>(undefined)
 
   useEffect(() => {
@@ -200,20 +199,12 @@ const SearchSelectControl = ({
       lastResolvedRef.current = undefined
       return
     }
-    const templateChanged =
-      lastResolvedRef.current !== undefined && lastResolvedRef.current.displayTemplate !== displayTemplate
-    if (
-      lastResolvedRef.current?.value === currentValue &&
-      lastResolvedRef.current?.label === currentLabel &&
-      lastResolvedRef.current?.displayTemplate === displayTemplate
-    )
-      return
+    if (lastResolvedRef.current?.value === currentValue && lastResolvedRef.current?.label === currentLabel) return
     // mark as resolving immediately — prevents re-runs if resolve is absent, rejects, or returns undefined
-    lastResolvedRef.current = { value: currentValue, label: currentLabel, displayTemplate }
+    lastResolvedRef.current = { value: currentValue, label: currentLabel }
 
-    // object-shaped fields already carry the label from submission time — no need to re-resolve it.
-    // A new displayTemplate has to go through resolve so presentOption can rebuild that label.
-    if (isObjectMode && currentLabel && !templateChanged) {
+    // object-shaped fields already carry the label from submission time — no need to re-resolve it
+    if (isObjectMode && currentLabel) {
       setSelectedOption({ id: currentValue, name: currentLabel })
       return
     }
@@ -225,15 +216,7 @@ const SearchSelectControl = ({
     void service
       .resolve(currentValue, searchParams)
       .then((opt) => {
-        if (cancelled || !opt) return
-        const presented = presentOption(opt, displayTemplate)
-        setSelectedOption(presented)
-        // Object fields persist the label. A template change refreshes the input
-        // here; write that label back so the saved { value, label } matches it.
-        if (isObjectMode && templateChanged && presented.name !== currentLabel) {
-          lastResolvedRef.current = { value: currentValue, label: presented.name, displayTemplate }
-          handleChange(path, { value: currentValue, label: presented.name })
-        }
+        if (!cancelled && opt) setSelectedOption(presentOption(opt, displayTemplate))
       })
       .catch(() => {
         /* keep raw-value fallback */
@@ -241,17 +224,7 @@ const SearchSelectControl = ({
     return () => {
       cancelled = true
     }
-  }, [
-    configError,
-    currentValue,
-    currentLabel,
-    isObjectMode,
-    service,
-    searchParams,
-    displayTemplate,
-    handleChange,
-    path,
-  ])
+  }, [configError, currentValue, currentLabel, isObjectMode, service, searchParams, displayTemplate])
 
   const runSearch = useCallback(
     async (q: string, isLoadMore = false) => {
@@ -384,11 +357,7 @@ const SearchSelectControl = ({
     handleChange(path, isObjectMode ? { value: option.id, label: option.name } : option.id)
     setSelectedOption(option)
     // prevent resolve effect from re-running for the just-selected value
-    lastResolvedRef.current = {
-      value: option.id,
-      label: isObjectMode ? option.name : undefined,
-      displayTemplate,
-    }
+    lastResolvedRef.current = { value: option.id, label: isObjectMode ? option.name : undefined }
     setOpen(false)
   }
 
