@@ -762,7 +762,7 @@ export const fixtures: Fixture[] = [
           type: 'object',
           title: 'Order Document',
           description:
-            'Upload dev/sample-files/order-sample.xml. One upload fills this whole form: x-xml.writeTo maps values out of the parsed document onto other fields by ABSOLUTE data path, so it reaches both top-level fields and an item inside the array below — something a relative path could not do. Things to look for: (1) Reference Number is composed from four separate elements by a formula; (2) Account Reference keeps all 13 digits because `as: string` runs before anything can round it; (3) Priority arrives as the number 1 and is mapped to an enum value; (4) Ordered On is reformatted from 7/23/26; (5) Discount is <null/> in the file, which parses to an OBJECT — it lands as 0 via `default`, not as {}; (6) the three <line> elements fill the table, whose derivations then feed Net Total. persistDocument is false, so this field itself stores nothing: everything worth keeping was distributed, and storing the document too would duplicate every mapped value. Then try the SECOND importer, the one inside each order: that is writeBase: "parent", so its paths carry no index and it fills only the order it sits in. Add a second order and import into it — order 1 is left exactly as it was, which the absolute default could not do, since every item shares one schema and they would all write orders.0.*.',
+            'Upload dev/sample-files/order-sample.xml. One upload fills this whole form: x-xml.writeTo maps values out of the parsed document onto other fields by ABSOLUTE data path, so it reaches both top-level fields and an item inside the array below — something a relative path could not do. Things to look for: (1) Reference Number is composed from four separate elements by a formula; (2) Account Reference keeps all 13 digits because `as: string` runs before anything can round it; (3) Priority arrives as the number 1 and is mapped to an enum value; (4) Ordered On is reformatted from 7/23/26; (5) Discount is <null/> in the file, which parses to an OBJECT — it lands as 0 via `default`, not as {}; (6) the three <line> elements fill the table whole, whose derivations then feed Net Total; (7) the SAME three <line> elements also fill Order Lines (Mapped) below, via a nested writeTo on that entry — each <line>\'s own sku/qty/unit_price/line_total tag names are renamed and re-nested (product.sku, quantity, pricing.unitPrice/lineTotal) rather than passed through as-is, which point (6)\'s raw sheet cannot do. persistDocument is false, so this field itself stores nothing: everything worth keeping was distributed, and storing the document too would duplicate every mapped value. Then try the SECOND importer, the one inside each order: that is writeBase: "parent", so its paths carry no index and it fills only the order it sits in. Add a second order and import into it — order 1 is left exactly as it was, which the absolute default could not do, since every item shares one schema and they would all write orders.0.*.',
           'x-xml': {
             accept: '.xml,text/xml,application/xml',
             maxSize: 5242880,
@@ -786,11 +786,44 @@ export const fixtures: Fixture[] = [
               { from: 'order.header.order_date', to: 'orders.0.ordered_on', as: 'date', format: 'M/D/YY' },
               { from: 'order.header.discount', to: 'orders.0.discount', as: 'number', default: 0 },
               { from: 'order.line', to: 'orders.0.lines.sheet' },
+              {
+                from: 'order.line',
+                to: 'order_lines',
+                writeTo: [
+                  { from: 'sku', to: 'sku' },
+                  { from: 'description', to: 'item_description' },
+                  { from: 'qty', to: 'quantity', as: 'number' },
+                  { from: 'unit_price', to: 'pricing.unit_price', as: 'number' },
+                  { from: 'line_total', to: 'pricing.line_total', as: 'number' },
+                ],
+              },
             ],
           },
         },
         reference_no: { type: 'string', title: 'Reference Number' },
         account_ref: { type: 'string', title: 'Account Reference' },
+        order_lines: {
+          type: 'array',
+          title: 'Order Lines (Mapped)',
+          description:
+            'The same <line> elements as the table below, reshaped per repetition by a nested writeTo instead of passed through whole.',
+          items: {
+            type: 'object',
+            properties: {
+              sku: { type: 'string', title: 'SKU' },
+              item_description: { type: 'string', title: 'Description' },
+              quantity: { type: 'number', title: 'Quantity' },
+              pricing: {
+                type: 'object',
+                title: 'Pricing',
+                properties: {
+                  unit_price: { type: 'number', title: 'Unit Price' },
+                  line_total: { type: 'number', title: 'Line Total' },
+                },
+              },
+            },
+          },
+        },
         priority: {
           type: 'string',
           title: 'Priority',
@@ -877,6 +910,28 @@ export const fixtures: Fixture[] = [
         { type: 'Control', scope: '#/properties/import_doc' },
         { type: 'Control', scope: '#/properties/reference_no' },
         { type: 'Control', scope: '#/properties/account_ref' },
+        {
+          type: 'Control',
+          scope: '#/properties/order_lines',
+          options: {
+            detail: {
+              type: 'VerticalLayout',
+              elements: [
+                { type: 'Control', scope: '#/properties/sku' },
+                { type: 'Control', scope: '#/properties/item_description' },
+                { type: 'Control', scope: '#/properties/quantity' },
+                {
+                  type: 'Group',
+                  label: 'Pricing',
+                  elements: [
+                    { type: 'Control', scope: '#/properties/pricing/properties/unit_price' },
+                    { type: 'Control', scope: '#/properties/pricing/properties/line_total' },
+                  ],
+                },
+              ],
+            },
+          },
+        },
         { type: 'Control', scope: '#/properties/priority' },
         {
           type: 'Control',

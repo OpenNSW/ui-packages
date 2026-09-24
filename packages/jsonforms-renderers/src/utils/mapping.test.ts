@@ -43,6 +43,57 @@ describe('resolveWrites', () => {
     expect(Array.isArray(write.value)).toBe(true)
   })
 
+  describe('nested writeTo', () => {
+    it('reshapes each repetition into the destination shape, instead of passing the source rows through', async () => {
+      expect(
+        await run([
+          {
+            from: 'order.line',
+            to: 'lineItems',
+            writeTo: [
+              { from: 'sku', to: 'product.sku' },
+              { from: 'qty', to: 'quantity', as: 'number' },
+            ],
+          },
+        ]),
+      ).toEqual([
+        {
+          to: 'lineItems',
+          value: [
+            { product: { sku: 'A-1' }, quantity: 10 },
+            { product: { sku: 'B-2' }, quantity: 20 },
+          ],
+        },
+      ])
+    })
+
+    it('still writes rows through whole when no nested writeTo is given', async () => {
+      expect(await run([{ from: 'order.line', to: 'orders.0.lines.sheet' }])).toEqual([
+        {
+          to: 'orders.0.lines.sheet',
+          value: [
+            { sku: 'A-1', qty: 10 },
+            { sku: 'B-2', qty: 20 },
+          ],
+        },
+      ])
+    })
+
+    it('propagates a bad nested entry the same way a top-level one would', async () => {
+      await expect(run([{ from: 'order.line', to: 'lineItems', writeTo: [{ to: 'sku' }] }])).rejects.toThrow(
+        /writeTo "sku" needs either "from" or "formula"/,
+      )
+    })
+
+    it('reports itself loudly rather than silently passing a non-array from through', async () => {
+      // A likely `from`/`arrayPaths` typo, not a value shaped for reshaping —
+      // a mistake worth surfacing rather than a scalar written unreshaped.
+      await expect(
+        run([{ from: 'order.customer.code', to: 'lineItems', writeTo: [{ from: 'sku', to: 'sku' }] }]),
+      ).rejects.toThrow(/writeTo "lineItems": "writeTo" is set, but "from" did not resolve to a repeating element/)
+    })
+  })
+
   describe('as', () => {
     it('stringifies a number, so a long identifier keeps its digits', async () => {
       expect(await run([{ from: 'order.customer.account_number', to: 'ref', as: 'string' }])).toEqual([

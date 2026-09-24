@@ -42,6 +42,14 @@ export interface WriteToEntry {
   map?: Record<string, CellValue>
   /** Used when the source is absent. Without one, an absent source writes nothing. */
   default?: CellValue
+  /**
+   * When `from` resolves to a repeating element, these entries are resolved
+   * per repetition (each against that one element) and assembled into one
+   * object per repetition via `buildFromWrites`, collected into `to` as an
+   * array. Omitted — the default — keeps the repeated element's raw rows,
+   * unchanged, as `to`'s value.
+   */
+  writeTo?: WriteToEntry[]
 }
 
 export interface ResolvedWrite {
@@ -167,6 +175,21 @@ export async function resolveWrites(document: unknown, entries: WriteToEntry[]):
     // `map` and `as` are scalar conversions. Rows go through untouched —
     // String()-ing an array of records would be meaningless, not useful.
     const rows = result.found && Array.isArray(result.value)
+    if (result.found && rows && entry.writeTo) {
+      const built = await Promise.all(
+        (result.value as unknown[]).map(async (element) =>
+          buildFromWrites(await resolveWrites(element, entry.writeTo!)),
+        ),
+      )
+      writes.push({ to: entry.to, value: built })
+      continue
+    }
+    // A nested `writeTo` only makes sense once `from` is actually repeating.
+    // Silently falling through to the scalar path would leave a mistyped
+    // `from`/`arrayPaths` writing an unreshaped value with no signal at all.
+    if (result.found && !rows && entry.writeTo) {
+      throw new Error(`writeTo "${entry.to}": "writeTo" is set, but "from" did not resolve to a repeating element.`)
+    }
     if (result.found && !rows && entry.map) {
       const key = result.value instanceof Date ? result.value.toISOString() : String(result.value)
       if (Object.prototype.hasOwnProperty.call(entry.map, key)) result = found(entry.map[key])

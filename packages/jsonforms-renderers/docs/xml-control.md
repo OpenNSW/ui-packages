@@ -177,17 +177,38 @@ A document almost never matches the shape a form wants: a date arrives as `7/23/
 }
 ```
 
-| Key                  | Meaning                                                                         |
-| -------------------- | ------------------------------------------------------------------------------- |
-| `to`                 | Target data path, resolved per `x-xml.writeBase`. Required.                     |
-| `from`               | Source path in the parsed document. Mutually exclusive with `inputs`/`formula`. |
-| `inputs` + `formula` | Named sources and an expression over them, for a value the document splits up.  |
-| `as`                 | `string`, `number`, `boolean` or `date`.                                        |
-| `format`             | dayjs parse format, `as: "date"` only.                                          |
-| `map`                | Substitutes matching values. An unmapped value passes through unchanged.        |
-| `default`            | Used when the source is absent.                                                 |
+| Key                  | Meaning                                                                           |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `to`                 | Target data path, resolved per `x-xml.writeBase`. Required.                       |
+| `from`               | Source path in the parsed document. Mutually exclusive with `inputs`/`formula`.   |
+| `inputs` + `formula` | Named sources and an expression over them, for a value the document splits up.    |
+| `as`                 | `string`, `number`, `boolean` or `date`.                                          |
+| `format`             | dayjs parse format, `as: "date"` only.                                            |
+| `map`                | Substitutes matching values. An unmapped value passes through unchanged.          |
+| `default`            | Used when the source is absent.                                                   |
+| `writeTo`            | When `from` resolves to a repeated element, reshapes each repetition — see below. |
 
 Applied in that order: resolve → `map` → `as` → `default`.
+
+### Reshaping a repeated element (nested `writeTo`)
+
+By default a repeated element is written whole — `{ "from": "order.line", "to": "orders.0.lines.sheet" }` above hands the destination the source's own field names and nesting, unchanged, which only works when they already match what the destination wants (that particular example feeds an `x-spreadsheet` field, where matching is the point). When the destination is a form-schema array whose item shape doesn't match the source 1:1 — different field names, different nesting, a coercion needed per field — nest another `writeTo` directly on the entry. Each nested entry is resolved once per repetition, against that one element, and assembled into one object per repetition via the same rules `writeTo` already uses at the top level:
+
+```jsonc
+{
+  "from": "order.line",
+  "to": "lineItems",
+  "writeTo": [
+    { "from": "sku", "to": "product.sku" },
+    { "from": "qty", "to": "quantity", "as": "number" },
+    { "from": "unit_price", "to": "pricing.unitPrice", "as": "number" },
+  ],
+}
+```
+
+Given three `<line>` elements, this writes `lineItems` as an array of three objects shaped `{ product: { sku }, quantity, pricing: { unitPrice } }` — not the source's own `{ sku, qty, unit_price }`. Omitting the nested `writeTo` is the identity case: today's raw-passthrough behavior, unchanged.
+
+A nested `writeTo` only makes sense once `from` actually resolves to a repeating element. If it resolves to a single value instead — a `from`/`arrayPaths` mismatch is the likely cause — the entry throws rather than silently writing that value unreshaped.
 
 ### How an importer renders
 
@@ -247,7 +268,7 @@ A dot-joined path cannot address a key that itself contains a dot — the same l
 ### Things worth knowing
 
 - **`<null/>` is empty, and it parses to an _object_.** `<discount><null/></discount>` becomes `{ "null": "" }`. A non-array object counts as absent, so `default` fills it in — otherwise an object lands in a number field and AJV rejects it with an error the form author cannot act on.
-- **A repeated element is written whole.** Arrays are the one object shape that counts as present, because writing rows into a sheet field is the main thing an importer does. `map` and `as` do not apply to them.
+- **A repeated element is written whole by default.** Arrays are the one object shape that counts as present, because writing rows into a sheet field is the main thing an importer does. `map` and `as` do not apply to them — nest a `writeTo` on the entry instead, to reshape each repetition (see [above](#reshaping-a-repeated-element-nested-writeto)).
 - **An absent source with no `default` writes nothing at all.** An importer fills in what its document carries; clearing a field the document is silent about is a different action.
 - **A date that doesn't match `format` is treated as absent, never guessed.** Parsing is strict, because a two-digit year is ambiguous otherwise.
 - **Formula aliases must not be 1–3 letters and all-alphabetic.** The grammar reads those as spreadsheet column references — use `ref_office`, never `o`. See [computed-fields.md](./computed-fields.md).
