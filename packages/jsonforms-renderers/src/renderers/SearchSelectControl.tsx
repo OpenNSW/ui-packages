@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, type KeyboardEvent }
 import { useSearchService, type SearchOption } from '../contexts/SearchServiceContext'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { getErrorMessage } from '../utils/error'
+import { renderTemplate } from '../utils/template'
 import * as React from 'react'
 
 export type SearchSelectMode = 'small-list' | 'large-searchable-list' | 'large-paginated-list'
@@ -82,18 +83,11 @@ type SearchSelectProps = ControlProps & {
   schema: JsonSchema & { 'x-search'?: XSearchOptions }
 }
 
-// `{id}` / `{name}` → that field as a string; unknown tokens become '' so a
-// typo does not leave the placeholder in the dropdown.
-function applyDisplayTemplate(template: string, option: SearchOption): string {
-  const fields: Record<string, string> = { id: option.id, name: option.name }
-  return template.replace(/\{(\w+)\}/g, (_, key: string) => fields[key] ?? '')
-}
-
 function presentOption(option: SearchOption, displayTemplate: string): SearchOption {
   // configError already blocks the dropdown; skip interpolation so resolve
   // cannot blank a selected label when the schema forgot the key.
   if (!displayTemplate) return option
-  return { ...option, name: applyDisplayTemplate(displayTemplate, option) }
+  return { ...option, name: renderTemplate(displayTemplate, option) }
 }
 
 // The only three valid combinations of {fetch on open, typed search, "load more" pagination}.

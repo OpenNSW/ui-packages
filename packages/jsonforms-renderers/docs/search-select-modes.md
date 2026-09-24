@@ -95,7 +95,8 @@ had a value clears this field.
 `displayTemplate` is required on every `x-search` field. `{id}` and `{name}` are
 replaced from the option the service already returns. The stored value is always
 `id`. `"displayTemplate": "{name}"` is the usual label; `"{id}-{name}"` shows
-both. A missing or empty template renders as inline config text in the dropdown
+both. A name the option does not have stays as written, so a typo shows up in
+the label. A missing or empty template renders as inline config text in the dropdown
 instead of fetching.
 
 ```jsonc
