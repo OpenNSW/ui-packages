@@ -6,6 +6,7 @@ import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from '../utils/computed'
 import type { ComputedInput } from '../utils/computed'
 import type { CellValue } from '../utils/spreadsheet'
+import { renderTemplate } from '../utils/template'
 
 interface XComputedOptions {
   /** alias -> path (shorthand) or { path, default }, relative to this control's own parent object. */
@@ -193,7 +194,7 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
             {error}
           </Text>
         ) : (
-          <Text size="2">{format.split(DEFAULT_FORMAT).join(formatComputedValue(value, decimals))}</Text>
+          <Text size="2">{renderTemplate(format, { value: formatComputedValue(value, decimals) })}</Text>
         )}
         {schema.description && (
           <Text size="1" color="gray">
