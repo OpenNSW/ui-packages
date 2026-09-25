@@ -1,5 +1,8 @@
 import { createDefaultValue, type ArrayControlProps } from '@jsonforms/core'
-import { withJsonFormsArrayControlProps, JsonFormsDispatch } from '@jsonforms/react'
+import { withJsonFormsArrayControlProps, JsonFormsDispatch, useJsonForms } from '@jsonforms/react'
+import { useRef } from 'react'
+import { stampSequences } from '../utils/sequence'
+import type { SequenceCounters } from '../utils/sequence'
 import { Card, Button, Flex, Text, Box } from '@radix-ui/themes'
 import { PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 
@@ -15,6 +18,17 @@ export const ArrayControl = ({
   rootSchema,
   arraySchema,
 }: ArrayControlProps) => {
+  // Numbers already handed out to this array's numbered `x-template` fields.
+  // A ref, not state: it must survive a row being removed, or the next row
+  // added would be given the removed row's number. Held here rather than by
+  // each row's own control because the count belongs to the array, not the
+  // row. It does NOT survive this control unmounting — see SequenceCounters
+  // in utils/sequence.ts for what that costs and what covers it.
+  const sequences = useRef<SequenceCounters>({})
+  // The whole form, for the placeholders a template resolves against — this
+  // control is only ever handed its own slice.
+  const ctx = useJsonForms()
+
   // If `arraySchema` is present, `schema` is already our `itemsSchema`, else fall back to `schema.items`
   const itemsSchema = arraySchema ? schema : schema.items
   const actualArraySchema = arraySchema || schema
@@ -37,7 +51,16 @@ export const ArrayControl = ({
   const itemLabel = options.itemLabel || 'Item'
 
   const handleAddItem = () => {
-    const newItem = createDefaultValue(validItemsSchema, rootSchema)
+    const newItem = stampSequences(
+      validItemsSchema,
+      createDefaultValue(validItemsSchema, rootSchema),
+      items,
+      ctx.core?.data,
+      // The object CONTAINING the array, not the row: a row being numbered is
+      // empty, so what a template reaches for sits alongside the array.
+      path.split('.').slice(0, -1).join('.'),
+      sequences.current,
+    )
     if (addItem) addItem(path, newItem)()
   }
 

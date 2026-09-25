@@ -1179,6 +1179,88 @@ export const fixtures: Fixture[] = [
     },
   },
   {
+    id: 'numbered-rows',
+    name: 'Array (auto-numbered rows)',
+    // Cast as the uischemas are: `x-template` is our own keyword, and
+    // JsonSchema7 admits known keywords only.
+    schema: {
+      type: 'object',
+      properties: {
+        order: {
+          type: 'object',
+          title: 'Order',
+          properties: {
+            orderNo: { type: 'string', description: 'Read by the {orderNo} placeholder below' },
+            orderDate: { type: 'string', format: 'date', description: 'Read by {ordered}, via inputs' },
+            lineItems: {
+              type: 'array',
+              title: 'Line items',
+              description: 'Each row is numbered as it is added',
+              items: {
+                type: 'object',
+                properties: {
+                  lineRef: {
+                    type: 'string',
+                    title: 'Line reference',
+                    readOnly: true,
+                    // Numbered, so ArrayControl stamps it once per row. The
+                    // placeholders resolve against `order` — the object that
+                    // contains the array, since the row itself is still empty.
+                    // `orderNo` needs no `inputs` entry: an undeclared
+                    // placeholder is a path of its own name.
+                    'x-template': {
+                      template: '{orderNo}-{ordered}-{seq}',
+                      inputs: { ordered: 'orderDate' },
+                      padding: 2,
+                    },
+                  },
+                  receivedOn: {
+                    type: 'string',
+                    title: 'Received on',
+                    readOnly: true,
+                    // {today(...)} is the shared engine's function form — the
+                    // only way to reach the date, and it picks the format.
+                    // Numbered too, so
+                    // it is stamped with the row rather than following the
+                    // clock afterwards.
+                    'x-template': { template: '{today(YYYYMMDD)}-{seq}' },
+                  },
+                  description: { type: 'string' },
+                  qty: { type: 'integer', minimum: 1 },
+                },
+                required: ['description'],
+              },
+            },
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/order/properties/orderNo' },
+        { type: 'Control', scope: '#/properties/order/properties/orderDate' },
+        { type: 'Control', scope: '#/properties/order/properties/lineItems' },
+      ],
+    } as UISchemaElement,
+    data: {
+      order: {
+        orderNo: 'ORD-77',
+        orderDate: '2026-05-04',
+        // Reopened with a row already numbered 07: the next row added is 08,
+        // not 02, and deleting a row does not free its number for reuse.
+        lineItems: [
+          {
+            lineRef: 'ORD-77-2026-05-04-07',
+            receivedOn: '20260504-07',
+            description: 'Carried over from a saved order',
+            qty: 3,
+          },
+        ],
+      },
+    },
+  },
+  {
     id: 'horizontal',
     name: 'Horizontal layout',
     schema: {
