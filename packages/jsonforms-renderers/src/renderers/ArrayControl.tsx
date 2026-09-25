@@ -1,7 +1,7 @@
 import { createDefaultValue, type ArrayControlProps } from '@jsonforms/core'
 import { withJsonFormsArrayControlProps, JsonFormsDispatch, useJsonForms } from '@jsonforms/react'
 import { useRef } from 'react'
-import { stampSequences } from '../utils/sequence'
+import { stampRowTemplates } from '../utils/sequence'
 import type { SequenceCounters } from '../utils/sequence'
 import { Card, Button, Flex, Text, Box } from '@radix-ui/themes'
 import { PlusIcon, TrashIcon } from '@radix-ui/react-icons'
@@ -51,7 +51,7 @@ export const ArrayControl = ({
   const itemLabel = options.itemLabel || 'Item'
 
   const handleAddItem = () => {
-    const newItem = stampSequences(
+    const newItem = stampRowTemplates(
       validItemsSchema,
       createDefaultValue(validItemsSchema, rootSchema),
       items,
