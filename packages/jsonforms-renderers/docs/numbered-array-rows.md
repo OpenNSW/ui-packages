@@ -19,11 +19,11 @@ Pair it with `readOnly: true`. The keyword says where the value comes from, not 
 
 ## `template`
 
-Substitution is [`utils/template.ts`](../src/utils/template.ts)'s, shared with `x-computed`'s `format`. This keyword adds only where a placeholder's value comes from, and `{seq(width)}`.
+Substitution is [`utils/template.ts`](../src/utils/template.ts)'s, shared with `x-computed`'s `format`. This keyword adds only where a placeholder's value comes from, and `{seq(padding)}`.
 
 - A bare `{name}` is read from the form (see `inputs` below).
 - `{name(arg)}` is a call: `{today()}` is the current date as `YYYY-MM-DD`, and `{today(YYYYMMDD)}` gives `20260504`.
-- `{seq(width)}` is the row's number, zero-padded to `width` digits; `{seq()}` pads to 2. A number wider than that is not truncated — row 100 of `{seq(2)}` is `100`, not `00`. A bare `{seq}` is an ordinary form value.
+- `{seq(padding)}` is the row's number, zero-padded to `padding` digits; `{seq()}` pads to 2. A number wider than that is not truncated — row 100 of `{seq(2)}` is `100`, not `00`. A bare `{seq}` is an ordinary form value.
 - `{seq(…)}` needs literal text between it and any other placeholder — `{today(YYYYMMDD)}-{seq(3)}`, not `{today(YYYYMMDD)}{seq(3)}` — or its digits run into its neighbour's and the number can't be read back out of the rows. Such a template is not numbered, and a warning is logged.
 
 A form value with nothing behind it renders as empty, and so does one that can't be printed, such as an object — never `undefined`, and never the placeholder itself. The value is **persisted**, and storing a literal `{orderDate}` in a row is worse than storing a gap. An unknown call such as `{todya()}` is left as written, so the typo stays visible.

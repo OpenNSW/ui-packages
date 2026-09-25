@@ -23,7 +23,7 @@ import type { TemplateFunction, TemplatePart } from './template'
  *
  * Substitution is utils/template.ts's, shared with `x-computed`'s `format`,
  * so its `{name(arg)}` calls work here too — `{today(YYYYMMDD)}`. This module
- * adds where a placeholder's value comes from, and `{seq(width)}`: the row's
+ * adds where a placeholder's value comes from, and `{seq(padding)}`: the row's
  * number, backed by a count that outlives the row it numbered.
  *
  * Every template is filled once, when its row is added, and not followed
@@ -70,7 +70,7 @@ export type SequenceCounters = Record<string, number>
 
 /** The call this module adds to utils/template.ts's registry. */
 const SEQ = 'seq'
-const DEFAULT_WIDTH = 2
+const DEFAULT_PADDING = 2
 
 const isBlank = (value: unknown): boolean => value === undefined || value === null || value === ''
 
@@ -142,12 +142,12 @@ const resolveInputs = (rootData: unknown, parentPath: string, spec: TemplateSpec
   return values
 }
 
-/** `{seq(width)}`: the number, zero-padded to `width` digits (default 2) and never truncated. */
+/** `{seq(padding)}`: the number, zero-padded to `padding` digits (default 2) and never truncated. */
 const seqFunction =
   (issued: number): TemplateFunction =>
-  (width) => {
-    const digits = width.trim() === '' ? DEFAULT_WIDTH : Number(width)
-    return `${issued}`.padStart(Number.isInteger(digits) && digits >= 0 ? digits : DEFAULT_WIDTH, '0')
+  (padding) => {
+    const digits = padding.trim() === '' ? DEFAULT_PADDING : Number(padding)
+    return `${issued}`.padStart(Number.isInteger(digits) && digits >= 0 ? digits : DEFAULT_PADDING, '0')
   }
 
 /**

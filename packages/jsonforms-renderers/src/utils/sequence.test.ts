@@ -50,7 +50,7 @@ describe('stampRowTemplates', () => {
     ])
   })
 
-  it('pads to the width {seq(…)} is given, without truncating a wider number', () => {
+  it('pads to the padding {seq(…)} is given, without truncating a wider number', () => {
     expect(stampOne('{orderNo}-{seq(3)}')).toEqual({ ref: 'ORD-77-001' })
     expect(stampOne('{orderNo}-{seq()}')).toEqual({ ref: 'ORD-77-01' })
     expect(stampOne('{orderNo}-{seq(x)}')).toEqual({ ref: 'ORD-77-01' })
