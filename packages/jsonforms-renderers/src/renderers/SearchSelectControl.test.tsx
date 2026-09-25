@@ -299,9 +299,9 @@ describe('SearchSelectControl displayTemplate', () => {
     const searches: unknown[] = []
     renderForm(
       {},
-      async (args) => {
+      (args) => {
         searches.push(args)
-        return { options: [portOption] }
+        return Promise.resolve({ options: [portOption] })
       },
       formSchema,
       stringUi,
