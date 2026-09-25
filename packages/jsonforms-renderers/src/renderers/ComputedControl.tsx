@@ -6,13 +6,14 @@ import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from '../utils/computed'
 import type { ComputedInput } from '../utils/computed'
 import type { CellValue } from '../utils/spreadsheet'
+import { renderTemplate } from '../utils/template'
 
 interface XComputedOptions {
   /** alias -> path (shorthand) or { path, default }, relative to this control's own parent object. */
   inputs: Record<string, ComputedInput>
   /** Formula written in terms of the aliases above, e.g. "total_sales + total_imported + total_blend_balance". */
   formula: string
-  /** Display template; "{value}" is replaced by the formatted number. Default "{value}". */
+  /** Display template (see utils/template.ts); "{value}" is the formatted number. Default "{value}". */
   format?: string
   /** Decimal places. Default 2. */
   decimals?: number
@@ -193,7 +194,7 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
             {error}
           </Text>
         ) : (
-          <Text size="2">{format.split(DEFAULT_FORMAT).join(formatComputedValue(value, decimals))}</Text>
+          <Text size="2">{renderTemplate(format, { value: formatComputedValue(value, decimals) })}</Text>
         )}
         {schema.description && (
           <Text size="1" color="gray">
