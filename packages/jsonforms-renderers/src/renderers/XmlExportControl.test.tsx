@@ -188,6 +188,99 @@ describe('XmlExportControl with writeTo (root-relative, the default)', () => {
   })
 })
 
+describe('XmlExportControl with nested writeTo (array reshape)', () => {
+  function makeSchema(xXmlExport: Record<string, unknown>): JsonSchema {
+    return {
+      type: 'object',
+      properties: {
+        lines: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { sku: { type: 'string' }, qty: { type: 'number' } },
+          },
+        },
+        invoiceExport: { type: 'object', 'x-xml-export': xXmlExport },
+      },
+    } as unknown as JsonSchema
+  }
+  const ui = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/invoiceExport' }],
+  } as UISchemaElement
+
+  it('reshapes each array item into the destination tag names, instead of passing source field names through', async () => {
+    renderForm(
+      makeSchema({
+        rootElement: 'Invoice',
+        writeTo: [
+          {
+            from: 'lines',
+            to: 'Lines.Line',
+            writeTo: [
+              { from: 'sku', to: 'SKU' },
+              { from: 'qty', to: 'Quantity' },
+            ],
+          },
+        ],
+      }),
+      {
+        lines: [
+          { sku: 'A-1', qty: 10 },
+          { sku: 'B-2', qty: 20 },
+        ],
+        invoiceExport: {},
+      },
+      ui,
+    )
+
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+
+    await waitFor(() => expect(downloadTextFile).toHaveBeenCalledTimes(1))
+    const [xml] = vi.mocked(downloadTextFile).mock.calls[0]
+    expect(xml).toContain('<SKU>A-1</SKU>')
+    expect(xml).toContain('<Quantity>10</Quantity>')
+    expect(xml).toContain('<SKU>B-2</SKU>')
+    expect(xml).toContain('<Quantity>20</Quantity>')
+    expect(xml).not.toContain('<sku>')
+    expect(xml).not.toContain('<qty>')
+  })
+
+  it('still passes rows through with their source field names when no nested writeTo is given', async () => {
+    renderForm(
+      makeSchema({ rootElement: 'Invoice', writeTo: [{ from: 'lines', to: 'Lines.Line' }] }),
+      { lines: [{ sku: 'A-1', qty: 10 }], invoiceExport: {} },
+      ui,
+    )
+
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+
+    await waitFor(() => expect(downloadTextFile).toHaveBeenCalledTimes(1))
+    const [xml] = vi.mocked(downloadTextFile).mock.calls[0]
+    expect(xml).toContain('<sku>A-1</sku>')
+    expect(xml).toContain('<qty>10</qty>')
+  })
+
+  it('shows an inline error instead of downloading when a nested writeTo meets a non-array from', async () => {
+    renderForm(
+      makeSchema({
+        rootElement: 'Invoice',
+        writeTo: [{ from: 'lines', to: 'Lines.Line', writeTo: [{ from: 'sku', to: 'SKU' }] }],
+      }),
+      { lines: 'not-an-array', invoiceExport: {} },
+      ui,
+    )
+
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+
+    await waitFor(() => expect(screen.getByText(/did not resolve to a repeating element/)).toBeTruthy())
+    expect(downloadTextFile).not.toHaveBeenCalled()
+  })
+})
+
 describe('XmlExportControl with writeTo and writeBase: parent', () => {
   function makeArraySchema(): JsonSchema {
     return {

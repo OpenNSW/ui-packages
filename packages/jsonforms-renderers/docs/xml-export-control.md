@@ -65,6 +65,7 @@ Note that `invoiceExport` itself never appears in the output, and is never read 
 | `format`             | dayjs parse format, `as: "date"` only.                                               |
 | `map`                | Substitutes matching values. An unmapped value passes through unchanged.             |
 | `default`            | Used when the source is absent.                                                      |
+| `writeTo`            | When `from` resolves to an array, reshapes each item — see below.                    |
 
 This is the exact same entry shape `x-xml`'s own `writeTo` uses — see [xml-control.md](./xml-control.md#filling-a-form-from-one-upload-writeto) for the full key-by-key behavior (`map`/`as`/`default` order, formula aliasing rules, absent-source handling). The only difference is direction: there, `from` addresses the parsed document and `to` addresses form data; here, `from` addresses form data and `to` addresses the document being built.
 
@@ -91,19 +92,32 @@ Item 2's button now reads item 2's own `id`/`qty`, never item 1's. As with `x-xm
 | `"root"`    | the form data root (default)        |
 | `"parent"`  | the control's own containing object |
 
-## Limitations
+## Reshaping an array (nested `writeTo`)
 
-`writeTo` gathers **one value from one `from` path into one `to` path** — it has no way to reach inside an array's own elements and rename their fields. When `from` resolves to an array (e.g. a `SpreadsheetControl`-backed set of line-item records), it's carried through to `to` **verbatim**, original field names and all — there's no per-element remapping.
+By default, when `from` resolves to an array (e.g. a `SpreadsheetControl`-backed set of line-item records), it's carried through to `to` **verbatim**, original field names and all:
 
 ```jsonc
 { "from": "lines.sheet", "to": "Lines.Line" }
 ```
 
-If `lines.sheet` holds `[{ "sku": "A-1", "qty": 10 }]`, the output is `<Lines><Line><sku>A-1</sku><qty>10</qty></Line></Lines>` — not `<SKU>`/`<Quantity>`, even if that's what the target format needs. There is currently no way to express "for each element in this array, also rename its own fields."
+If `lines.sheet` holds `[{ "sku": "A-1", "qty": 10 }]`, the output is `<Lines><Line><sku>A-1</sku><qty>10</qty></Line></Lines>` — not `<SKU>`/`<Quantity>`, even if that's what the target format needs.
 
-**Workaround:** configure the naming further upstream, at the source of the array — e.g. `SpreadsheetControl`'s own `x-spreadsheet.columns[].id` — so the _stored_ records already use the names the export needs. `writeTo` then passes them through already correct.
+Nest another `writeTo` directly on the entry to reshape each array item instead — the exact same directive `x-xml`'s own importer-side `writeTo` uses for a repeating XML element (see [xml-control.md](./xml-control.md#reshaping-a-repeated-element-nested-writeto)), since both controls resolve entries through the same shared function:
 
-This is a real gap for the common "repeated line items with renamed elements" case, tracked as follow-up work in a separate issue.
+```jsonc
+{
+  "from": "lines.sheet",
+  "to": "Lines.Line",
+  "writeTo": [
+    { "from": "sku", "to": "SKU" },
+    { "from": "qty", "to": "Quantity" },
+  ],
+}
+```
+
+Given the same data, this now downloads `<Lines><Line><SKU>A-1</SKU><Quantity>10</Quantity></Line></Lines>`. As on the import side, a nested `writeTo` only makes sense once `from` actually resolves to an array — if it resolves to a single value instead, the entry throws rather than silently writing that value unreshaped.
+
+**When the array items already use the target names** — e.g. by configuring `SpreadsheetControl`'s own `x-spreadsheet.columns[].id` upstream so the _stored_ records already match — a plain `writeTo` entry with no nested `writeTo` still passes them through unchanged, exactly as before.
 
 ## Behavior notes
 
