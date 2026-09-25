@@ -1203,27 +1203,22 @@ export const fixtures: Fixture[] = [
                     type: 'string',
                     title: 'Line reference',
                     readOnly: true,
-                    // Numbered, so ArrayControl stamps it once per row. The
-                    // placeholders resolve against `order` — the object that
-                    // contains the array, since the row itself is still empty.
-                    // `orderNo` needs no `inputs` entry: an undeclared
-                    // placeholder is a path of its own name.
+                    // Stamped once per row. The placeholders resolve against
+                    // `order` — the object that contains the array, since the
+                    // row itself is still empty. `orderNo` needs no `inputs`
+                    // entry: an undeclared placeholder is a path of its own name.
                     'x-template': {
-                      template: '{orderNo}-{ordered}-{seq}',
+                      template: '{orderNo}-{ordered}-{seq(2)}',
                       inputs: { ordered: 'orderDate' },
-                      padding: 2,
                     },
                   },
                   receivedOn: {
                     type: 'string',
                     title: 'Received on',
                     readOnly: true,
-                    // {today(...)} is the shared engine's function form — the
-                    // only way to reach the date, and it picks the format.
-                    // Numbered too, so
-                    // it is stamped with the row rather than following the
-                    // clock afterwards.
-                    'x-template': { template: '{today(YYYYMMDD)}-{seq}' },
+                    // Not numbered, but still stamped when the row is added,
+                    // so it keeps that day rather than following the clock.
+                    'x-template': { template: '{today(YYYYMMDD)}' },
                   },
                   description: { type: 'string' },
                   qty: { type: 'integer', minimum: 1 },
@@ -1252,7 +1247,7 @@ export const fixtures: Fixture[] = [
         lineItems: [
           {
             lineRef: 'ORD-77-2026-05-04-07',
-            receivedOn: '20260504-07',
+            receivedOn: '20260504',
             description: 'Carried over from a saved order',
             qty: 3,
           },

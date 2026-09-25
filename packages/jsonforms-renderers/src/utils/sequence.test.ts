@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { JsonSchema } from '@jsonforms/core'
-import { stampSequences } from './sequence'
+import { stampRowTemplates } from './sequence'
 import type { SequenceCounters } from './sequence'
 
-const spec = { template: '{orderNo}-{orderDate}-{seq}', padding: 2 }
+const spec = { template: '{orderNo}-{orderDate}-{seq(2)}' }
 
 const itemsSchema = {
   type: 'object',
@@ -13,12 +13,23 @@ const itemsSchema = {
   },
 } as unknown as JsonSchema
 
-// The array sits at `order.lineItems`, so its rows are numbered against
+// The array sits at `order.lineItems`, so its rows are filled against
 // `order` — the object the template's placeholders live in.
 const rootData = { order: { orderNo: 'ORD-77', orderDate: '2026-05-04' } }
 
 const stamp = (newRow: unknown, rows: unknown[], counters: SequenceCounters = {}) =>
-  stampSequences(itemsSchema, newRow, rows, rootData, 'order', counters)
+  stampRowTemplates(itemsSchema, newRow, rows, rootData, 'order', counters)
+
+/** Stamps one new row against `data` with a single-field schema carrying `template`. */
+const stampOne = (template: string, data: unknown = rootData, extra: Record<string, unknown> = {}) =>
+  stampRowTemplates(
+    { properties: { ref: { 'x-template': { template, ...extra } } } } as unknown as JsonSchema,
+    {},
+    [],
+    data,
+    'order',
+    {},
+  )
 
 /** Adds `count` rows to `rows`, sharing one counter, and returns them. */
 const addRows = (count: number, counters: SequenceCounters = {}, rows: unknown[] = []) => {
@@ -26,7 +37,11 @@ const addRows = (count: number, counters: SequenceCounters = {}, rows: unknown[]
   return rows
 }
 
-describe('stampSequences', () => {
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('stampRowTemplates', () => {
   it('numbers each new row in turn', () => {
     expect(addRows(3)).toEqual([
       { lineRef: 'ORD-77-2026-05-04-01' },
@@ -35,7 +50,11 @@ describe('stampSequences', () => {
     ])
   })
 
-  it('pads to the configured width without truncating a wider number', () => {
+  it('pads to the padding {seq(…)} is given, without truncating a wider number', () => {
+    expect(stampOne('{orderNo}-{seq(3)}')).toEqual({ ref: 'ORD-77-001' })
+    expect(stampOne('{orderNo}-{seq()}')).toEqual({ ref: 'ORD-77-01' })
+    expect(stampOne('{orderNo}-{seq(x)}')).toEqual({ ref: 'ORD-77-01' })
+
     const counters: SequenceCounters = { lineRef: 99 }
     expect(stamp({}, [], counters)).toEqual({ lineRef: 'ORD-77-2026-05-04-100' })
   })
@@ -105,6 +124,15 @@ describe('stampSequences', () => {
         lineRef: 'ORD-77-2026-05-04-12',
       })
     })
+
+    // With nothing between them, a neighbour's digits run into the number:
+    // `{today(YYYYMMDD)}{seq()}` would read 2026050401 back as the number.
+    it('does not number a template whose {seq(…)} touches another placeholder', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      expect(stampOne('{orderNo}{seq(2)}')).toEqual({})
+      expect(stampOne('{seq(2)}{orderNo}')).toEqual({})
+      expect(warn).toHaveBeenCalledTimes(2)
+    })
   })
 
   describe('resolving a template', () => {
@@ -112,52 +140,57 @@ describe('stampSequences', () => {
     // alongside the array — resolved from the array's parent, not the root.
     it('resolves against the object containing the array', () => {
       const nested = { a: { b: { orderNo: 'DEEP', orderDate: '2026-01-01' } } }
-      expect(stampSequences(itemsSchema, {}, [], nested, 'a.b', {})).toEqual({
+      expect(stampRowTemplates(itemsSchema, {}, [], nested, 'a.b', {})).toEqual({
         lineRef: 'DEEP-2026-01-01-01',
       })
-      expect(stampSequences(itemsSchema, {}, [], { orderNo: 'TOP', orderDate: '2026-02-02' }, '', {})).toEqual({
+      expect(stampRowTemplates(itemsSchema, {}, [], { orderNo: 'TOP', orderDate: '2026-02-02' }, '', {})).toEqual({
         lineRef: 'TOP-2026-02-02-01',
       })
     })
 
     it('lets inputs alias a deeper path, and give it a default', () => {
-      const schema = {
-        properties: {
-          ref: {
-            'x-template': {
-              template: '{ordered}/{status}/{seq}',
-              inputs: { ordered: 'meta.dates.ordered', status: { path: 'status', default: 'draft' } },
-            },
-          },
-        },
-      } as unknown as JsonSchema
       const data = { order: { meta: { dates: { ordered: '2026-05-04' } } } }
-      expect(stampSequences(schema, {}, [], data, 'order', {})).toEqual({ ref: '2026-05-04/draft/01' })
+      expect(
+        stampOne('{ordered}/{status}/{seq(2)}', data, {
+          inputs: { ordered: 'meta.dates.ordered', status: { path: 'status', default: 'draft' } },
+        }),
+      ).toEqual({ ref: '2026-05-04/draft/01' })
+    })
+
+    // Same rule as x-computed: a default stands in for null/undefined only.
+    it('keeps an empty string rather than replacing it with the default', () => {
+      const data = { order: { status: '' } }
+      expect(stampOne('{status}/{seq(2)}', data, { inputs: { status: { path: 'status', default: 'draft' } } })).toEqual(
+        { ref: '/01' },
+      )
     })
 
     // A value the user has not typed yet leaves a gap, never the placeholder
     // itself — this string is persisted, so "{orderDate}" would be stored.
     it('renders a missing value as empty rather than as the placeholder', () => {
-      expect(stampSequences(itemsSchema, {}, [], { order: { orderNo: 'ORD-77' } }, 'order', {})).toEqual({
+      expect(stampRowTemplates(itemsSchema, {}, [], { order: { orderNo: 'ORD-77' } }, 'order', {})).toEqual({
         lineRef: 'ORD-77--01',
       })
     })
 
-    // The engine's function registry, reached through a stamped row.
-    it('passes a {name(arg)} call through to the shared engine', () => {
-      const schema = {
-        properties: { ref: { 'x-template': { template: '{today(YYYY)}-{seq}' } } },
-      } as unknown as JsonSchema
-      expect(stampSequences(schema, {}, [], {}, '', {})).toMatchObject({
-        ref: expect.stringMatching(/^\d{4}-01$/) as unknown as string,
-      })
+    it('renders a value it cannot print as empty', () => {
+      const data = { order: { orderNo: { value: 'ORD-77', label: 'Order 77' } } }
+      expect(stampOne('{orderNo}-{seq(2)}', data)).toEqual({ ref: '-01' })
     })
 
-    it('does not let a form field shadow {seq}', () => {
-      const data = { order: { orderNo: 'ORD-77', orderDate: '2026-05-04', seq: '99' } }
-      expect(stampSequences(itemsSchema, {}, [], data, 'order', {})).toEqual({
-        lineRef: 'ORD-77-2026-05-04-01',
-      })
+    // The engine's function registry, reached through a stamped row.
+    it('passes a {name(arg)} call through to the shared engine', () => {
+      const { ref } = stampOne('{today(YYYY)}-{seq(2)}', {}) as { ref: string }
+      expect(ref).toMatch(/^\d{4}-01$/)
+    })
+
+    it('leaves an unknown call as written, so the typo shows', () => {
+      expect(stampOne('{nope()}-{seq(2)}')).toEqual({ ref: '{nope()}-01' })
+    })
+
+    it('reads a bare {seq} from the form, like any other value', () => {
+      const data = { order: { seq: 'A' } }
+      expect(stampOne('{seq}-{seq(2)}', data)).toEqual({ ref: 'A-01' })
     })
   })
 
@@ -177,22 +210,26 @@ describe('stampSequences', () => {
 
     it('ignores a schema with no template, and a malformed one', () => {
       const plain = { type: 'object', properties: { a: { type: 'string' } } } as unknown as JsonSchema
-      expect(stampSequences(plain, {}, [], rootData, 'order', {})).toEqual({})
+      expect(stampRowTemplates(plain, {}, [], rootData, 'order', {})).toEqual({})
 
-      const bad = { properties: { a: { 'x-template': null }, b: { 'x-template': { padding: 2 } } } }
-      expect(stampSequences(bad as unknown as JsonSchema, {}, [], rootData, 'order', {})).toEqual({})
-      expect(stampSequences(undefined, {}, [], rootData, 'order', {})).toEqual({})
-    })
-
-    // Without {seq} there is nothing to remember, so nothing is stamped —
-    // following the inputs afterwards is a control's job, not this module's.
-    it('ignores an unnumbered template', () => {
-      const plain = { properties: { a: { 'x-template': { template: '{orderNo}' } } } }
-      expect(stampSequences(plain as unknown as JsonSchema, {}, [], rootData, 'order', {})).toEqual({})
+      const bad = { properties: { a: { 'x-template': null }, b: { 'x-template': { inputs: {} } } } }
+      expect(stampRowTemplates(bad as unknown as JsonSchema, {}, [], rootData, 'order', {})).toEqual({})
+      expect(stampRowTemplates(undefined, {}, [], rootData, 'order', {})).toEqual({})
     })
 
     it('returns a row it cannot stamp as it found it', () => {
       expect(stamp('not a row', [])).toBe('not a row')
     })
+  })
+
+  // Without {seq(…)} there is nothing to count, but the field is still filled
+  // once, when the row is added.
+  it('fills an unnumbered template once, without touching the counters', () => {
+    const counters: SequenceCounters = {}
+    const schema = { properties: { ref: { 'x-template': { template: '{orderNo}/{orderDate}' } } } }
+    expect(stampRowTemplates(schema as unknown as JsonSchema, {}, [], rootData, 'order', counters)).toEqual({
+      ref: 'ORD-77/2026-05-04',
+    })
+    expect(counters).toEqual({})
   })
 })

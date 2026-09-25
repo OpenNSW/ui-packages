@@ -16,6 +16,17 @@ export interface ComputedResolution {
   error?: string
 }
 
+// One input, relative to `parentPath`; its `default` stands in for null/undefined. undefined means missing.
+export function resolveComputedInput(
+  rootData: unknown,
+  parentPath: string,
+  input: ComputedInput,
+): CellValue | undefined {
+  const { path, default: fallback } = typeof input === 'string' ? { path: input, default: undefined } : input
+  const resolved = Resolve.data(rootData, parentPath ? `${parentPath}.${path}` : path) as CellValue | undefined
+  return resolved === null || resolved === undefined ? fallback : resolved
+}
+
 // Pure, synchronous. Resolves each alias in `inputs` against `rootData`,
 // relative to `parentPath` — the computed control's own containing object
 // (e.g. a control at `blendsheet_data.0.total` passes parentPath
@@ -38,17 +49,10 @@ export function resolveComputedInputs(
 ): Record<string, CellValue> | undefined {
   const values: Record<string, CellValue> = {}
 
-  for (const [alias, config] of Object.entries(inputs)) {
-    const { path, default: fallback } = typeof config === 'string' ? { path: config, default: undefined } : config
-    const resolvedPath = parentPath ? `${parentPath}.${path}` : path
-    const resolved = Resolve.data(rootData, resolvedPath) as CellValue | undefined
-
-    if (resolved === null || resolved === undefined) {
-      if (fallback === undefined) return undefined
-      values[alias] = fallback
-    } else {
-      values[alias] = resolved
-    }
+  for (const [alias, input] of Object.entries(inputs)) {
+    const value = resolveComputedInput(rootData, parentPath, input)
+    if (value === undefined) return undefined
+    values[alias] = value
   }
 
   return values
