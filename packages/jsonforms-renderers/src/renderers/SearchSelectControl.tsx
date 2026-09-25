@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, type KeyboardEvent }
 import { useSearchService, type SearchOption } from '../contexts/SearchServiceContext'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { getErrorMessage } from '../utils/error'
+import { renderTemplate } from '../utils/template'
 import * as React from 'react'
 
 export type SearchSelectMode = 'small-list' | 'large-searchable-list' | 'large-paginated-list'
@@ -18,6 +19,9 @@ interface XSearchOptions {
   params?: Record<string, unknown>
   // sibling property name (sent as params.parent), or param-key → sibling property for several live filters
   dependsOn?: string | Record<string, string>
+  // `{id}` / `{name}` string used as the dropdown / selected label. Required —
+  // a missing or empty value shows a config error instead of falling back to `name`.
+  displayTemplate: string
 }
 
 function dependsOnConst(raw: unknown): string | undefined {
@@ -79,6 +83,13 @@ type SearchSelectProps = ControlProps & {
   schema: JsonSchema & { 'x-search'?: XSearchOptions }
 }
 
+function presentOption(option: SearchOption, displayTemplate: string): SearchOption {
+  // configError already blocks the dropdown; skip interpolation so resolve
+  // cannot blank a selected label when the schema forgot the key.
+  if (!displayTemplate) return option
+  return { ...option, name: renderTemplate(displayTemplate, option) }
+}
+
 // The only three valid combinations of {fetch on open, typed search, "load more" pagination}.
 const MODE_CONFIG: Record<SearchSelectMode, { fetchOnOpen: boolean; searchable: boolean; paginated: boolean }> = {
   'small-list': { fetchOnOpen: true, searchable: false, paginated: false },
@@ -98,12 +109,16 @@ const SearchSelectControl = ({
   schema,
   uischema,
 }: SearchSelectProps) => {
-  const xSearch = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? { service: '' }
+  const xSearch = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? {
+    service: '',
+    displayTemplate: '',
+  }
   const serviceName = xSearch.service ?? ''
   // unconfigured mode defaults to the "search before fetching" lifecycle — the safest choice for an unknown data size
   const mode = xSearch.mode ?? 'large-paginated-list'
   const modeConfig = MODE_CONFIG[mode]
   const fetchOnOpen = modeConfig?.fetchOnOpen ?? false
+  const displayTemplate = typeof xSearch.displayTemplate === 'string' ? xSearch.displayTemplate : ''
   const ctx = useJsonForms()
   const parentPath = path.split('.').slice(0, -1).join('.')
   // Memoized the same way ComputedControl caches resolveComputedInputs: form-wide data
@@ -138,7 +153,9 @@ const SearchSelectControl = ({
       ? `Search service "${serviceName}" is not registered.`
       : !modeConfig
         ? `Invalid x-search.mode "${mode}". Expected "small-list", "large-searchable-list", or "large-paginated-list".`
-        : null
+        : !displayTemplate
+          ? 'x-search.displayTemplate is required.'
+          : null
 
   const isEnabled = enabled !== false
   const isValid = !errors || errors.length === 0
@@ -172,6 +189,11 @@ const SearchSelectControl = ({
   }, [parentValuesKey, currentValue, handleChange, path, isObjectMode])
 
   useEffect(() => {
+    if (configError) {
+      setSelectedOption(undefined)
+      lastResolvedRef.current = undefined
+      return
+    }
     if (!currentValue) {
       setSelectedOption(undefined)
       lastResolvedRef.current = undefined
@@ -194,7 +216,7 @@ const SearchSelectControl = ({
     void service
       .resolve(currentValue, searchParams)
       .then((opt) => {
-        if (!cancelled && opt) setSelectedOption(opt)
+        if (!cancelled && opt) setSelectedOption(presentOption(opt, displayTemplate))
       })
       .catch(() => {
         /* keep raw-value fallback */
@@ -202,10 +224,11 @@ const SearchSelectControl = ({
     return () => {
       cancelled = true
     }
-  }, [currentValue, currentLabel, isObjectMode, service, searchParams])
+  }, [configError, currentValue, currentLabel, isObjectMode, service, searchParams, displayTemplate])
 
   const runSearch = useCallback(
     async (q: string, isLoadMore = false) => {
+      if (configError) return
       if (!service) {
         setError('Search service not configured.')
         return
@@ -234,7 +257,7 @@ const SearchSelectControl = ({
         // let that stale payload overwrite a newer search (typed query or a new sibling).
         if (controller.signal.aborted) return
 
-        const newItems = result.options ?? []
+        const newItems = (result.options ?? []).map((opt) => presentOption(opt, displayTemplate))
         if (isLoadMore) setOptions((prev) => [...prev, ...newItems])
         else setOptions(newItems)
 
@@ -251,7 +274,7 @@ const SearchSelectControl = ({
         }
       }
     },
-    [service, modeConfig?.paginated, searchParams],
+    [configError, service, modeConfig?.paginated, searchParams, displayTemplate],
   )
 
   useEffect(() => {

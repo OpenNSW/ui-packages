@@ -24,7 +24,7 @@ const schema = {
     country: {
       type: 'string',
       title: 'Country',
-      'x-search': { service: 'countries', mode: 'small-list', dependsOn: 'continent' },
+      'x-search': { service: 'countries', mode: 'small-list', dependsOn: 'continent', displayTemplate: '{name}' },
     },
   },
 } as unknown as JsonSchema
@@ -44,6 +44,7 @@ function renderForm(
   formUi: UISchemaElement = uischema,
 ) {
   const writes: Data[] = []
+  const resolves: string[] = []
   let live = true
   finishers.push(() => {
     live = false
@@ -53,6 +54,7 @@ function renderForm(
     countries: {
       search,
       async resolve(value: string) {
+        resolves.push(value)
         return { id: value, name: value }
       },
     },
@@ -78,7 +80,7 @@ function renderForm(
   }
 
   render(<Harness />)
-  return { writes, latest: () => writes[writes.length - 1] }
+  return { writes, latest: () => writes[writes.length - 1], resolves }
 }
 
 describe('SearchSelectControl dependsOn', () => {
@@ -121,6 +123,7 @@ describe('SearchSelectControl dependsOn', () => {
           service: 'countries',
           mode: 'small-list',
           dependsOn: { continent: 'continent', region: 'region' },
+          displayTemplate: '{name}',
         },
       },
     },
@@ -206,6 +209,7 @@ describe('SearchSelectControl dependsOn', () => {
             mode: 'small-list',
             dependsOn: { continent: 'continent', region: 'region' },
             params: { id: 'scientific-names', version: '1' },
+            displayTemplate: '{name}',
           },
         },
       },
@@ -246,6 +250,7 @@ describe('SearchSelectControl dependsOn', () => {
             service: 'countries',
             mode: 'small-list',
             dependsOn: { continent: '', region: 3 },
+            displayTemplate: '{name}',
           },
         },
       },
@@ -268,5 +273,124 @@ describe('SearchSelectControl dependsOn', () => {
     fireEvent.focus(screen.getByRole('textbox'))
     expect(await screen.findByText('Select the related field first.')).toBeTruthy()
     expect(searches).toHaveLength(0)
+  })
+})
+
+describe('SearchSelectControl displayTemplate', () => {
+  const portOption = { id: 'USTMR', name: 'ALTHEIMER' }
+
+  const stringUi = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/port' }],
+  } as UISchemaElement
+
+  it('shows a config error when displayTemplate is omitted', async () => {
+    const formSchema = {
+      type: 'object',
+      properties: {
+        port: {
+          type: 'string',
+          title: 'Port',
+          'x-search': { service: 'countries', mode: 'small-list' },
+        },
+      },
+    } as unknown as JsonSchema
+
+    const searches: unknown[] = []
+    renderForm(
+      {},
+      (args) => {
+        searches.push(args)
+        return Promise.resolve({ options: [portOption] })
+      },
+      formSchema,
+      stringUi,
+    )
+
+    fireEvent.focus(screen.getByRole('textbox'))
+    expect(await screen.findByText('x-search.displayTemplate is required.')).toBeTruthy()
+    expect(screen.queryByText('ALTHEIMER')).toBeNull()
+    expect(searches).toHaveLength(0)
+  })
+
+  it('does not resolve a stored value when displayTemplate is omitted', async () => {
+    const formSchema = {
+      type: 'object',
+      properties: {
+        port: {
+          type: 'string',
+          title: 'Port',
+          'x-search': { service: 'countries', mode: 'small-list' },
+        },
+      },
+    } as unknown as JsonSchema
+
+    const { resolves } = renderForm(
+      { port: 'USTMR' },
+      () => Promise.resolve({ options: [portOption] }),
+      formSchema,
+      stringUi,
+    )
+
+    await screen.findByRole('textbox')
+    expect(resolves).toHaveLength(0)
+  })
+
+  it('shows displayTemplate in the dropdown and stores the service id', async () => {
+    const formSchema = {
+      type: 'object',
+      properties: {
+        port: {
+          type: 'string',
+          title: 'Port',
+          'x-search': {
+            service: 'countries',
+            mode: 'small-list',
+            displayTemplate: '{id}-{name}',
+          },
+        },
+      },
+    } as unknown as JsonSchema
+
+    const { latest } = renderForm({}, () => Promise.resolve({ options: [portOption] }), formSchema, stringUi)
+
+    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(await screen.findByText('USTMR-ALTHEIMER'))
+
+    await waitFor(() => {
+      expect(latest()?.port).toBe('USTMR')
+    })
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('USTMR-ALTHEIMER')
+  })
+
+  it('writes the service id and templated label for an object-shaped field', async () => {
+    const formSchema = {
+      type: 'object',
+      properties: {
+        port: {
+          type: 'object',
+          title: 'Port',
+          'x-search': {
+            service: 'countries',
+            mode: 'small-list',
+            displayTemplate: '{id}-{name}',
+          },
+          properties: {
+            value: { type: 'string' },
+            label: { type: 'string' },
+          },
+          required: ['value'],
+        },
+      },
+    } as unknown as JsonSchema
+
+    const { latest } = renderForm({}, () => Promise.resolve({ options: [portOption] }), formSchema, stringUi)
+
+    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(await screen.findByText('USTMR-ALTHEIMER'))
+
+    await waitFor(() => {
+      expect(latest()?.port).toEqual({ value: 'USTMR', label: 'USTMR-ALTHEIMER' })
+    })
   })
 })

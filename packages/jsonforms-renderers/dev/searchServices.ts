@@ -17,7 +17,34 @@ const COUNTRIES: (SearchOption & { continent: string; size: 'large' | 'small' })
   { id: 'gb', name: 'United Kingdom', continent: 'europe', size: 'large' },
 ]
 
+// A few UN/LOCODE rows from the NPQS port list. Several share the title HAMPTON,
+// so a displayTemplate of "{id}-{name}" is what tells them apart.
+const PORTS: SearchOption[] = [
+  { id: 'USUJS', name: 'HAMPTON' },
+  { id: 'USHPF', name: 'HAMPTON' },
+  { id: 'USHPN', name: 'HAMPTON' },
+  { id: 'USAHM', name: 'HAMPTON' },
+  { id: 'GBHMP', name: 'HAMPTON' },
+  { id: 'USPHF', name: 'HAMPTON/HAMPTON ROADS' },
+  { id: 'USNIM', name: 'NEW HAMPTON' },
+  { id: 'USHTO', name: 'EAST HAMPTON' },
+]
+
 const PAGE_SIZE = 5
+
+function pageByName(options: SearchOption[], query: string | undefined, cursor: unknown) {
+  const matches = query ? options.filter((option) => option.name.toLowerCase().includes(query.toLowerCase())) : options
+
+  // An empty query means "browse everything" — the only fetch small-list ever makes, and
+  // large-searchable-list's initial one. Neither mode renders "Load more", so paging here would hide
+  // items with no way to reach them. Only page once there's an actual query, like a real search API would.
+  if (!query) return { options: matches, nextCursor: undefined }
+
+  const offset = typeof cursor === 'number' ? cursor : 0
+  const page = matches.slice(offset, offset + PAGE_SIZE)
+  const nextOffset = offset + PAGE_SIZE
+  return { options: page, nextCursor: nextOffset < matches.length ? nextOffset : undefined }
+}
 
 export const searchServices: SearchServiceRegistry = {
   countries: {
@@ -35,20 +62,18 @@ export const searchServices: SearchServiceRegistry = {
       const size = typeof params?.size === 'string' ? params.size : undefined
       let scoped = continent ? COUNTRIES.filter((c) => c.continent === continent) : COUNTRIES
       if (size) scoped = scoped.filter((c) => c.size === size)
-      const matches = query ? scoped.filter((c) => c.name.toLowerCase().includes(query.toLowerCase())) : scoped
-
-      // An empty query means "browse everything" — the only fetch small-list ever makes, and
-      // large-searchable-list's initial one. Neither mode renders "Load more", so paging here would hide
-      // items with no way to reach them. Only page once there's an actual query, like a real search API would.
-      if (!query) return { options: matches, nextCursor: undefined }
-
-      const offset = typeof cursor === 'number' ? cursor : 0
-      const page = matches.slice(offset, offset + PAGE_SIZE)
-      const nextOffset = offset + PAGE_SIZE
-      return { options: page, nextCursor: nextOffset < matches.length ? nextOffset : undefined }
+      return pageByName(scoped, query, cursor)
     },
     async resolve(value) {
       return COUNTRIES.find((c) => c.id === value)
+    },
+  },
+  ports: {
+    async search({ query, cursor }) {
+      return pageByName(PORTS, query, cursor)
+    },
+    async resolve(value) {
+      return PORTS.find((port) => port.id === value)
     },
   },
 }

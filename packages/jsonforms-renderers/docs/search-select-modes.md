@@ -9,7 +9,7 @@ below.
 ```jsonc
 {
   "type": "string",
-  "x-search": { "service": "countries", "mode": "large-searchable-list" },
+  "x-search": { "service": "countries", "mode": "large-searchable-list", "displayTemplate": "{name}" },
 }
 ```
 
@@ -28,11 +28,21 @@ fixed filters, via `x-search.params`:
 {
   "asianCountry": {
     "type": "string",
-    "x-search": { "service": "countries", "mode": "large-searchable-list", "params": { "continent": "asia" } },
+    "x-search": {
+      "service": "countries",
+      "mode": "large-searchable-list",
+      "displayTemplate": "{name}",
+      "params": { "continent": "asia" },
+    },
   },
   "europeanCountry": {
     "type": "string",
-    "x-search": { "service": "countries", "mode": "large-searchable-list", "params": { "continent": "europe" } },
+    "x-search": {
+      "service": "countries",
+      "mode": "large-searchable-list",
+      "displayTemplate": "{name}",
+      "params": { "continent": "europe" },
+    },
   },
 }
 ```
@@ -57,6 +67,7 @@ value is set, the dropdown shows "Select the related field first." instead of fe
     "x-search": {
       "service": "static-data",
       "mode": "large-searchable-list",
+      "displayTemplate": "{name}",
       "params": { "id": "commodities", "version": "1" },
     },
   },
@@ -66,6 +77,7 @@ value is set, the dropdown shows "Select the related field first." instead of fe
       "service": "static-data",
       "mode": "small-list",
       "dependsOn": "commodity_common_name",
+      "displayTemplate": "{name}",
       "params": { "id": "scientific-names", "version": "1" },
     },
   },
@@ -77,6 +89,41 @@ A string `dependsOn: "commodity_common_name"` is the same as
 query-param name → sibling property (`dependsOn: { "commodity": "commodity_common_name", "origin": "country" }`).
 Fetching waits until every listed sibling has a value; changing any sibling that already
 had a value clears this field.
+
+## Display template
+
+`displayTemplate` is required on every `x-search` field. `{id}` and `{name}` are
+replaced from the option the service already returns. The stored value is always
+`id`. `"displayTemplate": "{name}"` is the usual label; `"{id}-{name}"` shows
+both. A name the option does not have stays as written, so a typo shows up in
+the label. A missing or empty template renders as inline config text in the dropdown
+instead of fetching.
+
+```jsonc
+{
+  "country": {
+    "type": "object",
+    "x-search": {
+      "service": "static-data",
+      "mode": "large-searchable-list",
+      "displayTemplate": "{name}",
+      "params": { "id": "countries", "version": "1" },
+    },
+  },
+  "place": {
+    "type": "object",
+    "x-search": {
+      "service": "static-data",
+      "mode": "large-paginated-list",
+      "displayTemplate": "{id}-{name}",
+      "params": { "id": "places", "version": "1" },
+    },
+  },
+}
+```
+
+Object-typed fields store `{ value: id, label: templated name }`. A later open
+uses the saved label and does not re-resolve.
 
 ## The three modes
 
