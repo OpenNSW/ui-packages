@@ -1,7 +1,49 @@
-import { createDefaultValue, type ArrayControlProps } from '@jsonforms/core'
-import { withJsonFormsArrayControlProps, JsonFormsDispatch } from '@jsonforms/react'
+import { createDefaultValue, type ArrayControlProps, type JsonSchema } from '@jsonforms/core'
+import { withJsonFormsArrayControlProps, JsonFormsDispatch, useJsonForms } from '@jsonforms/react'
+import { useRef, type RefObject } from 'react'
+import { stampRowTemplates } from '../utils/sequence'
+import type { SequenceCounters } from '../utils/sequence'
 import { Card, Button, Flex, Text, Box } from '@radix-ui/themes'
 import { PlusIcon, TrashIcon } from '@radix-ui/react-icons'
+
+interface AddItemButtonProps {
+  path: string
+  items: unknown[]
+  itemsSchema: JsonSchema
+  rootSchema: JsonSchema
+  addItem: ArrayControlProps['addItem']
+  sequences: RefObject<SequenceCounters>
+}
+
+// The only part of the array that reads the whole form, so ArrayControl itself stays memoized.
+const AddItemButton = ({ path, items, itemsSchema, rootSchema, addItem, sequences }: AddItemButtonProps) => {
+  // The whole form, for the placeholders a template resolves against — the
+  // array control is only ever handed its own slice.
+  const ctx = useJsonForms()
+
+  const handleAddItem = () => {
+    const newItem = stampRowTemplates(
+      itemsSchema,
+      createDefaultValue(itemsSchema, rootSchema),
+      items,
+      ctx.core?.data,
+      // The object CONTAINING the array, not the row: a row being filled is
+      // empty, so what a template reaches for sits alongside the array.
+      path.split('.').slice(0, -1).join('.'),
+      sequences.current,
+    )
+    if (addItem) addItem(path, newItem)()
+  }
+
+  return (
+    <Box mt="2">
+      <Button type="button" variant="surface" onClick={handleAddItem}>
+        <PlusIcon />
+        Add Item
+      </Button>
+    </Box>
+  )
+}
 
 export const ArrayControl = ({
   data,
@@ -15,6 +57,14 @@ export const ArrayControl = ({
   rootSchema,
   arraySchema,
 }: ArrayControlProps) => {
+  // Numbers already handed out to this array's numbered `x-template` fields.
+  // A ref, not state: it must survive a row being removed, or the next row
+  // added would be given the removed row's number. Held here rather than by
+  // each row's own control because the count belongs to the array, not the
+  // row. It does NOT survive this control unmounting — see SequenceCounters
+  // in utils/sequence.ts for what that costs and what covers it.
+  const sequences = useRef<SequenceCounters>({})
+
   // If `arraySchema` is present, `schema` is already our `itemsSchema`, else fall back to `schema.items`
   const itemsSchema = arraySchema ? schema : schema.items
   const actualArraySchema = arraySchema || schema
@@ -35,11 +85,6 @@ export const ArrayControl = ({
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
   const itemLabel = options.itemLabel || 'Item'
-
-  const handleAddItem = () => {
-    const newItem = createDefaultValue(validItemsSchema, rootSchema)
-    if (addItem) addItem(path, newItem)()
-  }
 
   const handleRemoveItem = (indexToRemove: number) => {
     if (removeItems) {
@@ -116,12 +161,14 @@ export const ArrayControl = ({
         })}
 
         {canAdd && (
-          <Box mt="2">
-            <Button type="button" variant="surface" onClick={handleAddItem}>
-              <PlusIcon />
-              Add Item
-            </Button>
-          </Box>
+          <AddItemButton
+            path={path}
+            items={items}
+            itemsSchema={validItemsSchema}
+            rootSchema={rootSchema}
+            addItem={addItem}
+            sequences={sequences}
+          />
         )}
       </Flex>
     </Box>
