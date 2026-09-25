@@ -13,7 +13,7 @@ interface XComputedOptions {
   inputs: Record<string, ComputedInput>
   /** Formula written in terms of the aliases above, e.g. "total_sales + total_imported + total_blend_balance". */
   formula: string
-  /** Display template; "{value}" is replaced by the formatted number. Default "{value}". */
+  /** Display template (see utils/template.ts); "{value}" is the formatted number. Default "{value}". */
   format?: string
   /** Decimal places. Default 2. */
   decimals?: number
