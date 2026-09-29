@@ -177,16 +177,16 @@ A document almost never matches the shape a form wants: a date arrives as `7/23/
 }
 ```
 
-| Key                  | Meaning                                                                           |
-| -------------------- | --------------------------------------------------------------------------------- |
-| `to`                 | Target data path, resolved per `x-xml.writeBase`. Required.                       |
-| `from`               | Source path in the parsed document. Mutually exclusive with `inputs`/`formula`.   |
-| `inputs` + `formula` | Named sources and an expression over them, for a value the document splits up.    |
-| `as`                 | `string`, `number`, `boolean` or `date`.                                          |
-| `format`             | dayjs parse format, `as: "date"` only.                                            |
-| `map`                | Substitutes matching values. An unmapped value passes through unchanged.          |
-| `default`            | Used when the source is absent.                                                   |
-| `writeTo`            | When `from` resolves to a repeated element, reshapes each repetition — see below. |
+| Key                  | Meaning                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `to`                 | Target data path, resolved per `x-xml.writeBase`. Required.                                                                                 |
+| `from`               | Source path in the parsed document. Mutually exclusive with `inputs`/`formula`.                                                             |
+| `inputs` + `formula` | Named sources and an expression over them, for a value the document splits up.                                                              |
+| `as`                 | `string`, `number`, `boolean` or `date`.                                                                                                    |
+| `format`             | The date's format in the document: a strict dayjs parse format, `as: "date"` only. `x-xml-export` writes dates back with the same `format`. |
+| `map`                | Substitutes matching values. An unmapped value passes through unchanged.                                                                    |
+| `default`            | Used when the source is absent.                                                                                                             |
+| `writeTo`            | When `from` resolves to a repeated element, reshapes each repetition — see below.                                                           |
 
 Applied in that order: resolve → `map` → `as` → `default`.
 
@@ -270,7 +270,8 @@ A dot-joined path cannot address a key that itself contains a dot — the same l
 - **`<null/>` is empty, and it parses to an _object_.** `<discount><null/></discount>` becomes `{ "null": "" }`. A non-array object counts as absent, so `default` fills it in — otherwise an object lands in a number field and AJV rejects it with an error the form author cannot act on.
 - **A repeated element is written whole by default.** Arrays are the one object shape that counts as present, because writing rows into a sheet field is the main thing an importer does. `map` and `as` do not apply to them — nest a `writeTo` on the entry instead, to reshape each repetition (see [above](#reshaping-a-repeated-element-nested-writeto)).
 - **An absent source with no `default` writes nothing at all.** An importer fills in what its document carries; clearing a field the document is silent about is a different action.
-- **A date that doesn't match `format` is treated as absent, never guessed.** Parsing is strict, because a two-digit year is ambiguous otherwise.
+- **A date that doesn't match `format` is treated as absent, never guessed.** Parsing is strict, because a two-digit year is ambiguous otherwise. `YY` reads 69–99 as 19xx, so a two-digit round trip through `x-xml-export` only holds for 1969–2068. `format` without `as: "date"` is an error.
+- **`decimals` is export-only.** An importer entry with `decimals` fails the upload: it writes fixed-point text, which would land in a number field. See [xml-export-control.md](./xml-export-control.md#dates-and-numbers).
 - **Formula aliases must not be 1–3 letters and all-alphabetic.** The grammar reads those as spreadsheet column references — use `ref_office`, never `o`. See [computed-fields.md](./computed-fields.md).
 - **If one input of a `formula` is missing the whole entry falls back**, rather than composing a value with a hole in it.
 - **Nothing is written until every entry resolves.** A mapping that cannot be evaluated reports itself instead of half-filling the form.
