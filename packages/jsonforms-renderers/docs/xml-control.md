@@ -274,6 +274,7 @@ A dot-joined path cannot address a key that itself contains a dot — the same l
 - **Formula aliases must not be 1–3 letters and all-alphabetic.** The grammar reads those as spreadsheet column references — use `ref_office`, never `o`. See [computed-fields.md](./computed-fields.md).
 - **If one input of a `formula` is missing the whole entry falls back**, rather than composing a value with a hole in it.
 - **Nothing is written until every entry resolves.** A mapping that cannot be evaluated reports itself instead of half-filling the form.
+- **Inside a nested `writeTo`, a path is either a value or a parent.** Writing `qty` and then `qty.unit` into the same row is an error that fails the upload, rather than one silently replacing the other. An empty `to` is an error too, since it would replace the whole form.
 
 ## Limits
 

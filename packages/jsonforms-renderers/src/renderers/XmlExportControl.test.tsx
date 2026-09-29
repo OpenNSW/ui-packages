@@ -188,6 +188,159 @@ describe('XmlExportControl with writeTo (root-relative, the default)', () => {
   })
 })
 
+describe('XmlExportControl declaration and attributes', () => {
+  function makeSchema(xXmlExport: Record<string, unknown>): JsonSchema {
+    return {
+      type: 'object',
+      properties: {
+        invoice_no: { type: 'string' },
+        note: { type: 'string' },
+        rush: { type: 'boolean' },
+        lines: {
+          type: 'array',
+          items: { type: 'object', properties: { n: { type: 'number' }, sku: { type: 'string' } } },
+        },
+        invoiceExport: { type: 'object', 'x-xml-export': xXmlExport },
+      },
+    } as unknown as JsonSchema
+  }
+  const ui = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/invoiceExport' }],
+  } as UISchemaElement
+  const seed = {
+    invoice_no: 'A&B',
+    note: 'Rush order',
+    rush: true,
+    lines: [
+      { n: 1, sku: 'A-1' },
+      { n: 2, sku: 'B-2' },
+    ],
+    invoiceExport: {},
+  }
+
+  async function download(xXmlExport: Record<string, unknown>): Promise<string> {
+    renderForm(makeSchema(xXmlExport), seed, ui)
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+    await waitFor(() => expect(downloadTextFile).toHaveBeenCalledTimes(1))
+    return vi.mocked(downloadTextFile).mock.calls[0][0]
+  }
+
+  it.each([
+    [{ encoding: 'ISO-8859-1' }, /declaration.encoding can only be "UTF-8"/],
+    [{ version: '2.0' }, /declaration.version must be "1.0" or "1.1"/],
+    [{ standalone: 'maybe' }, /declaration.standalone must be "yes" or "no"/],
+    [{ standAlone: 'no' }, /declaration has an unknown key "standAlone"/],
+    ['yes', /declaration must be an object/],
+  ])('shows a config error for declaration %j', async (declaration, message) => {
+    renderForm(makeSchema({ declaration, writeTo: [{ from: 'invoice_no', to: 'Id' }] }), seed, ui)
+
+    await waitFor(() => expect(screen.getByText(message)).toBeTruthy())
+    expect(downloadButton()).toBeNull()
+  })
+
+  it('shows a config error for an attribute segment that is not last, even inside a nested writeTo', async () => {
+    renderForm(
+      makeSchema({ writeTo: [{ from: 'lines', to: 'Lines.Line', writeTo: [{ from: 'n', to: 'Party.@_id.x' }] }] }),
+      seed,
+      ui,
+    )
+
+    await waitFor(() =>
+      expect(screen.getByText(/writeTo "Party.@_id.x": "@_id" must be the last segment/)).toBeTruthy(),
+    )
+    expect(downloadButton()).toBeNull()
+  })
+
+  it('shows a config error for an entry that is not an object', async () => {
+    renderForm(makeSchema({ writeTo: ['invoice_no'] }), seed, ui)
+
+    await waitFor(() => expect(screen.getByText(/every writeTo entry must be an object/)).toBeTruthy())
+  })
+
+  it('writes no declaration unless one is configured', async () => {
+    const xml = await download({ rootElement: 'Invoice', writeTo: [{ from: 'invoice_no', to: 'Id' }] })
+    expect(xml.startsWith('<Invoice>')).toBe(true)
+  })
+
+  it('writes the default declaration first for declaration: {}', async () => {
+    const xml = await download({ rootElement: 'Invoice', declaration: {}, writeTo: [{ from: 'invoice_no', to: 'Id' }] })
+    expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n<Invoice>')).toBe(true)
+  })
+
+  it('writes the declared version and standalone', async () => {
+    const xml = await download({
+      rootElement: 'Invoice',
+      declaration: { version: '1.1', standalone: 'no' },
+      writeTo: [{ from: 'invoice_no', to: 'Id' }],
+    })
+    expect(xml.startsWith('<?xml version="1.1" encoding="UTF-8" standalone="no"?>')).toBe(true)
+  })
+
+  it('writes a top-level @_ entry as an attribute of the root element, escaped', async () => {
+    const xml = await download({ rootElement: 'Invoice', writeTo: [{ from: 'invoice_no', to: '@_id' }] })
+    expect(xml).toContain('<Invoice id="A&amp;B"')
+  })
+
+  it('writes attributes on each repeated element and text beside an attribute', async () => {
+    const xml = await download({
+      rootElement: 'Invoice',
+      writeTo: [
+        { from: 'note', to: 'Note.#text' },
+        { formula: '"en"', to: 'Note.@_lang' },
+        {
+          from: 'lines',
+          to: 'Lines.Line',
+          writeTo: [
+            { from: 'n', to: '@_n' },
+            { from: 'sku', to: 'SKU' },
+          ],
+        },
+      ],
+    })
+    expect(xml).toContain('<Note lang="en">Rush order</Note>')
+    expect(xml).toContain('<Line n="1">')
+    expect(xml).toContain('<Line n="2">')
+    expect(xml).toContain('<SKU>B-2</SKU>')
+  })
+
+  it('writes a true attribute with its value, never as a bare flag', async () => {
+    const xml = await download({ rootElement: 'Invoice', writeTo: [{ from: 'rush', to: '@_rush' }] })
+    expect(xml).toContain('<Invoice rush="true"')
+  })
+
+  it('shows an error and downloads nothing when a value collides with a parent', async () => {
+    renderForm(
+      makeSchema({
+        rootElement: 'Invoice',
+        writeTo: [
+          { from: 'note', to: 'Note' },
+          { from: 'invoice_no', to: 'Note.@_ref' },
+        ],
+      }),
+      seed,
+      ui,
+    )
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+
+    await waitFor(() => expect(screen.getByText(/write its text to "Note.#text"/)).toBeTruthy())
+    expect(downloadTextFile).not.toHaveBeenCalled()
+  })
+
+  it('shows the error when the download itself fails, instead of an unhandled rejection', async () => {
+    vi.mocked(downloadTextFile).mockImplementationOnce(() => {
+      throw new Error('Download blocked')
+    })
+    renderForm(makeSchema({ rootElement: 'Invoice', writeTo: [{ from: 'invoice_no', to: 'Id' }] }), seed, ui)
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+
+    await waitFor(() => expect(screen.getByText('Download blocked')).toBeTruthy())
+  })
+})
+
 describe('XmlExportControl with nested writeTo (array reshape)', () => {
   function makeSchema(xXmlExport: Record<string, unknown>): JsonSchema {
     return {

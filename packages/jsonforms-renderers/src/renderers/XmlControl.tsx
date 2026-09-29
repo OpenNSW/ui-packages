@@ -180,7 +180,7 @@ const XmlControl = ({
       let writes: { to: string; value: unknown }[] = []
       if (writeTo && writeTo.length > 0) {
         try {
-          writes = await resolveWrites(parsed, writeTo)
+          writes = await resolveWrites(parsed, writeTo, 'import')
         } catch (err) {
           if (sequence !== uploadSequence.current) return
           setStatus('error')
