@@ -14,7 +14,10 @@ import { radixRenderers } from './index'
 // (writeTo is mandatory and always assembles the document from elsewhere)
 // and never writes to form data either.
 
-vi.mock('../utils/download', () => ({
+// Only the browser download is faked; the file-name helpers next to it stay
+// real, since what name gets downloaded is part of what's under test.
+vi.mock('../utils/download', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/download')>()),
   downloadTextFile: vi.fn(),
 }))
 import { downloadTextFile } from '../utils/download'
@@ -500,5 +503,101 @@ describe('XmlExportControl with writeTo and writeBase: parent', () => {
     expect(xml).toContain('<Id>2</Id>')
     expect(xml).toContain('<Qty>5</Qty>')
     expect(xml).not.toContain('<Id>1</Id>')
+  })
+})
+
+describe('XmlExportControl fileName', () => {
+  function makeSchema(fileName?: string): JsonSchema {
+    return {
+      type: 'object',
+      properties: {
+        invoice_no: { type: 'string' },
+        invoiceExport: {
+          type: 'object',
+          'x-xml-export': { rootElement: 'Invoice', fileName, writeTo: [{ from: 'invoice_no', to: 'Id' }] },
+        },
+      },
+    } as unknown as JsonSchema
+  }
+  const ui = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/invoiceExport' }],
+  } as UISchemaElement
+
+  async function downloadedName(fileName: string | undefined, data: Data): Promise<string> {
+    renderForm(makeSchema(fileName), data, ui)
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+    await waitFor(() => expect(downloadTextFile).toHaveBeenCalledTimes(1))
+    return vi.mocked(downloadTextFile).mock.calls[0][1]
+  }
+
+  it('defaults to export.xml', async () => {
+    expect(await downloadedName(undefined, { invoice_no: 'INV-7' })).toBe('export.xml')
+  })
+
+  it('fills the template from the form, sanitizing what a file name cannot hold', async () => {
+    expect(await downloadedName('invoice_{invoice_no}.xml', { invoice_no: '121/2026' })).toBe('invoice_121_2026.xml')
+  })
+
+  it('falls back when the value the name depends on is empty', async () => {
+    expect(await downloadedName('{invoice_no}.xml', { invoice_no: '', other: 'x' })).toBe('export.xml')
+  })
+
+  it('reads the template from the item under writeBase: parent', async () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        orders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              exporter: {
+                type: 'object',
+                'x-xml-export': {
+                  rootElement: 'Order',
+                  writeBase: 'parent',
+                  fileName: 'order-{id}.xml',
+                  writeTo: [{ from: 'id', to: 'Id' }],
+                },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as JsonSchema
+    const arrayUi = {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/orders',
+          options: {
+            detail: { type: 'VerticalLayout', elements: [{ type: 'Control', scope: '#/properties/exporter' }] },
+          },
+        },
+      ],
+    } as UISchemaElement
+    renderForm(
+      schema,
+      {
+        orders: [
+          { id: '1', exporter: {} },
+          { id: '2', exporter: {} },
+        ],
+      },
+      arrayUi,
+    )
+
+    const buttons = await waitFor(() => {
+      const found = screen.getAllByRole('button', { name: /Download XML/ })
+      expect(found).toHaveLength(2)
+      return found
+    })
+    fireEvent.click(buttons[1])
+    await waitFor(() => expect(downloadTextFile).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(downloadTextFile).mock.calls[0][1]).toBe('order-2.xml')
   })
 })

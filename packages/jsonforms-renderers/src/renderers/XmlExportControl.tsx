@@ -5,7 +5,7 @@ import { Box, Button, Text } from '@radix-ui/themes'
 import { DownloadIcon } from '@radix-ui/react-icons'
 import { useCallback, useState } from 'react'
 import type { XmlBuilderOptions } from 'fast-xml-parser'
-import { downloadTextFile } from '../utils/download'
+import { downloadTextFile, renderFileName } from '../utils/download'
 import { buildFromWrites, resolveWrites, validateWriteToEntry, type WriteToEntry } from '../utils/mapping'
 
 interface XmlDeclaration {
@@ -22,7 +22,12 @@ interface XXmlExportOptions {
   rootElement?: string
   /** When set, the file starts with `<?xml version=".." encoding="UTF-8" …?>`. Absent — the default — writes none. */
   declaration?: XmlDeclaration
-  /** Downloaded file's name. Default 'export.xml'. */
+  /**
+   * Downloaded file's name, as a template: `{name}` is a top-level value of
+   * the record `writeTo` reads (so under `writeBase: 'parent'`, this item's
+   * own), and `{today(YYYYMMDD)}` today's date. Characters a file name can't
+   * hold become `_`, and an empty result falls back. Default 'export.xml'.
+   */
   fileName?: string
   /**
    * Assembles the exported document from elsewhere in the form — the mirror
@@ -177,7 +182,7 @@ const XmlExportControl = ({ path, label, schema, visible = true }: XmlExportCont
         [rootElement]: exportData,
       }
       const xml = new XMLBuilder(BUILDER_OPTIONS).build(xmlDocument) as string
-      downloadTextFile(xml, fileName, 'application/xml')
+      downloadTextFile(xml, renderFileName(fileName, baseData, DEFAULT_FILE_NAME), 'application/xml')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'This export could not be built.')
     }

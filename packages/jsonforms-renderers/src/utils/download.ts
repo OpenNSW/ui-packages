@@ -1,3 +1,5 @@
+import { renderTemplate } from './template'
+
 // Shared browser-download primitive: a Blob plus a synthetic anchor click,
 // same mechanism any file-saving control in this package would otherwise
 // reimplement. Kept separate from any one renderer so a second "download this
@@ -10,4 +12,27 @@ export function downloadTextFile(content: string, fileName: string, mimeType: st
   anchor.download = fileName
   anchor.click()
   URL.revokeObjectURL(url)
+}
+
+// Path separators, the characters Windows reserves, and control characters:
+// what browsers themselves replace in a download's name.
+const RESERVED = new Set(['/', '\\', '<', '>', ':', '"', '|', '?', '*'])
+const unsafe = (ch: string) => RESERVED.has(ch) || ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f
+
+// A name built from form values carries whatever the values do: `121/2026`
+// would read as a folder. Nothing left, or only an extension (`{no}.xml` with
+// no `no`), falls back rather than downloading as `.xml`.
+export function sanitizeFileName(name: string, fallback: string): string {
+  const cleaned = Array.from(name, (ch) => (unsafe(ch) ? '_' : ch))
+    .join('')
+    .trim()
+  return cleaned === '' || cleaned.startsWith('.') ? fallback : cleaned
+}
+
+// An export button's `fileName`: a template rendered against the record the
+// control reads, the same `{name}` / `{today(FORMAT)}` syntax x-computed.format
+// uses, then made safe to save.
+export function renderFileName(template: string, record: unknown, fallback: string): string {
+  const values = record !== null && typeof record === 'object' && !Array.isArray(record) ? record : {}
+  return sanitizeFileName(renderTemplate(template, values), fallback)
 }

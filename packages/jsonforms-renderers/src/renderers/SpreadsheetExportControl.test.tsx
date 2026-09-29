@@ -144,6 +144,42 @@ describe('SpreadsheetExportControl writing a workbook', () => {
     expect(writeFile).toHaveBeenCalledWith(expect.anything(), 'budget.xlsx', { bookType: 'xlsx' })
   })
 
+  it('fills a fileName template from the object the field sits in, sanitized', async () => {
+    renderControl(makeSchema({ fileName: 'rows-{ref}-{nope}.xlsx' }), { ref: 'A/B', rows: MATRIX })
+    await clickDownload()
+
+    expect(writeFile).toHaveBeenCalledWith(expect.anything(), 'rows-A_B-{nope}.xlsx', { bookType: 'xlsx' })
+  })
+
+  it('reads the template from the nearest containing object, not the form root', async () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        order: {
+          type: 'object',
+          properties: { rows: { type: 'array', 'x-spreadsheet-export': { fileName: 'rows-{ref}.xlsx' } } },
+        },
+      },
+    } as unknown as JsonSchema
+    const nestedUi = {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/order/properties/rows' }],
+    } as UISchemaElement
+    render(
+      <Theme>
+        <JsonForms
+          schema={schema}
+          uischema={nestedUi}
+          data={{ ref: 'root', order: { ref: 'inner', rows: MATRIX } }}
+          renderers={radixRenderers}
+        />
+      </Theme>,
+    )
+    await clickDownload()
+
+    expect(writeFile).toHaveBeenCalledWith(expect.anything(), 'rows-inner.xlsx', { bookType: 'xlsx' })
+  })
+
   it('passes fileType through as bookType and defaults fileName to match its extension', async () => {
     renderControl(makeSchema({ fileType: 'csv' }), { rows: MATRIX })
 
