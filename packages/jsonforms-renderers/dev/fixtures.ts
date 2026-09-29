@@ -773,7 +773,7 @@ export const fixtures: Fixture[] = [
               { id: 'amount', label: 'Amount' },
             ],
             sheetName: 'Sales',
-            fileName: 'sales-export.xlsx',
+            fileName: 'sales-{today(YYYY-MM-DD)}.xlsx',
           },
         },
       },
@@ -1044,11 +1044,11 @@ export const fixtures: Fixture[] = [
           type: 'object',
           title: 'Invoice Export',
           description:
-            'x-xml-export.writeTo assembles a document out of elsewhere in the form — the mirror image of the XML → writeTo fixture\'s importer. Edit the fields above, then click Download XML: the file starts with a standalone="no" declaration, then <Invoice id="(Invoice No.)"><Party><Name>...</Name></Party><Amount>...</Amount><Lines><Line sku="...">...</Line></Lines></Invoice>, built entirely from writeTo\'s from/to pairs. invoice_export itself is never read from and never appears in the output — it exists only to place the button and carry the x-xml-export config, exactly the role x-xml.writeTo leaves an importer\'s own scoped field playing when persistDocument: false. Line Items shows nested writeTo on the export side: each item\'s sku becomes an attribute of its <Line> (a last @_ segment), and description/qty/unit_price are renamed to Description/Quantity/UnitPrice per repetition, the same reshaping x-xml\'s own writeTo does for a repeating XML element on import — both controls resolve entries through the same shared function.',
+            'x-xml-export.writeTo assembles a document out of elsewhere in the form — the mirror image of the XML → writeTo fixture\'s importer. Edit the fields above, then click Download XML: the file starts with a standalone="no" declaration, then <Invoice id="(Invoice No.)"><Party><Name>...</Name></Party><Amount>...</Amount><Lines><Line sku="...">...</Line></Lines></Invoice>, built entirely from writeTo\'s from/to pairs, and saved as invoice_(Invoice No.).xml — try an Invoice No. with a / in it. invoice_export itself is never read from and never appears in the output — it exists only to place the button and carry the x-xml-export config, exactly the role x-xml.writeTo leaves an importer\'s own scoped field playing when persistDocument: false. Line Items shows nested writeTo on the export side: each item\'s sku becomes an attribute of its <Line> (a last @_ segment), and description/qty/unit_price are renamed to Description/Quantity/UnitPrice per repetition, the same reshaping x-xml\'s own writeTo does for a repeating XML element on import — both controls resolve entries through the same shared function.',
           'x-xml-export': {
             rootElement: 'Invoice',
             declaration: { standalone: 'no' },
-            fileName: 'invoice.xml',
+            fileName: 'invoice_{invoice_no}.xml',
             writeTo: [
               { from: 'invoice_no', to: '@_id' },
               { from: 'customer_name', to: 'Party.Name' },
@@ -1078,10 +1078,10 @@ export const fixtures: Fixture[] = [
                 type: 'object',
                 title: 'Order Export',
                 description:
-                  'writeBase: "parent" rebases writeTo\'s from paths onto this order, the same base x-computed.inputs and an importer\'s own writeBase: "parent" use. Add a second order, give the two different ids/quantities, and download each one\'s XML: order 2\'s file reads order 2\'s own id/qty, never order 1\'s — which an absolute (default "root") path could not do, since every item shares one schema.',
+                  'writeBase: "parent" rebases writeTo\'s from paths onto this order, the same base x-computed.inputs and an importer\'s own writeBase: "parent" use. Add a second order, give the two different ids/quantities, and download each one\'s XML: order 2\'s file, order-2.xml, reads order 2\'s own id/qty, never order 1\'s — which an absolute (default "root") path could not do, since every item shares one schema.',
                 'x-xml-export': {
                   rootElement: 'Order',
-                  fileName: 'order-export.xml',
+                  fileName: 'order-{id}.xml',
                   writeBase: 'parent',
                   writeTo: [
                     { from: 'id', to: 'Id' },

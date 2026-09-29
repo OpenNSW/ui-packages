@@ -1,10 +1,12 @@
-import { withJsonFormsControlProps } from '@jsonforms/react'
+import { useJsonForms, withJsonFormsControlProps } from '@jsonforms/react'
+import { Resolve } from '@jsonforms/core'
 import type { ControlProps, JsonSchema } from '@jsonforms/core'
 import { Box, Button, Text } from '@radix-ui/themes'
 import { DownloadIcon } from '@radix-ui/react-icons'
 import { useState } from 'react'
 import { isRecordsSheet, type CellValue, type SheetData, type SpreadsheetFieldSpec } from '../utils/spreadsheet'
 import { recordsToMatrix } from '../utils/records'
+import { renderFileName } from '../utils/download'
 
 // Narrowed to the four ordinary spreadsheet interchange formats worth
 // exposing today. @e965/xlsx's own BookType union covers many more (xlsm,
@@ -28,7 +30,13 @@ interface XSpreadsheetExportOptions {
   sheetName?: string
   /** Output format, passed straight through as @e965/xlsx's own `bookType`. */
   fileType?: SpreadsheetExportFileType
-  /** Downloaded file's name. Defaults to `export.${fileType}`, so the two never mismatch. */
+  /**
+   * Downloaded file's name, as a template: `{name}` is a top-level value of
+   * the object this field sits in, and `{today(YYYYMMDD)}` today's date — the
+   * same rules x-xml-export's fileName follows. Characters a file name can't
+   * hold become `_`. Defaults to `export.${fileType}`, so the two never
+   * mismatch; an empty result falls back to that too.
+   */
   fileName?: string
 }
 
@@ -93,8 +101,9 @@ function toMatrix(data: SheetData, columns: SpreadsheetFieldSpec[] | undefined):
   return [header.map((id) => labelById.get(String(id)) ?? id), ...rows]
 }
 
-const SpreadsheetExportControl = ({ data, label, schema, visible = true }: SpreadsheetExportControlProps) => {
+const SpreadsheetExportControl = ({ data, path, label, schema, visible = true }: SpreadsheetExportControlProps) => {
   const [error, setError] = useState<string | null>(null)
+  const ctx = useJsonForms()
 
   if (visible === false) {
     return null
@@ -151,7 +160,12 @@ const SpreadsheetExportControl = ({ data, label, schema, visible = true }: Sprea
       const worksheet = XLSX.utils.aoa_to_sheet(matrix)
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
-      XLSX.writeFile(workbook, fileName, { bookType: fileType })
+      // `data` is the sheet itself, which has no named fields, so the name
+      // reads from the object it sits in: the base x-xml-export's
+      // writeBase: 'parent' uses.
+      const parentPath = path.split('.').slice(0, -1).join('.')
+      const record: unknown = parentPath ? Resolve.data(ctx.core?.data, parentPath) : ctx.core?.data
+      XLSX.writeFile(workbook, renderFileName(fileName, record, `export.${fileType}`), { bookType: fileType })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to build the workbook.')
     }

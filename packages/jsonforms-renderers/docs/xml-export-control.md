@@ -12,7 +12,7 @@ The bound schema node must be `type: 'object'` and declare a (non-null) `x-xml-e
 | ------------- | --------- | -------------- | -------------------------------------------------------------------------- |
 | `rootElement` | `string`  | `'root'`       | Top-level wrapping element name.                                           |
 | `declaration` | `object`  | _(none)_       | Writes an `<?xml …?>` declaration first — see [Declaration](#declaration). |
-| `fileName`    | `string`  | `'export.xml'` | Downloaded file's name.                                                    |
+| `fileName`    | `string`  | `'export.xml'` | Downloaded file's name, as a template — see [File name](#file-name).       |
 | `writeTo`     | `entry[]` | _(required)_   | Assembles the document from elsewhere in the form — see below.             |
 | `writeBase`   | `string`  | `'root'`       | Where `writeTo`'s `from` paths are resolved from — see below.              |
 
@@ -175,6 +175,19 @@ A last `to` segment of `@_name` writes an attribute of the element before it, an
 | `standalone` | `"yes"`, `"no"`  | omitted   |
 
 `"declaration": {}` writes `<?xml version="1.0" encoding="UTF-8"?>`. Without `declaration`, none is written. `encoding` accepts only `UTF-8` because that is how the file is always written: a declaration naming any other encoding would be wrong about its own bytes. Any other key or value is a config error.
+
+## File name
+
+`fileName` is a template, with the same `{name}` / `{name(arg)}` placeholders `x-computed.format` and `x-search.displayTemplate` use:
+
+```jsonc
+"fileName": "blend_{blend_no}.xml"          // blend_121_2026.xml for blend_no "121/2026"
+"fileName": "orders-{today(YYYYMMDD)}.xml"  // today's date
+```
+
+- `{name}` reads a top-level value of the record `writeTo` reads: the form root, or with `writeBase: "parent"` the control's own item, so each item's file is named after that item. Nested paths aren't supported inside a placeholder.
+- An empty value renders as nothing, and an unknown name stays as written, so a typo shows in the name rather than disappearing.
+- Characters a file name can't hold (`/ \ < > : " | ? *` and control characters) become `_`. If nothing is left, or only an extension such as `.xml`, the file falls back to `export.xml`.
 
 ## Behavior notes
 
