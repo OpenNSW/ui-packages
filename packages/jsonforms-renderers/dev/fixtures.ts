@@ -1024,6 +1024,7 @@ export const fixtures: Fixture[] = [
     schema: {
       type: 'object',
       properties: {
+        invoice_no: { type: 'string', title: 'Invoice No.' },
         customer_name: { type: 'string', title: 'Customer Name' },
         order_total: { type: 'number', title: 'Order Total' },
         line_items: {
@@ -1043,18 +1044,20 @@ export const fixtures: Fixture[] = [
           type: 'object',
           title: 'Invoice Export',
           description:
-            "x-xml-export.writeTo assembles a document out of elsewhere in the form — the mirror image of the XML → writeTo fixture's importer. Edit Customer Name / Order Total / Line Items above, then click Download XML: the file is <Invoice><Party><Name>...</Name></Party><Amount>...</Amount><Lines><Line><SKU>...</SKU>...</Line></Lines></Invoice>, built entirely from writeTo's from/to pairs. invoice_export itself is never read from and never appears in the output — it exists only to place the button and carry the x-xml-export config, exactly the role x-xml.writeTo leaves an importer's own scoped field playing when persistDocument: false. Line Items shows nested writeTo on the export side: each item's own sku/description/qty/unit_price field names are renamed to SKU/Description/Quantity/UnitPrice per repetition, the same reshaping x-xml's own writeTo does for a repeating XML element on import — both controls resolve entries through the same shared function.",
+            'x-xml-export.writeTo assembles a document out of elsewhere in the form — the mirror image of the XML → writeTo fixture\'s importer. Edit the fields above, then click Download XML: the file starts with a standalone="no" declaration, then <Invoice id="(Invoice No.)"><Party><Name>...</Name></Party><Amount>...</Amount><Lines><Line sku="...">...</Line></Lines></Invoice>, built entirely from writeTo\'s from/to pairs. invoice_export itself is never read from and never appears in the output — it exists only to place the button and carry the x-xml-export config, exactly the role x-xml.writeTo leaves an importer\'s own scoped field playing when persistDocument: false. Line Items shows nested writeTo on the export side: each item\'s sku becomes an attribute of its <Line> (a last @_ segment), and description/qty/unit_price are renamed to Description/Quantity/UnitPrice per repetition, the same reshaping x-xml\'s own writeTo does for a repeating XML element on import — both controls resolve entries through the same shared function.',
           'x-xml-export': {
             rootElement: 'Invoice',
+            declaration: { standalone: 'no' },
             fileName: 'invoice.xml',
             writeTo: [
+              { from: 'invoice_no', to: '@_id' },
               { from: 'customer_name', to: 'Party.Name' },
               { from: 'order_total', to: 'Amount' },
               {
                 from: 'line_items',
                 to: 'Lines.Line',
                 writeTo: [
-                  { from: 'sku', to: 'SKU' },
+                  { from: 'sku', to: '@_sku' },
                   { from: 'description', to: 'Description' },
                   { from: 'qty', to: 'Quantity' },
                   { from: 'unit_price', to: 'UnitPrice' },
@@ -1094,6 +1097,7 @@ export const fixtures: Fixture[] = [
     uischema: {
       type: 'VerticalLayout',
       elements: [
+        { type: 'Control', scope: '#/properties/invoice_no' },
         { type: 'Control', scope: '#/properties/customer_name' },
         { type: 'Control', scope: '#/properties/order_total' },
         { type: 'Control', scope: '#/properties/line_items' },

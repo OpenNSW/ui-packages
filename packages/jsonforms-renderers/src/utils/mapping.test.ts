@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFromWrites, resolveWrites } from './mapping'
+import { buildFromWrites, resolveWrites, validateWriteToEntry } from './mapping'
 
 // A document shaped like the ones importers actually meet: values nested at
 // different depths, a date in a local format, an enum as a number, an
@@ -17,7 +17,23 @@ const doc = {
   },
 }
 
-const run = (entries: Parameters<typeof resolveWrites>[1]) => resolveWrites(doc, entries)
+const run = (entries: Parameters<typeof resolveWrites>[1]) => resolveWrites(doc, entries, 'import')
+
+// Form data, shaped the way an exporter reads it.
+const form = {
+  invoice_no: 'INV-7',
+  note: 'Rush & partial',
+  lang: 'en',
+  rush: true,
+  issued_on: '2026-07-23',
+  when: new Date(2026, 6, 23),
+  lines: [
+    { sku: 'A-1', qty: 10, line_no: 1 },
+    { sku: 'B-2', qty: 20, line_no: 2 },
+  ],
+}
+
+const exportRun = (entries: Parameters<typeof resolveWrites>[1]) => resolveWrites(form, entries, 'export')
 
 describe('resolveWrites', () => {
   it('copies a value across unchanged when nothing else is asked for', async () => {
@@ -207,6 +223,99 @@ describe('resolveWrites', () => {
   it('requires a source', async () => {
     await expect(run([{ to: 'x' }])).rejects.toThrow(/needs either "from" or "formula"/)
   })
+
+  it('rejects an empty "to", which on import would replace the whole form', async () => {
+    await expect(run([{ from: 'order.customer.code', to: '' }])).rejects.toThrow(/"to" must be a non-empty path/)
+    await expect(exportRun([{ from: 'invoice_no', to: '.' }])).rejects.toThrow(/"to" must be a non-empty path/)
+  })
+})
+
+describe('resolveWrites on export: attributes and #text', () => {
+  it('writes an attribute of the root element from a top-level @_ segment', async () => {
+    expect(await exportRun([{ from: 'invoice_no', to: '@_id' }])).toEqual([{ to: '@_id', value: 'INV-7' }])
+  })
+
+  it('writes text and an attribute onto the same element', async () => {
+    expect(
+      buildFromWrites(
+        await exportRun([
+          { from: 'note', to: 'Note.#text' },
+          { from: 'lang', to: 'Note.@_lang' },
+        ]),
+      ),
+    ).toEqual({ Note: { '#text': 'Rush & partial', '@_lang': 'en' } })
+  })
+
+  it('puts an attribute on each repeated element through a nested writeTo', async () => {
+    const [write] = await exportRun([
+      {
+        from: 'lines',
+        to: 'Lines.Line',
+        writeTo: [
+          { from: 'line_no', to: '@_n' },
+          { from: 'sku', to: 'SKU' },
+        ],
+      },
+    ])
+    expect(write.value).toEqual([
+      { '@_n': 1, SKU: 'A-1' },
+      { '@_n': 2, SKU: 'B-2' },
+    ])
+  })
+
+  it('leaves a null attribute or #text off, rather than rendering it as an element', async () => {
+    expect(
+      await exportRun([
+        { from: 'nope', to: '@_id', default: null },
+        { from: 'nope', to: 'Note.#text', default: null },
+      ]),
+    ).toEqual([])
+  })
+
+  it('still writes a null element, which renders as an empty one', async () => {
+    expect(await exportRun([{ from: 'nope', to: 'Remarks', default: null }])).toEqual([{ to: 'Remarks', value: null }])
+  })
+
+  it('rejects rows or an object as an attribute value', async () => {
+    await expect(exportRun([{ from: 'lines', to: '@_lines' }])).rejects.toThrow(
+      /writeTo "@_lines": an attribute or #text value must be text, a number or a boolean/,
+    )
+    await expect(exportRun([{ from: 'nope', to: '@_id', default: { null: null } }])).rejects.toThrow(
+      /an attribute or #text value must be/,
+    )
+  })
+
+  it('rejects a Date as an attribute value and points at as: date', async () => {
+    await expect(exportRun([{ from: 'when', to: '@_on' }])).rejects.toThrow(/Add "as": "date" to write a date/)
+  })
+
+  it('writes a boolean attribute as a value, not as a bare flag', async () => {
+    expect(await exportRun([{ from: 'rush', to: '@_rush' }])).toEqual([{ to: '@_rush', value: true }])
+  })
+})
+
+describe('validateWriteToEntry', () => {
+  it('rejects an attribute or #text segment that is not last, on export only', () => {
+    expect(validateWriteToEntry({ from: 'a', to: 'Party.@_id.x' }, 'export')).toMatch(/"@_id" must be the last segment/)
+    expect(validateWriteToEntry({ from: 'a', to: 'Note.#text.x' }, 'export')).toMatch(/"#text" must be the last/)
+    expect(validateWriteToEntry({ from: 'a', to: 'Party.@_id.x' }, 'import')).toBeNull()
+  })
+
+  it('rejects a bare @_ with no attribute name', () => {
+    expect(validateWriteToEntry({ from: 'a', to: 'Party.@_' }, 'export')).toMatch(/needs an attribute name/)
+  })
+
+  it('accepts ordinary paths either way', () => {
+    expect(validateWriteToEntry({ from: 'a', to: 'Party.Name' }, 'export')).toBeNull()
+    expect(validateWriteToEntry({ from: 'a', to: 'Party.@_id' }, 'export')).toBeNull()
+    expect(validateWriteToEntry({ from: 'a', to: 'orders.0.id' }, 'import')).toBeNull()
+  })
+
+  it('names the entry when resolveWrites meets a bad one', async () => {
+    await expect(exportRun([{ from: 'invoice_no', to: 'Party.@_id.x' }])).rejects.toThrow(
+      /writeTo "Party.@_id.x": "@_id" must be the last segment/,
+    )
+  })
 })
 
 describe('buildFromWrites', () => {
@@ -243,15 +352,59 @@ describe('buildFromWrites', () => {
     ).toEqual({ Amount: 120 })
   })
 
-  it('replaces a scalar with an object when a later write needs to nest under it', () => {
-    // Deliberately permissive rather than throwing — a schema author's own
-    // ordering mistake, not something this pure function should police.
-    expect(
+  it('throws rather than dropping a value that a later write needs to nest under', () => {
+    expect(() =>
       buildFromWrites([
         { to: 'Party', value: 'flat' },
         { to: 'Party.Name', value: 'Acme' },
       ]),
-    ).toEqual({ Party: { Name: 'Acme' } })
+    ).toThrow(/writeTo "Party.Name": "Party" is written both as a value and as the parent of other values/)
+  })
+
+  it('throws when a value lands on a path other writes already nest under', () => {
+    expect(() =>
+      buildFromWrites([
+        { to: 'Party.Name', value: 'Acme' },
+        { to: 'Party', value: 'flat' },
+      ]),
+    ).toThrow(/"Party" is written both as a value and as the parent/)
+  })
+
+  it('points at #text when the collision is between text and an attribute', () => {
+    expect(() =>
+      buildFromWrites([
+        { to: 'Party', value: 'Acme' },
+        { to: 'Party.@_id', value: 'P-1' },
+      ]),
+    ).toThrow(/write its text to "Party.#text"/)
+    expect(() =>
+      buildFromWrites([
+        { to: 'Party.@_id', value: 'P-1' },
+        { to: 'Party', value: 'Acme' },
+      ]),
+    ).toThrow(/write its text to "Party.#text"/)
+  })
+
+  it('does not nest under rows', () => {
+    expect(() =>
+      buildFromWrites([
+        { to: 'Lines', value: [{ sku: 'A-1' }] },
+        { to: 'Lines.Count', value: 1 },
+      ]),
+    ).toThrow(/"Lines" is written both as a value/)
+  })
+
+  it('never reaches into an object that came in as a value, like a default', () => {
+    // `default: { null: null }` is the schema's own object. Writing under it
+    // would change the config for every later click.
+    const fromSchema = { null: null }
+    expect(() =>
+      buildFromWrites([
+        { to: 'Remarks', value: fromSchema },
+        { to: 'Remarks.@_lang', value: 'en' },
+      ]),
+    ).toThrow(/"Remarks" is written both as a value/)
+    expect(fromSchema).toEqual({ null: null })
   })
 
   it('returns an empty object for no writes', () => {
