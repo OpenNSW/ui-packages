@@ -344,6 +344,63 @@ describe('XmlExportControl declaration and attributes', () => {
   })
 })
 
+describe('XmlExportControl dates and numbers', () => {
+  const schema = {
+    type: 'object',
+    properties: {
+      issued_on: { type: 'string', format: 'date' },
+      total: { type: 'number' },
+      lines: { type: 'array', items: { type: 'object', properties: { qty: { type: 'number' } } } },
+      invoiceExport: {
+        type: 'object',
+        'x-xml-export': {
+          rootElement: 'Invoice',
+          writeTo: [
+            { from: 'issued_on', to: 'IssueDate', as: 'date', format: 'M/D/YY' },
+            { from: 'total', to: 'Total', as: 'number', decimals: 1 },
+            { from: 'lines', to: 'Lines.Line', writeTo: [{ from: 'qty', to: 'Qty', as: 'number', decimals: 2 }] },
+          ],
+        },
+      },
+    },
+  } as unknown as JsonSchema
+  const ui = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/invoiceExport' }],
+  } as UISchemaElement
+
+  it('writes the form date in the XML format and numbers with fixed decimals', async () => {
+    renderForm(schema, { issued_on: '2026-07-23', total: 8522, lines: [{ qty: 3 }], invoiceExport: {} }, ui)
+    await waitFor(() => expect(downloadButton()?.disabled).toBe(false))
+    fireEvent.click(downloadButton()!)
+
+    await waitFor(() => expect(downloadTextFile).toHaveBeenCalledTimes(1))
+    const [xml] = vi.mocked(downloadTextFile).mock.calls[0]
+    expect(xml).toContain('<IssueDate>7/23/26</IssueDate>')
+    expect(xml).toContain('<Total>8522.0</Total>')
+    expect(xml).toContain('<Qty>3.00</Qty>')
+  })
+
+  it('shows a config error for decimals without as: number, even inside a nested writeTo', async () => {
+    const bad = {
+      type: 'object',
+      properties: {
+        lines: { type: 'array' },
+        invoiceExport: {
+          type: 'object',
+          'x-xml-export': {
+            writeTo: [{ from: 'lines', to: 'Lines.Line', writeTo: [{ from: 'qty', to: 'Qty', decimals: 1 }] }],
+          },
+        },
+      },
+    } as unknown as JsonSchema
+    renderForm(bad, { lines: [{ qty: 3 }] }, ui)
+
+    await waitFor(() => expect(screen.getByText(/writeTo "Qty": "decimals" needs "as": "number"/)).toBeTruthy())
+    expect(downloadButton()).toBeNull()
+  })
+})
+
 describe('XmlExportControl with nested writeTo (array reshape)', () => {
   function makeSchema(xXmlExport: Record<string, unknown>): JsonSchema {
     return {

@@ -1,4 +1,5 @@
 import { Resolve } from '@jsonforms/core'
+import { formatComputedValue } from './computed'
 import { evaluateFormulaWithVariables, describeFormulaError, type CellValue } from './spreadsheet'
 
 // Maps values from one shape onto another, in either direction: out of a parsed
@@ -49,8 +50,18 @@ export interface WriteToEntry {
   formula?: string
   /** Coercion applied after `map`. */
   as?: 'string' | 'number' | 'boolean' | 'date'
-  /** dayjs parse format, `as: 'date'` only — e.g. 'M/D/YY'. */
+  /**
+   * The date's format in the XML, `as: 'date'` only — e.g. 'M/D/YY'. On import
+   * it's the strict parse format (the form gets YYYY-MM-DD); on export, the
+   * format the form's date is written in. So one format round-trips.
+   */
   format?: string
+  /**
+   * Fixed decimal places for `as: 'number'`, export only — `1` writes 23 as
+   * "23.0". The same rounding x-computed's `decimals` uses. On import a
+   * string would break a number field, so there it's an error.
+   */
+  decimals?: number
   /** Substitutes matching values. A value with no entry passes through unchanged. */
   map?: Record<string, CellValue>
   /**
@@ -104,7 +115,12 @@ function present(value: unknown): Resolved {
 const TRUE = new Set(['true', '1', 'yes', 'y'])
 const FALSE = new Set(['false', '0', 'no', 'n'])
 
-async function coerce(value: unknown, entry: WriteToEntry): Promise<Resolved> {
+// A form's date as a date field stores it (YYYY-MM-DD), or a date-time with an
+// offset. Only the date part as written is used, so no time zone can move the
+// day.
+const ISO_DATE = /^(\d{4}-\d{2}-\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/
+
+async function coerce(value: unknown, entry: WriteToEntry, direction: WriteDirection): Promise<Resolved> {
   switch (entry.as) {
     case undefined:
       return found(value)
@@ -112,7 +128,8 @@ async function coerce(value: unknown, entry: WriteToEntry): Promise<Resolved> {
       return found(value instanceof Date ? value.toISOString() : String(value))
     case 'number': {
       const n = value instanceof Date ? value.getTime() : Number(value)
-      return Number.isFinite(n) ? found(n) : ABSENT
+      if (!Number.isFinite(n)) return ABSENT
+      return found(entry.decimals === undefined ? n : formatComputedValue(n, entry.decimals))
     }
     case 'boolean': {
       const k = String(value).trim().toLowerCase()
@@ -126,6 +143,14 @@ async function coerce(value: unknown, entry: WriteToEntry): Promise<Resolved> {
       const { default: dayjs } = await import('dayjs')
       const { default: customParseFormat } = await import('dayjs/plugin/customParseFormat.js')
       dayjs.extend(customParseFormat)
+      if (direction === 'export') {
+        // A Date (a formula's result) is its local day, the way DATE() and
+        // TODAY() build one; slicing its ISO string would be the UTC day.
+        // Anything that isn't ISO is absent rather than guessed.
+        const iso = typeof value === 'string' ? ISO_DATE.exec(value) : null
+        const parsed = value instanceof Date ? dayjs(value) : iso ? dayjs(iso[1], 'YYYY-MM-DD', true) : null
+        return parsed?.isValid() ? found(parsed.format(entry.format ?? 'YYYY-MM-DD')) : ABSENT
+      }
       const raw = value instanceof Date ? value.toISOString() : String(value)
       // strict, so a format that doesn't match is reported as absent rather
       // than silently guessed into some other date.
@@ -169,6 +194,16 @@ const isMarkup = (segment: string) => segment.startsWith(ATTRIBUTE_PREFIX) || se
 export function validateWriteToEntry(entry: WriteToEntry, direction: WriteDirection): string | null {
   // An empty `to` on import is update(''), which replaces the whole form.
   if (typeof entry.to !== 'string' || segmentsOf(entry.to).length === 0) return '"to" must be a non-empty path.'
+  if (entry.format !== undefined && entry.as !== 'date') return '"format" needs "as": "date".'
+  if (entry.decimals !== undefined) {
+    if (direction === 'import')
+      return '"decimals" only applies on export — on import it would put text in a number field.'
+    if (entry.as !== 'number') return '"decimals" needs "as": "number".'
+    const { decimals } = entry
+    if (!Number.isInteger(decimals) || decimals < 0 || decimals > 100) {
+      return '"decimals" must be a whole number from 0 to 100.'
+    }
+  }
   if (direction === 'export') {
     const segments = segmentsOf(entry.to)
     for (const [i, segment] of segments.entries()) {
@@ -286,7 +321,7 @@ export async function resolveWrites(
       const key = result.value instanceof Date ? result.value.toISOString() : String(result.value)
       if (Object.prototype.hasOwnProperty.call(entry.map, key)) result = found(entry.map[key])
     }
-    if (result.found && !rows) result = await coerce(result.value, entry)
+    if (result.found && !rows) result = await coerce(result.value, entry, direction)
     if (!result.found) {
       if (entry.default === undefined) continue
       write(entry.default)

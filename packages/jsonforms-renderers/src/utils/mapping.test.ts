@@ -318,6 +318,123 @@ describe('validateWriteToEntry', () => {
   })
 })
 
+describe('resolveWrites on export: dates and numbers', () => {
+  const at = (value: unknown) => ({ ...form, value })
+
+  it('writes a date in the format the XML uses', async () => {
+    expect(await exportRun([{ from: 'issued_on', to: 'On', as: 'date', format: 'M/D/YY' }])).toEqual([
+      { to: 'On', value: '7/23/26' },
+    ])
+  })
+
+  it('writes YYYY-MM-DD when no format is given', async () => {
+    expect(await exportRun([{ from: 'issued_on', to: 'On', as: 'date' }])).toEqual([{ to: 'On', value: '2026-07-23' }])
+  })
+
+  it('uses the date part of a date-time as written, whatever its offset', async () => {
+    for (const value of ['2026-07-23T23:30:00-05:00', '2026-07-23T00:30:00+05:30', '2026-07-23T12:00:00.000Z']) {
+      expect(
+        await resolveWrites(at(value), [{ from: 'value', to: 'On', as: 'date', format: 'M/D/YY' }], 'export'),
+      ).toEqual([{ to: 'On', value: '7/23/26' }])
+    }
+  })
+
+  it('writes a Date as its local day, never the UTC day its ISO string names', async () => {
+    for (const value of [new Date(2026, 6, 23, 0, 30), new Date(2026, 6, 23, 23, 30)]) {
+      expect(
+        await resolveWrites(at(value), [{ from: 'value', to: 'On', as: 'date', format: 'M/D/YY' }], 'export'),
+      ).toEqual([{ to: 'On', value: '7/23/26' }])
+    }
+  })
+
+  it('treats a form value that is not an ISO date as absent, never a guess', async () => {
+    for (const value of ['7/23/26', '2026-02-30', 20260723]) {
+      expect(
+        await resolveWrites(at(value), [{ from: 'value', to: 'On', as: 'date', format: 'M/D/YY' }], 'export'),
+      ).toEqual([])
+    }
+  })
+
+  it('still reads a date with the format on import, into YYYY-MM-DD', async () => {
+    expect(await run([{ from: 'order.header.order_date', to: 'on', as: 'date', format: 'M/D/YY' }])).toEqual([
+      { to: 'on', value: '2026-07-23' },
+    ])
+  })
+
+  it('writes a number with fixed decimals', async () => {
+    expect(
+      await exportRun([
+        { from: 'lines.0.qty', to: 'Qty', as: 'number', decimals: 1 },
+        { formula: '"23"', to: 'Text', as: 'number', decimals: 1 },
+        { formula: '1916.9443792536963', to: 'Avg', as: 'number', decimals: 2 },
+      ]),
+    ).toEqual([
+      { to: 'Qty', value: '10.0' },
+      { to: 'Text', value: '23.0' },
+      { to: 'Avg', value: '1916.94' },
+    ])
+  })
+
+  it('writes a default exactly as given, unformatted', async () => {
+    expect(await exportRun([{ from: 'nope', to: 'Qty', as: 'number', decimals: 1, default: 0 }])).toEqual([
+      { to: 'Qty', value: 0 },
+    ])
+  })
+
+  it('formats a column inside a nested writeTo', async () => {
+    const [write] = await exportRun([
+      {
+        from: 'lines',
+        to: 'Lines.Line',
+        writeTo: [
+          { from: 'line_no', to: '@_n' },
+          { from: 'qty', to: 'Qty', as: 'number', decimals: 1 },
+        ],
+      },
+    ])
+    expect(write.value).toEqual([
+      { '@_n': 1, Qty: '10.0' },
+      { '@_n': 2, Qty: '20.0' },
+    ])
+  })
+})
+
+describe('validateWriteToEntry: format and decimals', () => {
+  it('rejects decimals on import, where a string would land in a number field', () => {
+    expect(validateWriteToEntry({ from: 'a', to: 'b', as: 'number', decimals: 1 }, 'import')).toMatch(
+      /"decimals" only applies on export/,
+    )
+  })
+
+  it('requires as: number for decimals', () => {
+    expect(validateWriteToEntry({ from: 'a', to: 'b', decimals: 1 }, 'export')).toMatch(
+      /"decimals" needs "as": "number"/,
+    )
+  })
+
+  it.each([1.5, -1, 101])('rejects decimals %s', (decimals) => {
+    expect(validateWriteToEntry({ from: 'a', to: 'b', as: 'number', decimals }, 'export')).toMatch(
+      /whole number from 0 to 100/,
+    )
+  })
+
+  it('requires as: date for format, either way', () => {
+    expect(validateWriteToEntry({ from: 'a', to: 'b', format: 'M/D/YY' }, 'import')).toMatch(
+      /"format" needs "as": "date"/,
+    )
+    expect(validateWriteToEntry({ from: 'a', to: 'b', format: 'M/D/YY' }, 'export')).toMatch(
+      /"format" needs "as": "date"/,
+    )
+  })
+
+  it('reports a bad decimals even when the source is absent', async () => {
+    // A config mistake, not a data one: it shouldn't depend on what's filled in.
+    await expect(exportRun([{ from: 'nope', to: 'Qty', as: 'number', decimals: 1.5 }])).rejects.toThrow(
+      /writeTo "Qty": "decimals" must be a whole number/,
+    )
+  })
+})
+
 describe('buildFromWrites', () => {
   it('nests dot-joined segments into an object', () => {
     expect(buildFromWrites([{ to: 'Party.Name', value: 'Acme' }])).toEqual({ Party: { Name: 'Acme' } })

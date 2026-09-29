@@ -63,12 +63,13 @@ Note that `invoiceExport` itself never appears in the output, and is never read 
 | `from`               | Source path in the form's own data. Mutually exclusive with `inputs`/`formula`.                                                                                                          |
 | `inputs` + `formula` | Named sources and an expression over them, for a value gathered from several fields.                                                                                                     |
 | `as`                 | `string`, `number`, `boolean` or `date`.                                                                                                                                                 |
-| `format`             | dayjs parse format, `as: "date"` only.                                                                                                                                                   |
+| `format`             | The date's format in the XML, `as: "date"` only — the format the form's date is written in here, e.g. `M/D/YY`. See [Dates and numbers](#dates-and-numbers).                             |
+| `decimals`           | Fixed decimal places, `as: "number"` only — `1` writes `23` as `23.0`. Export only.                                                                                                      |
 | `map`                | Substitutes matching values. An unmapped value passes through unchanged.                                                                                                                 |
-| `default`            | Used when the source is absent.                                                                                                                                                          |
+| `default`            | Used when the source is absent, written exactly as given — never formatted.                                                                                                              |
 | `writeTo`            | When `from` resolves to an array, reshapes each item — see below.                                                                                                                        |
 
-This is the exact same entry shape `x-xml`'s own `writeTo` uses — see [xml-control.md](./xml-control.md#filling-a-form-from-one-upload-writeto) for the full key-by-key behavior (`map`/`as`/`default` order, formula aliasing rules, absent-source handling). The only difference is direction: there, `from` addresses the parsed document and `to` addresses form data; here, `from` addresses form data and `to` addresses the document being built.
+This is the exact same entry shape `x-xml`'s own `writeTo` uses — see [xml-control.md](./xml-control.md#filling-a-form-from-one-upload-writeto) for the full key-by-key behavior (`map`/`as`/`default` order, formula aliasing rules, absent-source handling). The only difference is direction: there, `from` addresses the parsed document and `to` addresses form data; here, `from` addresses form data and `to` addresses the document being built. `format` describes the XML either way, so the importer parses with it and this control writes with it, and `decimals` only applies here.
 
 ### `writeBase` — one exporter per array item
 
@@ -122,7 +123,7 @@ Given the same data, this now downloads `<Lines><Line><SKU>A-1</SKU><Quantity>10
 
 ## Matching a fixed format
 
-When the target is another system's file format, fixed down to the attribute, the document needs more than elements: attributes, text beside them, and a declaration line.
+When the target is another system's file format, fixed down to the attribute, the document needs more than elements: attributes, text beside them, a declaration line, and dates and numbers written the way that format writes them.
 
 ### Attributes and text
 
@@ -175,6 +176,23 @@ A last `to` segment of `@_name` writes an attribute of the element before it, an
 | `standalone` | `"yes"`, `"no"`  | omitted   |
 
 `"declaration": {}` writes `<?xml version="1.0" encoding="UTF-8"?>`. Without `declaration`, none is written. `encoding` accepts only `UTF-8` because that is how the file is always written: a declaration naming any other encoding would be wrong about its own bytes. Any other key or value is a config error.
+
+### Dates and numbers
+
+```jsonc
+"writeTo": [
+  { "from": "issued_on", "to": "IssueDate", "as": "date", "format": "M/D/YY" },
+  { "from": "quantity", "to": "Quantity", "as": "number", "decimals": 1 }
+]
+```
+
+Given `issued_on: "2026-07-23"` and `quantity: 8522`, this writes `<IssueDate>7/23/26</IssueDate>` and `<Quantity>8522.0</Quantity>`.
+
+- **`format` is the date's format in the XML**, the same meaning it has on the importer. There it parses the document's date into the form's `YYYY-MM-DD`; here it writes the form's date back out, so one `format` round-trips. Without `format`, dates are written as `YYYY-MM-DD`.
+- **A form date is read as ISO**: `YYYY-MM-DD` from a date field, or a date-time with an offset. Only the date part is used, as written, so no time zone can move the day. A `Date` from a formula is its local day, the way `DATE()` and `TODAY()` build one. Anything else, such as `7/23/26` already in the form, is absent rather than guessed.
+- **`decimals` writes fixed decimal places**, using the same rounding as `x-computed`'s `decimals`. It needs `as: "number"` and a whole number from 0 to 100; anything else is a config error. On the importer it's an error too, since a string would land in a number field.
+- **A `default` is written exactly as given.** With `decimals: 1`, `default: 0` writes `0`; write `"default": "0.0"` for a padded one.
+- `format` uses dayjs tokens without the advancedFormat plugin, so `Do` isn't available, and time tokens write midnight. Rounding follows `toFixed`: `1.005` with `decimals: 2` writes `1.00`, and `-0.04` with `decimals: 1` writes `-0.0`.
 
 ## File name
 
