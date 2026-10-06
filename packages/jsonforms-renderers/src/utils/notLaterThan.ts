@@ -29,9 +29,7 @@ function siblingValue(rootData: unknown, controlPath: string, siblingKey: string
 }
 
 function titleOf(propSchema: JsonSchema | undefined, key: string): string {
-  return propSchema && typeof propSchema === 'object' && typeof propSchema.title === 'string'
-    ? propSchema.title
-    : key
+  return propSchema && typeof propSchema === 'object' && typeof propSchema.title === 'string' ? propSchema.title : key
 }
 
 /** Inline error string for DateControl, or undefined when OK / inapplicable. */

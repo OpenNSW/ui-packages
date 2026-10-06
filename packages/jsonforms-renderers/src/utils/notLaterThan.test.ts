@@ -58,7 +58,9 @@ describe('collectNotLaterThanErrors', () => {
       },
     } as unknown as JsonSchema
 
-    expect(collectNotLaterThanErrors(schema, { date_of_containerization: '2026-06-20', date_of_sailing: '2026-06-12' })).toEqual([
+    expect(
+      collectNotLaterThanErrors(schema, { date_of_containerization: '2026-06-20', date_of_sailing: '2026-06-12' }),
+    ).toEqual([
       {
         instancePath: '/date_of_containerization',
         schemaPath: '#/properties/date_of_containerization/x-notLaterThan',
