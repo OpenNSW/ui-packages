@@ -39,6 +39,8 @@ const RESERVED_AUTHORIZE_PARAMS = new Set([
   'nonce',
   'code_challenge',
   'code_challenge_method',
+  'response_mode',
+  'dpop_jkt',
 ])
 
 /**

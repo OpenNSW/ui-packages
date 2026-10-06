@@ -29,5 +29,7 @@ describe('parseExtraQueryParams', () => {
     expect(() => parseExtraQueryParams('resource=x&redirect_uri=https://evil.example')).toThrow(
       '"redirect_uri" is set by the OIDC client',
     )
+    expect(() => parseExtraQueryParams('response_mode=form_post')).toThrow('"response_mode"')
+    expect(() => parseExtraQueryParams('dpop_jkt=abc')).toThrow('"dpop_jkt"')
   })
 })
