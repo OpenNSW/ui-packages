@@ -1,0 +1,53 @@
+{
+  "name": "@opennsw/auth",
+  "version": "0.1.0",
+  "description": "Shared OIDC setup for OpenNSW portals: UserManager defaults, IdP config parsing, role mapping and bearer headers.",
+  "license": "Apache-2.0",
+  "keywords": [
+    "oidc",
+    "oauth2",
+    "oidc-client-ts",
+    "auth",
+    "opennsw"
+  ],
+  "homepage": "https://github.com/OpenNSW/ui-packages/tree/main/packages/auth#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OpenNSW/ui-packages.git",
+    "directory": "packages/auth"
+  },
+  "bugs": {
+    "url": "https://github.com/OpenNSW/ui-packages/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm build",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "oidc-client-ts": "^3.0.0"
+  },
+  "devDependencies": {
+    "oidc-client-ts": "^3.5.0",
+    "typescript": "~5.7.2",
+    "vitest": "^3.2.7"
+  }
+}
