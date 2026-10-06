@@ -15,7 +15,7 @@ This package provides a collection of JSON Forms controls and layout renderers t
 
 ### Controls
 
-- **[DateControl](src/renderers/DateControl.tsx)**: Formats `date`, `time`, and `date-time` inputs. Combines native inputs that split space equally in `date-time` combination mode and expand to `100%` container width otherwise. Honors optional `x-notLaterThan: "<siblingField>"` (inline error when this date is after the sibling). Hosts that gate submit can also use exported `collectNotLaterThanErrors`.
+- **[DateControl](src/renderers/DateControl.tsx)**: Formats `date`, `time`, and `date-time` inputs. Combines native inputs that split space equally in `date-time` combination mode and expand to `100%` container width otherwise. Supports `x-notLaterThan` (inline error; export `collectNotLaterThanErrors` for submit gating).
 - **[TextControl](src/renderers/TextControl.tsx)**: Handles standard string schemas with optional placeholders.
 - **[NumberControl](src/renderers/NumberControl.tsx)**: Handles numeric and integer inputs.
 - **[BooleanControl](src/renderers/BooleanControl.tsx)**: Toggle switch control for boolean values.

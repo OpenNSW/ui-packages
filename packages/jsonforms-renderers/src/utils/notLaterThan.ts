@@ -2,9 +2,8 @@ import type { JsonSchema } from '@jsonforms/core'
 import { Resolve } from '@jsonforms/core'
 import dayjs from 'dayjs'
 
-// Schema keyword on a date / date-time property: the local value must not be
-// later than the named sibling field (same parent object). Compared with
-// dayjs so plain `YYYY-MM-DD` and RFC 3339 date-times both work; equal is OK.
+// x-notLaterThan: "<sibling>" on a date/date-time field — local value must not
+// be after the sibling (equal OK). dayjs covers YYYY-MM-DD and RFC 3339.
 
 export type NotLaterThanError = {
   instancePath: string
@@ -14,52 +13,43 @@ export type NotLaterThanError = {
   message: string
 }
 
-export function notLaterThanMessage(leftTitle: string, rightTitle: string): string {
+function message(leftTitle: string, rightTitle: string): string {
   return `${leftTitle} cannot be later than ${rightTitle}`
 }
 
-// True when both parse as dates and left is strictly after right.
-export function isLaterThan(left: string, right: string): boolean {
+function isLaterThan(left: string, right: string): boolean {
   const l = dayjs(left)
   const r = dayjs(right)
-  if (!l.isValid() || !r.isValid()) return false
-  return l.isAfter(r)
+  return l.isValid() && r.isValid() && l.isAfter(r)
 }
 
-// Sibling value for a control at JsonForms `path` (dot-separated).
-export function resolveSiblingValue(rootData: unknown, controlPath: string, siblingKey: string): unknown {
+function siblingValue(rootData: unknown, controlPath: string, siblingKey: string): unknown {
   const parentPath = controlPath.split('.').slice(0, -1).join('.')
-  const siblingPath = parentPath ? `${parentPath}.${siblingKey}` : siblingKey
-  return Resolve.data(rootData, siblingPath)
+  return Resolve.data(rootData, parentPath ? `${parentPath}.${siblingKey}` : siblingKey)
 }
 
-function propertyTitle(propSchema: JsonSchema | undefined, key: string): string {
-  if (propSchema && typeof propSchema === 'object' && typeof propSchema.title === 'string') {
-    return propSchema.title
-  }
-  return key
+function titleOf(propSchema: JsonSchema | undefined, key: string): string {
+  return propSchema && typeof propSchema === 'object' && typeof propSchema.title === 'string'
+    ? propSchema.title
+    : key
 }
 
-// Inline error for DateControl when this field's x-notLaterThan sibling is earlier.
-// `rightTitle` defaults to the sibling property name when the host has no
-// schema title handy (collectNotLaterThanErrors resolves titles for submit).
+/** Inline error string for DateControl, or undefined when OK / inapplicable. */
 export function notLaterThanControlError(
   rootData: unknown,
   controlPath: string,
   data: unknown,
   schema: JsonSchema,
   label: string,
-  rightTitle?: string,
 ): string | undefined {
   const limitField = (schema as { 'x-notLaterThan'?: unknown })['x-notLaterThan']
   if (typeof limitField !== 'string' || typeof data !== 'string' || data === '') return undefined
-  const sibling = resolveSiblingValue(rootData, controlPath, limitField)
+  const sibling = siblingValue(rootData, controlPath, limitField)
   if (typeof sibling !== 'string' || sibling === '' || !isLaterThan(data, sibling)) return undefined
-  return notLaterThanMessage(label || controlPath, rightTitle || limitField)
+  return message(label || controlPath, limitField)
 }
 
-// AJV-shaped errors for JsonForms `additionalErrors` (submit gating in hosts).
-// Walks object / array schemas the same way trader FormRenderer walks required.
+/** AJV-shaped errors for JsonForms `additionalErrors` (host submit gating). */
 export function collectNotLaterThanErrors(
   schema: JsonSchema | undefined,
   data: unknown,
@@ -67,7 +57,6 @@ export function collectNotLaterThanErrors(
 ): NotLaterThanError[] {
   if (!schema || typeof schema !== 'object') return []
   const properties = schema.properties
-  const items = schema.items
   const out: NotLaterThanError[] = []
 
   if (properties && data && typeof data === 'object' && !Array.isArray(data)) {
@@ -84,7 +73,7 @@ export function collectNotLaterThanErrors(
             schemaPath: `#/properties/${key}/x-notLaterThan`,
             keyword: 'x-notLaterThan',
             params: { limitField },
-            message: notLaterThanMessage(propertyTitle(propSchema, key), propertyTitle(properties[limitField], limitField)),
+            message: message(titleOf(propSchema, key), titleOf(properties[limitField], limitField)),
           })
         }
       }
@@ -93,6 +82,7 @@ export function collectNotLaterThanErrors(
     }
   }
 
+  const items = schema.items
   if (items && !Array.isArray(items) && Array.isArray(data)) {
     data.forEach((item, index) => {
       out.push(...collectNotLaterThanErrors(items, item, `${instancePath}/${index}`))
