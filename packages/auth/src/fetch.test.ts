@@ -17,4 +17,14 @@ describe('authHeader', () => {
     expect(await authHeader(managerWithUser(null))).toEqual({})
     expect(await authHeader(managerWithUser({ access_token: 'abc', expired: true }))).toEqual({})
   })
+
+  it('returns nothing when the access token is empty', async () => {
+    expect(await authHeader(managerWithUser({ access_token: '', expired: false }))).toEqual({})
+  })
+
+  it('sends a token whose expiry is unknown', async () => {
+    expect(await authHeader(managerWithUser({ access_token: 'abc', expired: undefined }))).toEqual({
+      Authorization: 'Bearer abc',
+    })
+  })
 })
