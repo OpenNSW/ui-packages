@@ -10,6 +10,7 @@
     "build": "pnpm --recursive run build",
     "lint": "eslint .",
     "type-check": "pnpm --recursive --parallel run type-check",
+    "test": "pnpm --recursive run test",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write ."
   },

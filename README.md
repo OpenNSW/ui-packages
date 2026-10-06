@@ -7,12 +7,14 @@ A pnpm monorepo of the shared UI packages that make up the **OpenNSW Framework**
 | Package                                                        | Description                                                                                                                   |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | [`@opennsw/jsonforms-renderers`](packages/jsonforms-renderers) | [JSON Forms](https://jsonforms.io/) controls and layout renderers for React, styled to match the OpenNSW portal applications. |
+| [`@opennsw/auth`](packages/auth)                               | Shared OIDC setup for the portals: `UserManager` defaults, IdP config parsing, role mapping and bearer headers.               |
 
 ## Repository layout
 
 ```
 .
 ├── packages/                 # publishable @opennsw/* packages (one dir each)
+│   ├── auth/
 │   └── jsonforms-renderers/
 ├── eslint.config.js          # shared, repo-wide ESLint flat config
 ├── .prettierrc               # shared Prettier config
@@ -41,6 +43,7 @@ Run from the repo root — each one fans out across the workspace:
 | ------------------- | --------------------------------------------------------------- |
 | `pnpm build`        | Build every package (`pnpm --recursive run build`).             |
 | `pnpm type-check`   | Type-check every package.                                       |
+| `pnpm test`         | Run every package's unit tests.                                 |
 | `pnpm lint`         | Lint the whole repo with the shared ESLint config (`eslint .`). |
 | `pnpm format:check` | Verify Prettier formatting.                                     |
 | `pnpm format:fix`   | Apply Prettier formatting.                                      |

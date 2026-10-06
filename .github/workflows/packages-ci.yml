@@ -13,7 +13,7 @@ on:
 
 jobs:
   # STAGE 1: Code Quality & Build
-  # Groups Type Check, Lint, and Build.
+  # Groups Type Check, Unit Tests, Lint, and Build.
   # These all require the exact same 'pnpm install' environment.
   qa-and-build:
     name: Quality Check & Build
@@ -42,18 +42,22 @@ jobs:
       - name: TypeScript Type Check
         run: pnpm run type-check
 
-      # 2. Lint (Permissive)
+      # 2. Unit Tests
+      - name: Run Unit Tests
+        run: pnpm run test
+
+      # 3. Lint (Permissive)
       # Kept 'continue-on-error: true' for legacy issues.
       # TODO: We should aim to fix lint issues and eventually remove 'continue-on-error' to enforce linting.
       - name: Run ESLint
         run: pnpm run lint
         continue-on-error: true
 
-      # 3. Check Formatting (Prettier)
+      # 4. Check Formatting (Prettier)
       - name: Check Formatting (Prettier)
         run: pnpm run format:check
 
-      # 4. Build (Final Verification)
+      # 5. Build (Final Verification)
       # Only runs if Type Check passed.
       - name: Build all workspaces
         run: pnpm run build
