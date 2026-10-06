@@ -26,7 +26,14 @@ describe('createUserManager', () => {
       post_logout_redirect_uri: 'https://app.example',
       scope: 'openid profile email',
       automaticSilentRenew: true,
+      userStore: undefined,
     })
+  })
+
+  it('wraps supplied storage in a user store', () => {
+    const manager = createUserManager({ ...config, storage: {} as Storage })
+
+    expect((settingsOf(manager) as { userStore: unknown }).userStore).toBeDefined()
   })
 
   it('passes config through, with userSettings applied last', () => {

@@ -10,7 +10,7 @@ export interface AuthConfig {
   scopes?: string[]
   /** Extra authorize-request parameters, e.g. RFC 8707 `resource`. See {@link parseExtraQueryParams}. */
   extraQueryParams?: Record<string, string>
-  /** Where the signed-in user is kept. Defaults to `sessionStorage`. */
+  /** Where the signed-in user is kept. Defaults to `sessionStorage`, or memory outside the browser. */
   storage?: Storage
   /** Defaults to true. */
   automaticSilentRenew?: boolean

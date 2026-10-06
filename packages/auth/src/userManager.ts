@@ -10,7 +10,8 @@ export function createUserManager(config: AuthConfig): UserManager {
     post_logout_redirect_uri: config.postLogoutRedirectUri ?? config.redirectUri,
     scope: (config.scopes ?? DEFAULT_SCOPES).join(' '),
     extraQueryParams: config.extraQueryParams,
-    userStore: new WebStorageStateStore({ store: config.storage ?? globalThis.sessionStorage }),
+    // Unset, oidc-client-ts uses sessionStorage in the browser and memory elsewhere.
+    userStore: config.storage ? new WebStorageStateStore({ store: config.storage }) : undefined,
     automaticSilentRenew: config.automaticSilentRenew ?? true,
     ...config.userSettings,
   })
