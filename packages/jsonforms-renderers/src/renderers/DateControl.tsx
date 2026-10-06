@@ -7,12 +7,13 @@ import {
   type RankedTester,
   rankWith,
 } from '@jsonforms/core'
-import { withJsonFormsControlProps } from '@jsonforms/react'
+import { useJsonForms, withJsonFormsControlProps } from '@jsonforms/react'
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { useEffect, type ReactNode } from 'react'
 import dayjs from 'dayjs'
 
 import { getErrorMessage } from '../utils/error'
+import { notLaterThanControlError } from '../utils/notLaterThan'
 
 // dayjs().format() defaults to RFC 3339 (e.g. 2026-06-05T12:30:00+05:30) with
 // seconds + local offset, which ajv's strict "date-time" format check requires.
@@ -58,6 +59,10 @@ export const DateControl = ({
   enabled,
   visible = true,
 }: ControlProps) => {
+  // Sibling lookup for x-notLaterThan: only root data changes when the limit
+  // field is edited, not this control's own `data`.
+  const ctx = useJsonForms()
+
   useEffect(() => {
     if (visible === false) {
       handleChange(path, undefined)
@@ -67,16 +72,19 @@ export const DateControl = ({
   if (visible === false) {
     return null
   }
-  const isValid = errors.length === 0
+
+  const orderError = notLaterThanControlError(ctx.core?.data, path, data, schema, label)
+  const displayErrors = [errors, orderError].filter((part) => typeof part === 'string' && part.length > 0).join('\n')
+  const isValid = displayErrors.length === 0
   const value: string = typeof data === 'string' ? data : ''
 
   const shell = (children: ReactNode) => (
-    <FieldShell path={path} label={label} required={required} errors={errors} description={schema.description}>
+    <FieldShell path={path} label={label} required={required} errors={displayErrors} description={schema.description}>
       {children}
     </FieldShell>
   )
 
-  // Time-only: native picker is plenty.
+  // Time-only: native picker is plenty. x-notLaterThan does not apply to time.
   if (schema.format === 'time') {
     return shell(
       <TextField.Root
