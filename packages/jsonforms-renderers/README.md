@@ -21,7 +21,7 @@ This package provides a collection of JSON Forms controls and layout renderers t
 - **[BooleanControl](src/renderers/BooleanControl.tsx)**: Toggle switch control for boolean values.
 - **[RadioControl](src/renderers/RadioControl.tsx)**: Option picker rendered as radio group buttons.
 - **[SelectControl](src/renderers/SelectControl.tsx)**: Select drop-down control for `enum` or `oneOf` schemas.
-- **[FileControl](src/renderers/FileControl.tsx)**: File picker control supporting custom attachments.
+- **[FileControl](src/renderers/FileControl.tsx)**: File picker. Optional `x-file.fileName` (e.g. `DC BAGS DETAILS _{index}.xlsx`) sets the row label and View download name.
 
 ### Layouts
 

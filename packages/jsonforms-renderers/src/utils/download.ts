@@ -5,7 +5,13 @@ import { renderTemplate } from './template'
 // reimplement. Kept separate from any one renderer so a second "download this
 // as text" control (see XmlExportControl) never has to duplicate it.
 export function downloadTextFile(content: string, fileName: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType })
+  downloadBlob(new Blob([content], { type: mimeType }), fileName)
+}
+
+// Trigger a browser download from an already-fetched Blob under a chosen name.
+// Used when View must ignore the storage object's opaque key / missing
+// Content-Disposition filename (see FileControl x-file.fileName).
+export function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

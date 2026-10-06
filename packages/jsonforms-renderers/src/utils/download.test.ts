@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { downloadTextFile, renderFileName, sanitizeFileName } from './download'
+import { downloadBlob, downloadTextFile, renderFileName, sanitizeFileName } from './download'
 
 // jsdom implements Blob but not URL.createObjectURL/revokeObjectURL at all, so
 // what's verified here is the CONTRACT — a blob URL is created from the given
@@ -56,6 +56,21 @@ describe('downloadTextFile', () => {
     downloadTextFile('<a>1</a>', 'a.xml', 'application/xml')
 
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
+  })
+})
+
+describe('downloadBlob', () => {
+  it('clicks an anchor with the given download name for an existing blob', () => {
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:from-blob')
+    URL.revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.href).toBe('blob:from-blob')
+      expect(this.download).toBe('DC BAGS DETAILS _1.xlsx')
+    })
+
+    downloadBlob(new Blob(['sheet'], { type: 'application/vnd.ms-excel' }), 'DC BAGS DETAILS _1.xlsx')
+
+    expect(click).toHaveBeenCalledTimes(1)
   })
 })
 

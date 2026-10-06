@@ -7,6 +7,7 @@ import { useUpload } from '../contexts/UploadContext'
 import { getErrorMessage } from '../utils/error'
 import { formatBytes, formatAccept } from '../utils/format'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { downloadBlob, renderFileName } from '../utils/download'
 import * as React from 'react'
 
 interface FileEntry {
@@ -19,6 +20,8 @@ interface XFileOptions {
   maxFiles?: number
   maxSize?: number
   accept?: string
+  /** View/label name template; `{index}` is 1-based. e.g. `DC BAGS DETAILS _{index}.xlsx`. */
+  fileName?: string
 }
 
 interface FileControlProps {
@@ -68,9 +71,16 @@ const FileControl = ({
   const maxFiles = xFile.maxFiles ?? (uiOptions.maxFiles as number) ?? 1
   const maxSize = xFile.maxSize ?? (uiOptions.maxSize as number) ?? 5 * 1024 * 1024
   const accept = xFile.accept ?? (uiOptions.accept as string) ?? 'image/*,application/pdf'
+  const fileNameTemplate = typeof xFile.fileName === 'string' ? xFile.fileName : undefined
 
   const isMulti = maxFiles > 1
   const isEnabled = enabled !== false
+
+  const displayNameFor = (key: string, index: number): string => {
+    const fallback = fileEntries[key]?.name ?? 'Uploaded File'
+    if (!fileNameTemplate) return fallback
+    return renderFileName(fileNameTemplate, { index }, fallback)
+  }
 
   const [dragActive, setDragActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -185,6 +195,36 @@ const FileControl = ({
 
   const onView = async (e: React.MouseEvent<HTMLButtonElement>, key: string) => {
     e.preventDefault()
+    const index = currentKeys.indexOf(key) + 1
+    const viewName = displayNameFor(key, index)
+
+    // When a schema fileName is set, fetch as a Blob and download under that
+    // name so View works the same for trader and officer (storage URLs have no
+    // meaningful Content-Disposition filename). Without fileName, keep the
+    // previous open-in-tab behaviour.
+    if (fileNameTemplate) {
+      try {
+        let sourceUrl = fileEntries[key]?.blobUrl
+        if (!sourceUrl) {
+          const result = await uploadContext?.getDownloadUrl?.(key)
+          sourceUrl = result?.url
+        }
+        if (!sourceUrl) {
+          setError('Unable to open file.')
+          return
+        }
+        const response = await fetch(sourceUrl)
+        if (!response.ok) {
+          setError('Unable to open file.')
+          return
+        }
+        downloadBlob(await response.blob(), viewName)
+      } catch {
+        setError('Unable to open file.')
+      }
+      return
+    }
+
     const blobUrl = fileEntries[key]?.blobUrl
     if (blobUrl) {
       window.open(blobUrl, '_blank', 'noopener,noreferrer')?.focus()
@@ -222,7 +262,7 @@ const FileControl = ({
       </Flex>
 
       {/* ── Uploaded file rows ── */}
-      {currentKeys.map((key) => (
+      {currentKeys.map((key, position) => (
         <Card key={key} size="2" variant="surface" mb="2">
           <Flex align="center" gap="3">
             <Box
@@ -247,7 +287,7 @@ const FileControl = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {fileEntries[key]?.name ?? 'Uploaded File'}
+                {displayNameFor(key, position + 1)}
               </Text>
             </Box>
             <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
