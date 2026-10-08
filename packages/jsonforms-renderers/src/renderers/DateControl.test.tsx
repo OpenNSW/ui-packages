@@ -84,11 +84,7 @@ describe('DateControl x-notLaterThan', () => {
   })
 
   it('hides the order error when validationMode is ValidateAndHide', () => {
-    renderForm(
-      { date_of_containerization: '2026-06-20', date_of_sailing: '2026-06-12' },
-      undefined,
-      'ValidateAndHide',
-    )
+    renderForm({ date_of_containerization: '2026-06-20', date_of_sailing: '2026-06-12' }, undefined, 'ValidateAndHide')
     expect(screen.queryByText('Date of Containerization cannot be later than Date of Sailing')).toBeNull()
   })
 })

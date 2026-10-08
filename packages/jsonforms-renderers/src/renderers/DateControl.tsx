@@ -154,14 +154,7 @@ const DateControlWithNotLaterThan = (props: ControlProps) => {
   const validationMode = ctx.core?.validationMode ?? 'ValidateAndShow'
   const orderError =
     validationMode === 'ValidateAndShow'
-      ? notLaterThanControlError(
-          ctx.core?.data,
-          props.path,
-          props.data,
-          props.schema,
-          props.label,
-          ctx.core?.schema,
-        )
+      ? notLaterThanControlError(ctx.core?.data, props.path, props.data, props.schema, props.label, ctx.core?.schema)
       : undefined
   return <DateControlView {...props} orderError={orderError} />
 }
