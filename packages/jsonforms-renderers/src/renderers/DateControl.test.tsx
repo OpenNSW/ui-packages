@@ -4,9 +4,9 @@ import { useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
-import type { ErrorObject, JsonSchema, UISchemaElement } from '@jsonforms/core'
+import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
 import { radixRenderers } from './index'
-import { collectNotLaterThanErrors } from '../utils/notLaterThan'
+import { collectNotLaterThanErrors, type NotLaterThanError } from '../utils/notLaterThan'
 
 afterEach(() => {
   cleanup()
@@ -35,7 +35,7 @@ const uischema = {
 
 function renderForm(
   seed: Record<string, unknown>,
-  additionalErrors?: ErrorObject[],
+  additionalErrors?: NotLaterThanError[],
   validationMode: 'ValidateAndShow' | 'ValidateAndHide' | 'NoValidation' = 'ValidateAndShow',
 ) {
   function Harness() {
@@ -75,7 +75,7 @@ describe('DateControl x-notLaterThan', () => {
     const additionalErrors = collectNotLaterThanErrors(schema, {
       date_of_containerization: '2026-06-20',
       date_of_sailing: '2026-06-12',
-    }) as unknown as ErrorObject[]
+    })
 
     renderForm({ date_of_containerization: '2026-06-20', date_of_sailing: '2026-06-12' }, additionalErrors)
 
