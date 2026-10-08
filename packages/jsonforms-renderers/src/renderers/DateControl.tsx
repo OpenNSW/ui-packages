@@ -48,7 +48,9 @@ const FieldShell = ({ path, label, required, errors, description, children }: Sh
   )
 }
 
-export const DateControl = ({
+type ViewProps = ControlProps & { orderError?: string }
+
+const DateControlView = ({
   data,
   handleChange,
   path,
@@ -58,11 +60,8 @@ export const DateControl = ({
   schema,
   enabled,
   visible = true,
-}: ControlProps) => {
-  // Sibling lookup for x-notLaterThan: only root data changes when the limit
-  // field is edited, not this control's own `data`.
-  const ctx = useJsonForms()
-
+  orderError,
+}: ViewProps) => {
   useEffect(() => {
     if (visible === false) {
       handleChange(path, undefined)
@@ -73,8 +72,17 @@ export const DateControl = ({
     return null
   }
 
-  const orderError = notLaterThanControlError(ctx.core?.data, path, data, schema, label)
-  const displayErrors = [errors, orderError].filter((part) => typeof part === 'string' && part.length > 0).join('\n')
+  // When the host also passes collectNotLaterThanErrors as additionalErrors,
+  // JSON Forms merges that message into `errors` — skip the duplicate.
+  const orderAlreadyShown =
+    Boolean(orderError) &&
+    errors
+      .split('\n')
+      .map((line) => line.trim())
+      .includes(orderError!)
+  const displayErrors = [errors, orderAlreadyShown ? undefined : orderError]
+    .filter((part) => typeof part === 'string' && part.length > 0)
+    .join('\n')
   const isValid = displayErrors.length === 0
   const value: string = typeof data === 'string' ? data : ''
 
@@ -84,7 +92,8 @@ export const DateControl = ({
     </FieldShell>
   )
 
-  // Time-only: native picker is plenty. x-notLaterThan does not apply to time.
+  // Time-only: native picker is plenty. x-notLaterThan does not apply to time
+  // (notLaterThanControlError guards on format === date | date-time).
   if (schema.format === 'time') {
     return shell(
       <TextField.Root
@@ -136,6 +145,33 @@ export const DateControl = ({
       )}
     </Flex>,
   )
+}
+
+/** Subscribes to form context only when this field declares x-notLaterThan. */
+const DateControlWithNotLaterThan = (props: ControlProps) => {
+  const ctx = useJsonForms()
+  // Match JSON Forms: ValidateAndHide / NoValidation hide other control errors.
+  const validationMode = ctx.core?.validationMode ?? 'ValidateAndShow'
+  const orderError =
+    validationMode === 'ValidateAndShow'
+      ? notLaterThanControlError(
+          ctx.core?.data,
+          props.path,
+          props.data,
+          props.schema,
+          props.label,
+          ctx.core?.schema,
+        )
+      : undefined
+  return <DateControlView {...props} orderError={orderError} />
+}
+
+export const DateControl = (props: ControlProps) => {
+  const limitField = (props.schema as { 'x-notLaterThan'?: unknown })['x-notLaterThan']
+  if (typeof limitField === 'string') {
+    return <DateControlWithNotLaterThan {...props} />
+  }
+  return <DateControlView {...props} />
 }
 
 export const DateControlTester: RankedTester = rankWith(2, or(isDateControl, isDateTimeControl, isTimeControl))
