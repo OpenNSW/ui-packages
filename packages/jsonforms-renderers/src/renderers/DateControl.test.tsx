@@ -6,7 +6,7 @@ import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
 import { radixRenderers } from './index'
-import { timeInputValue, toRfc3339Time } from './DateControl'
+import { timeInputValue, toRfc3339Time } from '../utils/time'
 
 type Data = Record<string, unknown>
 
