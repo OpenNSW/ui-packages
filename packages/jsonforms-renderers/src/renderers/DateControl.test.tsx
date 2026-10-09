@@ -74,6 +74,17 @@ describe('DateControl time', () => {
     })
   })
 
+  it('clears the time when the picker value is empty', async () => {
+    const { writes } = renderForm(timeControl, { openingTime: '14:30:00' })
+    const input = screen.getByLabelText(/Opening Time/)
+
+    fireEvent.change(input, { target: { value: '' } })
+
+    await waitFor(() => {
+      expect(writes.at(-1)?.openingTime).toBeUndefined()
+    })
+  })
+
   it('uses minute step unless showSeconds is set', () => {
     renderForm(timeControl, { openingTime: '14:30:00' })
     expect(screen.getByLabelText(/Opening Time/).getAttribute('step')).toBe('60')
