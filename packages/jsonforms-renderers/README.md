@@ -21,7 +21,7 @@ This package provides a collection of JSON Forms controls and layout renderers t
 - **[BooleanControl](src/renderers/BooleanControl.tsx)**: Toggle switch control for boolean values.
 - **[RadioControl](src/renderers/RadioControl.tsx)**: Option picker rendered as radio group buttons.
 - **[SelectControl](src/renderers/SelectControl.tsx)**: Select drop-down control for `enum` or `oneOf` schemas.
-- **[FileControl](src/renderers/FileControl.tsx)**: File picker control supporting custom attachments.
+- **[FileControl](src/renderers/FileControl.tsx)**: File picker. View opens browser-viewable types in a tab. Download (every row) saves under optional `x-file.fileName` as a base name (`Attachment_{index}`); `{index}` is the file's 1-based position and shifts when an earlier file is removed. The real extension is appended. Download fetches the signed storage URL in the browser, so the bucket must allow CORS GET from the app origin.
 
 ### Layouts
 

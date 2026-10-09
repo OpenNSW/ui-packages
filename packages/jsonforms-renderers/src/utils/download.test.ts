@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { downloadTextFile, renderFileName, sanitizeFileName } from './download'
+import {
+  downloadBlob,
+  downloadFromUrl,
+  downloadName,
+  downloadTextFile,
+  renderFileName,
+  sanitizeFileName,
+} from './download'
 
 // jsdom implements Blob but not URL.createObjectURL/revokeObjectURL at all, so
 // what's verified here is the CONTRACT — a blob URL is created from the given
@@ -56,6 +63,78 @@ describe('downloadTextFile', () => {
     downloadTextFile('<a>1</a>', 'a.xml', 'application/xml')
 
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
+  })
+})
+
+describe('downloadBlob', () => {
+  it('clicks an anchor with the given download name for an existing blob', () => {
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:from-blob')
+    URL.revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.href).toBe('blob:from-blob')
+      expect(this.download).toBe('Attachment_1.xlsx')
+    })
+
+    downloadBlob(new Blob(['sheet'], { type: 'application/vnd.ms-excel' }), 'Attachment_1.xlsx')
+
+    expect(click).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('downloadFromUrl', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('downloads the response blob under the given name', async () => {
+    const blob = new Blob(['sheet'])
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(blob) }))
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:from-url')
+    URL.revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toBe('Attachment_1.xlsx')
+    })
+
+    await downloadFromUrl('https://example.test/file', 'Attachment_1.xlsx')
+
+    expect(fetch).toHaveBeenCalledWith('https://example.test/file')
+    expect(click).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws on a non-OK response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 }))
+    await expect(downloadFromUrl('https://example.test/file', 'a.xlsx')).rejects.toThrow(/403/)
+  })
+
+  it('throws on a network error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    await expect(downloadFromUrl('https://example.test/file', 'a.xlsx')).rejects.toThrow('offline')
+  })
+})
+
+describe('downloadName', () => {
+  it('renders a template and appends the real extension', () => {
+    expect(downloadName('Attachment_{index}', { index: 1 }, { name: 'report.xlsx', key: 'k1' })).toBe(
+      'Attachment_1.xlsx',
+    )
+  })
+
+  it('does not double the extension when the template already ends with it', () => {
+    expect(downloadName('Attachment_{index}.xlsx', { index: 2 }, { name: 'report.xlsx', key: 'k1' })).toBe(
+      'Attachment_2.xlsx',
+    )
+  })
+
+  it('falls back to the original name when there is no template', () => {
+    expect(downloadName(undefined, { index: 1 }, { name: 'report.xlsx', key: 'k1' })).toBe('report.xlsx')
+  })
+
+  it('falls back to the key when there is no template and no name', () => {
+    expect(downloadName(undefined, { index: 1 }, { key: '0f8e.xlsx' })).toBe('0f8e.xlsx')
+  })
+
+  it('takes the extension from the key when the original name is missing', () => {
+    expect(downloadName('Attachment_{index}', { index: 1 }, { key: '0f8e.xlsx' })).toBe('Attachment_1.xlsx')
   })
 })
 

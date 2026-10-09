@@ -446,6 +446,16 @@ export const fixtures: Fixture[] = [
           items: { type: 'string', format: 'file' },
           description: 'Multiple files',
         },
+        namedAttachments: {
+          type: 'array',
+          items: { type: 'string', format: 'file' },
+          description: 'Multi-file with named Download (View only for browser-viewable types)',
+          'x-file': {
+            maxFiles: 5,
+            accept: 'image/png,image/jpeg,application/pdf,.xlsx,.png,.jpg,.jpeg,.pdf',
+            fileName: 'Attachment_{index}',
+          },
+        },
       },
     },
     uischema: {
@@ -453,6 +463,7 @@ export const fixtures: Fixture[] = [
       elements: [
         { type: 'Control', scope: '#/properties/avatar' },
         { type: 'Control', scope: '#/properties/attachments' },
+        { type: 'Control', scope: '#/properties/namedAttachments' },
       ],
     } as UISchemaElement,
   },
