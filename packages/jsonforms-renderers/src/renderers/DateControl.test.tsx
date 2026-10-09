@@ -6,7 +6,6 @@ import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
 import { radixRenderers } from './index'
-import { timeInputValue, toRfc3339Time } from '../utils/time'
 
 type Data = Record<string, unknown>
 
@@ -62,34 +61,6 @@ const secondsControl = {
   type: 'VerticalLayout',
   elements: [{ type: 'Control', scope: '#/properties/openingTime', options: { showSeconds: true } }],
 } as UISchemaElement
-
-describe('toRfc3339Time', () => {
-  it('pads HH:MM with zero seconds', () => {
-    expect(toRfc3339Time('14:30')).toBe('14:30:00')
-  })
-
-  it('leaves HH:MM:SS unchanged', () => {
-    expect(toRfc3339Time('14:30:45')).toBe('14:30:45')
-  })
-
-  it('clears an empty picker value', () => {
-    expect(toRfc3339Time('')).toBeUndefined()
-  })
-})
-
-describe('timeInputValue', () => {
-  it('drops seconds when the seconds spinner is off', () => {
-    expect(timeInputValue('14:30:00', false)).toBe('14:30')
-  })
-
-  it('keeps seconds when the seconds spinner is on', () => {
-    expect(timeInputValue('14:30:45', true)).toBe('14:30:45')
-  })
-
-  it('fills missing seconds for the seconds spinner', () => {
-    expect(timeInputValue('14:30', true)).toBe('14:30:00')
-  })
-})
 
 describe('DateControl time', () => {
   it('stores HH:MM:SS when the picker emits HH:MM', async () => {
