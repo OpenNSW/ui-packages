@@ -14,14 +14,23 @@ name: Release - Stage @opennsw package on npm
 #   - <package-dir> is the folder name under packages/
 #   - <semver> must match the "version" in that package's package.json
 #
-# How to cut a release:
-#   1. Bump "version" in packages/<package-dir>/package.json and merge to main.
-#   2. Tag that commit and push the tag, e.g.:
-#        git tag jsonforms-renderers-v0.3.1
-#        git push origin jsonforms-renderers-v0.3.1
-#   3. This workflow resolves the package from the tag, verifies the version,
-#      builds, and stages the package on npm.
+# How to cut a release (see CONTRIBUTING.md):
+#   1. Run "Release - Bump package version" and merge the PR it opens.
+#   2. Run the release-package skill in Claude Code. It creates a DRAFT GitHub
+#      Release, pinned to the bump commit, with notes for that package only.
+#   3. Publish the draft on GitHub. That creates the tag, which triggers this
+#      workflow: it resolves the package from the tag, verifies the version and
+#      that the commit is on main, builds, and stages the package on npm.
 #   4. A maintainer approves the staged package on npm (2FA). Only then is it live.
+#   A tag can also be pushed by hand (git tag <package-dir>-v<version>), with the
+#   same checks.
+#
+# A version that is already on npm is skipped, not failed, so re-running is safe
+# once it has been approved. A version that is staged but not approved yet is not
+# on npm, so a re-run would stage it again: check `npm stage list <package>`
+# first, and reject the older stage.
+# Pre-release versions (1.2.0-beta.1) stage under the "next" dist-tag so they
+# never become "latest".
 #
 # Authentication: npm Trusted Publishing via GitHub OIDC — no NPM_TOKEN secret.
 # One-time setup per package on npmjs.com: open the package's Settings ->
@@ -51,6 +60,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, to check the tagged commit is on main
+
+      # The release-package skill pins its draft to the bump commit on main, but
+      # anyone can push a tag. Never publish a commit that isn't on main.
+      - name: Check the tagged commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME points at $GITHUB_SHA, which is not on main. Merge it first, then tag the merge commit."
+            exit 1
+          fi
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
@@ -110,35 +131,67 @@ jobs:
             echo "::error::Tag version ($TAG_VERSION) does not match $PKG_PATH/package.json ($PKG_VERSION)."
             exit 1
           fi
+          # npm 11 refuses to stage or publish a pre-release without an explicit
+          # tag, and a pre-release must not become "latest" anyway.
+          DIST_TAG=latest
+          if [[ "$PKG_VERSION" == *-* ]]; then DIST_TAG=next; fi
+          echo "Dist-tag:        $DIST_TAG"
           {
             echo "path=$PKG_PATH"
             echo "name=$PKG_NAME"
             echo "version=$PKG_VERSION"
+            echo "dist_tag=$DIST_TAG"
           } >> "$GITHUB_OUTPUT"
 
+      # Makes a re-run (or a tag pushed for a version that was published by hand
+      # earlier) a no-op instead of a failed run. It only sees approved versions:
+      # one that is staged and waiting for approval is not on npm yet.
+      - name: Check whether this version is already on npm
+        id: published
+        # From the package directory: the root package.json's devEngines makes npm
+        # refuse to run there (the staging steps below run here for the same reason).
+        working-directory: ${{ steps.pkg.outputs.path }}
+        env:
+          PKG_NAME: ${{ steps.pkg.outputs.name }}
+          PKG_VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          if npm view "$PKG_NAME@$PKG_VERSION" version > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$PKG_NAME@$PKG_VERSION is already on npm; nothing to stage."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Type check
+        if: steps.published.outputs.exists != 'true'
         run: pnpm --filter "${{ steps.pkg.outputs.name }}" run type-check
 
       - name: Build package
+        if: steps.published.outputs.exists != 'true'
         run: pnpm --filter "${{ steps.pkg.outputs.name }}" run build
 
       # Sanity-check the tarball (no real upload).
       - name: Stage dry run
+        if: steps.published.outputs.exists != 'true'
         working-directory: ${{ steps.pkg.outputs.path }}
-        run: npm stage publish --provenance --access public --dry-run
+        env:
+          DIST_TAG: ${{ steps.pkg.outputs.dist_tag }}
+        run: npm stage publish --provenance --access public --tag "$DIST_TAG" --dry-run
 
       # Uploads the tarball to npm's staging queue. Nothing is installable until a
       # maintainer approves it on npm, so a green run here does NOT mean the
       # version is live. The output (it carries the stage ID) goes to the job
       # summary, with the commands the approver needs.
       - name: Stage on npm
+        if: steps.published.outputs.exists != 'true'
         working-directory: ${{ steps.pkg.outputs.path }}
         env:
+          DIST_TAG: ${{ steps.pkg.outputs.dist_tag }}
           PKG_NAME: ${{ steps.pkg.outputs.name }}
           PKG_VERSION: ${{ steps.pkg.outputs.version }}
         run: |
           set -o pipefail
-          npm stage publish --provenance --access public 2>&1 | tee "$RUNNER_TEMP/stage.log"
+          npm stage publish --provenance --access public --tag "$DIST_TAG" 2>&1 | tee "$RUNNER_TEMP/stage.log"
           {
             echo "### Staged $PKG_NAME@$PKG_VERSION on npm"
             echo
