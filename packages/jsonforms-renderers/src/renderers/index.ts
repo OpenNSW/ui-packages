@@ -33,6 +33,7 @@ import ArrayControl from './ArrayControl'
 import { ArrayControlTester } from './ArrayControlTester'
 import LabelRenderer, { LabelTester } from './LabelRenderer'
 import { rankWith, isPrimitiveArrayControl } from '@jsonforms/core'
+import { withJsonFormsLayoutProps } from '@jsonforms/react'
 
 const PrimitiveArrayControlTester = rankWith(3, isPrimitiveArrayControl)
 
@@ -44,10 +45,13 @@ export const radixRenderers = [
   { tester: SearchSelectControlTester, renderer: SearchSelectControl },
   { tester: SelectControlTester, renderer: SelectControl },
   { tester: DateControlTester, renderer: DateControl },
-  { tester: VerticalLayoutTester, renderer: VerticalLayoutRenderer },
-  { tester: HorizontalLayoutTester, renderer: HorizontalLayoutRenderer },
-  { tester: GroupLayoutTester, renderer: GroupLayoutRenderer },
-  { tester: CategorizationLayoutTester, renderer: CategorizationLayoutRenderer },
+  // The layout renderers take their props from withJsonFormsLayoutProps, which
+  // evaluates the layout's rule into `visible` and `enabled`, as
+  // withJsonFormsControlProps does for the controls.
+  { tester: VerticalLayoutTester, renderer: withJsonFormsLayoutProps(VerticalLayoutRenderer) },
+  { tester: HorizontalLayoutTester, renderer: withJsonFormsLayoutProps(HorizontalLayoutRenderer) },
+  { tester: GroupLayoutTester, renderer: withJsonFormsLayoutProps(GroupLayoutRenderer) },
+  { tester: CategorizationLayoutTester, renderer: withJsonFormsLayoutProps(CategorizationLayoutRenderer) },
   { tester: FileControlTester, renderer: FileControl },
   { tester: SpreadsheetControlTester, renderer: SpreadsheetControl },
   { tester: SpreadsheetExportControlTester, renderer: SpreadsheetExportControl },
