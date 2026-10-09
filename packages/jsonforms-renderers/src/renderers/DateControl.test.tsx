@@ -17,14 +17,21 @@ afterEach(() => {
   cleanup()
 })
 
-const schema: JsonSchema = {
+const openingTimeSchema: JsonSchema = {
   type: 'object',
   properties: {
     openingTime: { type: 'string', format: 'time', title: 'Opening Time' },
   },
 }
 
-function renderForm(uischema: UISchemaElement, seed: Data) {
+const appointmentSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    appointment: { type: 'string', format: 'date-time', title: 'Appointment' },
+  },
+}
+
+function renderForm(schema: JsonSchema, uischema: UISchemaElement, seed: Data) {
   const writes: Data[] = []
   let live = true
   finishers.push(() => {
@@ -62,9 +69,19 @@ const secondsControl = {
   elements: [{ type: 'Control', scope: '#/properties/openingTime', options: { showSeconds: true } }],
 } as UISchemaElement
 
+const appointmentControl = {
+  type: 'VerticalLayout',
+  elements: [{ type: 'Control', scope: '#/properties/appointment' }],
+} as UISchemaElement
+
+const appointmentSecondsControl = {
+  type: 'VerticalLayout',
+  elements: [{ type: 'Control', scope: '#/properties/appointment', options: { showSeconds: true } }],
+} as UISchemaElement
+
 describe('DateControl time', () => {
   it('stores HH:MM:SS when the picker emits HH:MM', async () => {
-    const { writes } = renderForm(timeControl, {})
+    const { writes } = renderForm(openingTimeSchema, timeControl, {})
     const input = screen.getByLabelText(/Opening Time/)
 
     fireEvent.change(input, { target: { value: '14:30' } })
@@ -75,7 +92,7 @@ describe('DateControl time', () => {
   })
 
   it('clears the time when the picker value is empty', async () => {
-    const { writes } = renderForm(timeControl, { openingTime: '14:30:00' })
+    const { writes } = renderForm(openingTimeSchema, timeControl, { openingTime: '14:30:00' })
     const input = screen.getByLabelText(/Opening Time/)
 
     fireEvent.change(input, { target: { value: '' } })
@@ -86,13 +103,13 @@ describe('DateControl time', () => {
   })
 
   it('uses minute step unless showSeconds is set', () => {
-    renderForm(timeControl, { openingTime: '14:30:00' })
+    renderForm(openingTimeSchema, timeControl, { openingTime: '14:30:00' })
     expect(screen.getByLabelText(/Opening Time/).getAttribute('step')).toBe('60')
     expect((screen.getByLabelText(/Opening Time/) as HTMLInputElement).value).toBe('14:30')
   })
 
   it('shows a seconds spinner when showSeconds is true', async () => {
-    const { writes } = renderForm(secondsControl, {})
+    const { writes } = renderForm(openingTimeSchema, secondsControl, {})
     const input = screen.getByLabelText(/Opening Time/)
 
     expect(input.getAttribute('step')).toBe('1')
@@ -106,5 +123,21 @@ describe('DateControl time', () => {
     await waitFor(() => {
       expect(writes.at(-1)).toEqual({ openingTime: '14:30:45' })
     })
+  })
+})
+
+describe('DateControl date-time', () => {
+  it('uses minute step on the time input unless showSeconds is set', () => {
+    renderForm(appointmentSchema, appointmentControl, { appointment: '2026-10-09T14:30:00' })
+    const timeInput = document.querySelector('input[type="time"]')
+    expect(timeInput?.getAttribute('step')).toBe('60')
+    expect((timeInput as HTMLInputElement).value).toBe('14:30')
+  })
+
+  it('shows a seconds spinner on date-time when showSeconds is true', () => {
+    renderForm(appointmentSchema, appointmentSecondsControl, { appointment: '2026-10-09T14:30:45' })
+    const timeInput = document.querySelector('input[type="time"]')
+    expect(timeInput?.getAttribute('step')).toBe('1')
+    expect((timeInput as HTMLInputElement).value).toBe('14:30:45')
   })
 })
