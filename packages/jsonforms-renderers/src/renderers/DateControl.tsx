@@ -18,6 +18,23 @@ import { getErrorMessage } from '../utils/error'
 // seconds + local offset, which ajv's strict "date-time" format check requires.
 const toISODateTime = (dateStr: string, timeStr: string) => dayjs(`${dateStr}T${timeStr}`).format()
 
+// AJV format "time" is RFC 3339, so seconds are required. Native <input type="time">
+// with minute precision (the default) emits HH:MM; pad those to HH:MM:SS.
+export const toRfc3339Time = (raw: string): string | undefined => {
+  if (!raw) return undefined
+  if (/^\d{2}:\d{2}$/.test(raw)) return `${raw}:00`
+  return raw
+}
+
+// Native time inputs only understand HH:MM or HH:MM:SS. Strip timezone suffixes
+// from stored RFC 3339 values, and drop seconds when the seconds spinner is off.
+export const timeInputValue = (stored: string, showSeconds: boolean): string => {
+  if (!stored) return ''
+  const match = stored.match(/^(\d{2}:\d{2})(:\d{2})?/)
+  if (!match) return stored
+  return showSeconds ? `${match[1]}${match[2] ?? ':00'}` : match[1]
+}
+
 type ShellProps = Pick<ControlProps, 'path' | 'label' | 'required' | 'errors'> & {
   description?: string
   children: ReactNode
@@ -55,6 +72,7 @@ export const DateControl = ({
   required,
   errors,
   schema,
+  uischema,
   enabled,
   visible = true,
 }: ControlProps) => {
@@ -69,6 +87,10 @@ export const DateControl = ({
   }
   const isValid = errors.length === 0
   const value: string = typeof data === 'string' ? data : ''
+  // Seconds spinner is opt-in. Omitted / false keeps hour+minute only.
+  // Stored values always include seconds so AJV format "time" still passes.
+  const showSeconds = uischema?.options?.showSeconds === true
+  const timeStep = showSeconds ? 1 : 60
 
   const shell = (children: ReactNode) => (
     <FieldShell path={path} label={label} required={required} errors={errors} description={schema.description}>
@@ -81,8 +103,9 @@ export const DateControl = ({
     return shell(
       <TextField.Root
         type="time"
-        value={value}
-        onChange={(e) => handleChange(path, e.target.value)}
+        step={timeStep}
+        value={timeInputValue(value, showSeconds)}
+        onChange={(e) => handleChange(path, toRfc3339Time(e.target.value))}
         disabled={!enabled}
         color={!isValid ? 'red' : undefined}
         id={path}
@@ -93,9 +116,7 @@ export const DateControl = ({
   // date and date-time share the same date input; date-time appends a native time input.
   const hasTime = schema.format === 'date-time'
   const [datePart = '', timeRaw = ''] = value.split('T')
-  // The native <input type="time"> only understands HH:MM(:SS); strip any
-  // timezone suffix from the stored RFC 3339 value before feeding it back.
-  const timeForInput = timeRaw.slice(0, 5)
+  const timeForInput = timeInputValue(timeRaw, showSeconds)
 
   const commit = (nextDate: string, nextTime: string) => {
     if (!nextDate) {
@@ -119,6 +140,7 @@ export const DateControl = ({
       {hasTime && (
         <TextField.Root
           type="time"
+          step={timeStep}
           value={timeForInput}
           disabled={!enabled || !datePart}
           color={!isValid ? 'red' : undefined}
