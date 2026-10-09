@@ -1,18 +1,27 @@
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import type { ControlElement, JsonSchema } from '@jsonforms/core'
-import { Card, Flex, Text, Box, IconButton, Button } from '@radix-ui/themes'
-import { UploadIcon, FileTextIcon, Cross2Icon, CheckCircledIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
+import { Card, Flex, Text, Box, IconButton, Button, Tooltip } from '@radix-ui/themes'
+import {
+  UploadIcon,
+  FileTextIcon,
+  Cross2Icon,
+  CheckCircledIcon,
+  ExclamationTriangleIcon,
+  DownloadIcon,
+} from '@radix-ui/react-icons'
 import { useState, useRef, useEffect, useCallback, type ChangeEvent, type DragEvent } from 'react'
 import { useUpload } from '../contexts/UploadContext'
 import { getErrorMessage } from '../utils/error'
 import { formatBytes, formatAccept } from '../utils/format'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
-import { downloadBlob, renderFileName } from '../utils/download'
+import { downloadFromUrl, downloadName } from '../utils/download'
+import { isBrowserViewable, matchesAccept } from '../utils/file'
 import * as React from 'react'
 
 interface FileEntry {
   key: string
   name: string
+  type?: string
   blobUrl?: string
 }
 
@@ -20,7 +29,13 @@ interface XFileOptions {
   maxFiles?: number
   maxSize?: number
   accept?: string
-  /** View/label name template; `{index}` is 1-based. e.g. `DC BAGS DETAILS _{index}.xlsx`. */
+  /**
+   * Base name for the row label and Download. `{index}` is the file's 1-based
+   * position (removing an earlier file renumbers later ones). The file's real
+   * extension is appended. e.g. `Attachment_{index}`. Download fetches the
+   * signed storage URL in the browser, so the bucket must allow CORS GET from
+   * the app origin.
+   */
   fileName?: string
 }
 
@@ -76,20 +91,35 @@ const FileControl = ({
   const isMulti = maxFiles > 1
   const isEnabled = enabled !== false
 
-  const displayNameFor = (key: string, index: number): string => {
-    const fallback = fileEntries[key]?.name ?? 'Uploaded File'
-    if (!fileNameTemplate) return fallback
-    return renderFileName(fileNameTemplate, { index }, fallback)
-  }
-
   const [dragActive, setDragActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
   const [fileEntries, setFileEntries] = useState<Record<string, FileEntry>>({})
   const activeBlobs = useRef<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
 
   const currentKeys = normalizeData(data)
   const atLimit = currentKeys.length >= maxFiles
+
+  const rowLabel = (key: string, index: number): string => {
+    const entry = fileEntries[key]
+    if (fileNameTemplate) {
+      return downloadName(fileNameTemplate, { index }, { name: entry?.name, key })
+    }
+    return entry?.name ?? 'Uploaded File'
+  }
+
+  const fileForViewability = (key: string) => {
+    const entry = fileEntries[key]
+    return { name: entry?.name ?? key, type: entry?.type }
+  }
+
+  const resolveFileUrl = async (key: string): Promise<string | undefined> => {
+    const blobUrl = fileEntries[key]?.blobUrl
+    if (blobUrl) return blobUrl
+    const result = await uploadContext?.getDownloadUrl?.(key)
+    return result?.url
+  }
 
   useEffect(() => {
     return () => {
@@ -111,14 +141,7 @@ const FileControl = ({
         return
       }
 
-      const acceptedTypes = accept.split(',').map((t) => t.trim())
-      const typeOk = acceptedTypes.some((type) => {
-        if (type === '*' || type === '*/*') return true
-        if (type.endsWith('/*')) return file.type.startsWith(type.slice(0, -1))
-        if (type.startsWith('.')) return file.name.toLowerCase().endsWith(type.toLowerCase())
-        return file.type === type
-      })
-      if (!typeOk) {
+      if (!matchesAccept(file, accept)) {
         setError(`Invalid type. Accepted: ${formatAccept(accept)}`)
         return
       }
@@ -132,7 +155,12 @@ const FileControl = ({
         const result = await uploadContext.onUpload(file)
         const blobUrl = URL.createObjectURL(file)
         activeBlobs.current.add(blobUrl)
-        const entry: FileEntry = { key: result.key, name: result.name ?? file.name, blobUrl }
+        const entry: FileEntry = {
+          key: result.key,
+          name: result.name ?? file.name,
+          type: file.type || undefined,
+          blobUrl,
+        }
 
         setFileEntries((prev) => ({ ...prev, [result.key]: entry }))
 
@@ -162,12 +190,12 @@ const FileControl = ({
     e.stopPropagation()
     setDragActive(false)
     if (!isEnabled || atLimit) return
-    if (e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0])
+    if (e.dataTransfer.files?.[0]) void processFile(e.dataTransfer.files[0])
   }
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
-      processFile(e.target.files[0])
+      void processFile(e.target.files[0])
       e.target.value = ''
     }
   }
@@ -184,6 +212,12 @@ const FileControl = ({
       delete next[key]
       return next
     })
+    setRowErrors((prev) => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
     const newKeys = currentKeys.filter((k) => k !== key)
     // `undefined`, not `null` — same reason as the clear-when-hidden call
     // above: `null` doesn't satisfy this field's `type: 'string'` schema, so
@@ -193,51 +227,52 @@ const FileControl = ({
     handleChange(path, isMulti ? (newKeys.length > 0 ? newKeys : undefined) : newKeys[0])
   }
 
+  const clearRowError = (key: string) => {
+    setRowErrors((prev) => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
   const onView = async (e: React.MouseEvent<HTMLButtonElement>, key: string) => {
     e.preventDefault()
-    const index = currentKeys.indexOf(key) + 1
-    const viewName = displayNameFor(key, index)
-
-    // When a schema fileName is set, fetch as a Blob and download under that
-    // name so View works the same for trader and officer (storage URLs have no
-    // meaningful Content-Disposition filename). Without fileName, keep the
-    // previous open-in-tab behaviour.
-    if (fileNameTemplate) {
-      try {
-        let sourceUrl = fileEntries[key]?.blobUrl
-        if (!sourceUrl) {
-          const result = await uploadContext?.getDownloadUrl?.(key)
-          sourceUrl = result?.url
-        }
-        if (!sourceUrl) {
-          setError('Unable to open file.')
-          return
-        }
-        const response = await fetch(sourceUrl)
-        if (!response.ok) {
-          setError('Unable to open file.')
-          return
-        }
-        downloadBlob(await response.blob(), viewName)
-      } catch {
-        setError('Unable to open file.')
-      }
-      return
-    }
+    clearRowError(key)
 
     const blobUrl = fileEntries[key]?.blobUrl
     if (blobUrl) {
       window.open(blobUrl, '_blank', 'noopener,noreferrer')?.focus()
       return
     }
+    // Open synchronously so the popup blocker does not block the tab.
     const newWindow = window.open('', '_blank')
     if (!newWindow) return
     try {
-      const result = await uploadContext?.getDownloadUrl?.(key)
-      if (result?.url) newWindow.location.href = result.url
-      else newWindow.close()
+      const url = await resolveFileUrl(key)
+      if (url) newWindow.location.href = url
+      else {
+        newWindow.close()
+        setRowErrors((prev) => ({ ...prev, [key]: 'Unable to open file.' }))
+      }
     } catch {
       newWindow.close()
+      setRowErrors((prev) => ({ ...prev, [key]: 'Unable to open file.' }))
+    }
+  }
+
+  const onDownload = async (key: string, index: number) => {
+    clearRowError(key)
+    const name = downloadName(fileNameTemplate, { index }, { name: fileEntries[key]?.name, key })
+    try {
+      const url = await resolveFileUrl(key)
+      if (!url) {
+        setRowErrors((prev) => ({ ...prev, [key]: 'Unable to download file.' }))
+        return
+      }
+      await downloadFromUrl(url, name)
+    } catch {
+      setRowErrors((prev) => ({ ...prev, [key]: 'Unable to download file.' }))
     }
   }
 
@@ -262,48 +297,87 @@ const FileControl = ({
       </Flex>
 
       {/* ── Uploaded file rows ── */}
-      {currentKeys.map((key, position) => (
-        <Card key={key} size="2" variant="surface" mb="2">
-          <Flex align="center" gap="3">
-            <Box
-              style={{
-                background: 'var(--blue-3)',
-                padding: 8,
-                borderRadius: 6,
-                color: 'var(--blue-9)',
-                flexShrink: 0,
-              }}
-            >
-              <FileTextIcon width="20" height="20" />
-            </Box>
-            <Box style={{ flex: 1, overflow: 'hidden' }}>
-              <Text
-                size="2"
-                weight="bold"
+      {currentKeys.map((key, position) => {
+        const index = position + 1
+        const originalName = fileEntries[key]?.name
+        const showSecondary = Boolean(fileNameTemplate && originalName)
+        const rowError = rowErrors[key]
+        const canView = isBrowserViewable(fileForViewability(key))
+
+        return (
+          <Card key={key} size="2" variant="surface" mb="2">
+            <Flex align="center" gap="3">
+              <Box
                 style={{
-                  display: 'block',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  background: 'var(--blue-3)',
+                  padding: 8,
+                  borderRadius: 6,
+                  color: 'var(--blue-9)',
+                  flexShrink: 0,
                 }}
               >
-                {displayNameFor(key, position + 1)}
-              </Text>
-            </Box>
-            <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
-              <Button variant="soft" color="blue" size="1" onClick={(e) => onView(e, key)}>
-                View
-              </Button>
-              <CheckCircledIcon style={{ color: 'var(--green-9)', width: 18, height: 18 }} />
-              {isEnabled && (
-                <IconButton variant="ghost" color="gray" onClick={() => handleRemove(key)}>
-                  <Cross2Icon />
-                </IconButton>
-              )}
+                <FileTextIcon width="20" height="20" />
+              </Box>
+              <Box style={{ flex: 1, overflow: 'hidden' }}>
+                <Text
+                  size="2"
+                  weight="bold"
+                  style={{
+                    display: 'block',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {rowLabel(key, index)}
+                </Text>
+                {showSecondary && (
+                  <Text
+                    size="1"
+                    color="gray"
+                    style={{
+                      display: 'block',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {originalName}
+                  </Text>
+                )}
+              </Box>
+              <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
+                {canView && (
+                  <Button variant="soft" color="blue" size="1" onClick={(e) => void onView(e, key)}>
+                    View
+                  </Button>
+                )}
+                <Tooltip content="Download">
+                  <IconButton
+                    variant="ghost"
+                    color="gray"
+                    aria-label="Download"
+                    onClick={() => void onDownload(key, index)}
+                  >
+                    <DownloadIcon />
+                  </IconButton>
+                </Tooltip>
+                <CheckCircledIcon style={{ color: 'var(--green-9)', width: 18, height: 18 }} />
+                {isEnabled && (
+                  <IconButton variant="ghost" color="gray" onClick={() => handleRemove(key)}>
+                    <Cross2Icon />
+                  </IconButton>
+                )}
+              </Flex>
             </Flex>
-          </Flex>
-        </Card>
-      ))}
+            {rowError && (
+              <Text color="red" size="1" mt="2" style={{ display: 'block' }}>
+                {rowError}
+              </Text>
+            )}
+          </Card>
+        )
+      })}
 
       {/* ── Drop zone — hidden once limit reached ── */}
       {showDropZone && (
