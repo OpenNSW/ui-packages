@@ -6,11 +6,11 @@ See the `date` fixture in `dev/fixtures.ts` for a runnable example (`eventDate`,
 
 ## Formats
 
-| Schema `format` | Stored value | UI |
-| --------------- | ------------ | -- |
-| `date` | `YYYY-MM-DD` | Native date input |
-| `time` | RFC 3339 `HH:MM:SS` | Native time input |
-| `date-time` | RFC 3339 date-time (seconds + local offset) | Date and time inputs side by side, sharing width equally |
+| Schema `format` | Stored value                                | UI                                                       |
+| --------------- | ------------------------------------------- | -------------------------------------------------------- |
+| `date`          | `YYYY-MM-DD`                                | Native date input                                        |
+| `time`          | RFC 3339 `HH:MM:SS`                         | Native time input                                        |
+| `date-time`     | RFC 3339 date-time (seconds + local offset) | Date and time inputs side by side, sharing width equally |
 
 `time` and `date-time` share the same native time input. With `date` alone the date input expands to the full control width.
 
@@ -32,9 +32,9 @@ The seconds spinner is **opt-in**. Set `options.showSeconds: true` on the **Cont
 }
 ```
 
-| `showSeconds` | Picker | Stored value |
-| ------------- | ------ | ------------ |
-| omitted / `false` | Hour and minute only (`step=60`) | Seconds default to `00` |
-| `true` | Hour, minute, and seconds (`step=1`) | Seconds as picked; still `00` if the user only sets hour and minute |
+| `showSeconds`     | Picker                               | Stored value                                                        |
+| ----------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| omitted / `false` | Hour and minute only (`step=60`)     | Seconds default to `00`                                             |
+| `true`            | Hour, minute, and seconds (`step=1`) | Seconds as picked; still `00` if the user only sets hour and minute |
 
 A form that omits `showSeconds` keeps the hour-and-minute picker and still submits a valid `HH:MM:SS` string.
