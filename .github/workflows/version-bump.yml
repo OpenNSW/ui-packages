@@ -11,7 +11,9 @@ name: Release - Bump package version
 #   3. Tag the merge commit on main and push the tag, e.g.:
 #        git tag jsonforms-renderers-v0.4.1
 #        git push origin jsonforms-renderers-v0.4.1
-#      That tag push triggers release.yml, which builds and publishes to npm.
+#      That tag push triggers release.yml, which builds and stages the package on
+#      npm.
+#   4. A maintainer approves the staged package on npm (2FA). Only then is it live.
 #
 # Note: this workflow pushes/opens its PR using the default GITHUB_TOKEN, so
 # packages-ci.yml will NOT run on the PR it creates (GitHub doesn't let the
@@ -108,14 +110,14 @@ jobs:
             --body "$(cat <<EOF
           Bumps \`${{ steps.pkg.outputs.name }}\` (\`${{ steps.pkg.outputs.path }}\`) to \`${{ inputs.version }}\`.
 
-          **After merging**, tag the merge commit on \`main\` and push the tag to publish:
+          **After merging**, tag the merge commit on \`main\` and push the tag to start the release:
 
           \`\`\`
           git tag ${{ inputs.package }}-v${{ inputs.version }}
           git push origin ${{ inputs.package }}-v${{ inputs.version }}
           \`\`\`
 
-          Pushing that tag triggers \`release.yml\`, which builds and publishes to npm.
+          Pushing that tag triggers \`release.yml\`, which builds and stages the package on npm. A maintainer then approves it on npm (2FA) to make it live.
 
           _Opened by the \`version-bump.yml\` workflow._
           EOF
