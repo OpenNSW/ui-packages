@@ -421,7 +421,12 @@ export const fixtures: Fixture[] = [
       properties: {
         eventDate: { type: 'string', format: 'date', description: 'Date only (yyyy-MM-dd)' },
         appointment: { type: 'string', format: 'date-time', description: 'Date + time (RFC 3339)' },
-        openingTime: { type: 'string', format: 'time', description: 'Time only (native picker)' },
+        openingTime: { type: 'string', format: 'time', description: 'Time only (native picker, minute precision)' },
+        closingTime: {
+          type: 'string',
+          format: 'time',
+          description: 'Time only with seconds spinner (options.showSeconds)',
+        },
       },
       required: ['eventDate'],
     },
@@ -431,6 +436,7 @@ export const fixtures: Fixture[] = [
         { type: 'Control', scope: '#/properties/eventDate' },
         { type: 'Control', scope: '#/properties/appointment' },
         { type: 'Control', scope: '#/properties/openingTime' },
+        { type: 'Control', scope: '#/properties/closingTime', options: { showSeconds: true } },
       ],
     } as UISchemaElement,
   },
