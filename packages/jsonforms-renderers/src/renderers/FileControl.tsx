@@ -101,14 +101,6 @@ const FileControl = ({
   const currentKeys = normalizeData(data)
   const atLimit = currentKeys.length >= maxFiles
 
-  const rowLabel = (key: string, index: number): string => {
-    const entry = fileEntries[key]
-    if (fileNameTemplate) {
-      return downloadName(fileNameTemplate, { index }, { name: entry?.name, key })
-    }
-    return entry?.name ?? 'Uploaded File'
-  }
-
   const fileForViewability = (key: string) => {
     const entry = fileEntries[key]
     return { name: entry?.name ?? key, type: entry?.type }
@@ -119,6 +111,19 @@ const FileControl = ({
     if (blobUrl) return blobUrl
     const result = await uploadContext?.getDownloadUrl?.(key)
     return result?.url
+  }
+
+  const setRowError = (key: string, message: string) => {
+    setRowErrors((prev) => ({ ...prev, [key]: message }))
+  }
+
+  const clearRowError = (key: string) => {
+    setRowErrors((prev) => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
   }
 
   useEffect(() => {
@@ -212,12 +217,7 @@ const FileControl = ({
       delete next[key]
       return next
     })
-    setRowErrors((prev) => {
-      if (!prev[key]) return prev
-      const next = { ...prev }
-      delete next[key]
-      return next
-    })
+    clearRowError(key)
     const newKeys = currentKeys.filter((k) => k !== key)
     // `undefined`, not `null` — same reason as the clear-when-hidden call
     // above: `null` doesn't satisfy this field's `type: 'string'` schema, so
@@ -225,15 +225,6 @@ const FileControl = ({
     // is already `undefined` once the array is empty, so the scalar branch
     // needs no fallback at all.
     handleChange(path, isMulti ? (newKeys.length > 0 ? newKeys : undefined) : newKeys[0])
-  }
-
-  const clearRowError = (key: string) => {
-    setRowErrors((prev) => {
-      if (!prev[key]) return prev
-      const next = { ...prev }
-      delete next[key]
-      return next
-    })
   }
 
   const onView = async (e: React.MouseEvent<HTMLButtonElement>, key: string) => {
@@ -253,26 +244,25 @@ const FileControl = ({
       if (url) newWindow.location.href = url
       else {
         newWindow.close()
-        setRowErrors((prev) => ({ ...prev, [key]: 'Unable to open file.' }))
+        setRowError(key, 'Unable to open file.')
       }
     } catch {
       newWindow.close()
-      setRowErrors((prev) => ({ ...prev, [key]: 'Unable to open file.' }))
+      setRowError(key, 'Unable to open file.')
     }
   }
 
-  const onDownload = async (key: string, index: number) => {
+  const onDownload = async (key: string, name: string) => {
     clearRowError(key)
-    const name = downloadName(fileNameTemplate, { index }, { name: fileEntries[key]?.name, key })
     try {
       const url = await resolveFileUrl(key)
       if (!url) {
-        setRowErrors((prev) => ({ ...prev, [key]: 'Unable to download file.' }))
+        setRowError(key, 'Unable to download file.')
         return
       }
       await downloadFromUrl(url, name)
     } catch {
-      setRowErrors((prev) => ({ ...prev, [key]: 'Unable to download file.' }))
+      setRowError(key, 'Unable to download file.')
     }
   }
 
@@ -300,6 +290,8 @@ const FileControl = ({
       {currentKeys.map((key, position) => {
         const index = position + 1
         const originalName = fileEntries[key]?.name
+        const name = downloadName(fileNameTemplate, { index }, { name: originalName, key })
+        const labelText = fileNameTemplate ? name : (originalName ?? 'Uploaded File')
         const showSecondary = Boolean(fileNameTemplate && originalName)
         const rowError = rowErrors[key]
         const canView = isBrowserViewable(fileForViewability(key))
@@ -329,7 +321,7 @@ const FileControl = ({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {rowLabel(key, index)}
+                  {labelText}
                 </Text>
                 {showSecondary && (
                   <Text
@@ -357,7 +349,7 @@ const FileControl = ({
                     variant="ghost"
                     color="gray"
                     aria-label="Download"
-                    onClick={() => void onDownload(key, index)}
+                    onClick={() => void onDownload(key, name)}
                   >
                     <DownloadIcon />
                   </IconButton>

@@ -200,26 +200,36 @@ const SearchSelectControl = ({
       return
     }
     if (lastResolvedRef.current?.value === currentValue && lastResolvedRef.current?.label === currentLabel) return
-    // mark as resolving immediately — prevents re-runs if resolve is absent, rejects, or returns undefined
-    lastResolvedRef.current = { value: currentValue, label: currentLabel }
 
     // object-shaped fields already carry the label from submission time — no need to re-resolve it
     if (isObjectMode && currentLabel) {
       setSelectedOption({ id: currentValue, name: currentLabel })
+      lastResolvedRef.current = { value: currentValue, label: currentLabel }
       return
     }
 
     // optimistic raw-value label first, so the field isn't blank while resolving
     setSelectedOption({ id: currentValue, name: currentLabel ?? currentValue })
-    if (!service?.resolve) return
+    if (!service?.resolve) {
+      lastResolvedRef.current = { value: currentValue, label: currentLabel }
+      return
+    }
+
+    // Mark resolved only after this call settles. StrictMode runs the effect,
+    // cancels it, and runs it again; recording the id up front makes that
+    // second run skip resolve and leave the raw id on screen.
     let cancelled = false
+    const value = currentValue
+    const label = currentLabel
     void service
-      .resolve(currentValue, searchParams)
+      .resolve(value, searchParams)
       .then((opt) => {
-        if (!cancelled && opt) setSelectedOption(presentOption(opt, displayTemplate))
+        if (cancelled) return
+        if (opt) setSelectedOption(presentOption(opt, displayTemplate))
+        lastResolvedRef.current = { value, label }
       })
       .catch(() => {
-        /* keep raw-value fallback */
+        if (!cancelled) lastResolvedRef.current = { value, label }
       })
     return () => {
       cancelled = true

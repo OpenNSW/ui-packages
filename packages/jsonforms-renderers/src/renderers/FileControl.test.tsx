@@ -105,7 +105,6 @@ function Harness({
           data={initial}
           renderers={radixRenderers}
           onChange={({ data }) => onData(data as Data)}
-          config={{ restrict: !enabled }}
           readonly={!enabled}
         />
       </UploadProvider>
@@ -278,5 +277,35 @@ describe('FileControl View and Download', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View' }))
 
     expect(open).toHaveBeenCalledWith('blob:mock', '_blank', 'noopener,noreferrer')
+  })
+
+  it('opens View through getDownloadUrl for a saved form', async () => {
+    const opened = { location: { href: '' }, close: vi.fn() }
+    const open = vi.spyOn(window, 'open').mockReturnValue(opened as unknown as Window)
+    const getDownloadUrl = vi.fn().mockResolvedValue({
+      url: 'https://storage.example/signed',
+      expiresAt: Date.now() + 60_000,
+    })
+    renderForm({ attachment: 'photo.png' }, { schema: namedSchema, getDownloadUrl })
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+
+    await waitFor(() => {
+      expect(getDownloadUrl).toHaveBeenCalledWith('photo.png')
+      expect(opened.location.href).toBe('https://storage.example/signed')
+    })
+    expect(open).toHaveBeenCalledWith('', '_blank')
+  })
+
+  it('shows a row error when View cannot resolve the link', async () => {
+    const opened = { location: { href: '' }, close: vi.fn() }
+    vi.spyOn(window, 'open').mockReturnValue(opened as unknown as Window)
+    const getDownloadUrl = vi.fn().mockResolvedValue(undefined)
+    renderForm({ attachment: 'photo.png' }, { schema: namedSchema, getDownloadUrl })
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+
+    await waitFor(() => expect(screen.getByText('Unable to open file.')).toBeTruthy())
+    expect(opened.close).toHaveBeenCalled()
   })
 })

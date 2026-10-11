@@ -68,7 +68,7 @@ pnpm --filter @opennsw/jsonforms-renderers run dev
 
 ## Releasing
 
-Each package is published independently via its own tag-triggered workflow using npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, no token secret). For `@opennsw/jsonforms-renderers`:
+Each package is released independently via its own tag-triggered workflow, using npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, no token secret) and [staged publishing](https://docs.npmjs.com/staged-publishing/): CI stages the version, and a maintainer approves it on npm with 2FA before it is installable. For `@opennsw/jsonforms-renderers`:
 
 1. Bump `"version"` in `packages/jsonforms-renderers/package.json` and merge to `main`.
 2. Tag the commit and push the tag:
@@ -76,7 +76,8 @@ Each package is published independently via its own tag-triggered workflow using
    git tag jsonforms-renderers-v0.3.1
    git push origin jsonforms-renderers-v0.3.1
    ```
-3. The release workflow verifies the tag matches `package.json`, builds, and publishes to npm with provenance.
+3. The release workflow verifies the tag matches `package.json`, builds, and stages the package on npm with provenance.
+4. A maintainer approves the staged package on npm; only then is it live. See [Approving a staged release](CONTRIBUTING.md#approving-a-staged-release).
 
 ## License
 

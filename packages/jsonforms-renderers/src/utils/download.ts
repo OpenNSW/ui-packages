@@ -10,13 +10,15 @@ export function downloadTextFile(content: string, fileName: string, mimeType: st
 }
 
 // Trigger a browser download from an already-fetched Blob under a chosen name.
+// Revoke on the next turn so Safari/Firefox can start the download first;
+// revoking synchronously after click() can cancel larger files.
 export function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = fileName
   anchor.click()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 // Fetch a URL and save it under `fileName`. Throws on network failure or a

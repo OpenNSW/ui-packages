@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
-import { useState } from 'react'
+import { StrictMode, useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
@@ -361,6 +361,49 @@ describe('SearchSelectControl displayTemplate', () => {
       expect(latest()?.port).toBe('USTMR')
     })
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('USTMR-ALTHEIMER')
+  })
+
+  it('shows displayTemplate for a stored id after resolve is cancelled and retried', async () => {
+    const formSchema = {
+      type: 'object',
+      properties: {
+        port: {
+          type: 'string',
+          title: 'Port',
+          'x-search': {
+            service: 'countries',
+            mode: 'small-list',
+            displayTemplate: '{name} ({id})',
+          },
+        },
+      },
+    } as unknown as JsonSchema
+
+    const resolves: string[] = []
+    render(
+      <StrictMode>
+        <Theme>
+          <SearchServiceProvider
+            services={{
+              countries: {
+                search: () => Promise.resolve({ options: [] }),
+                async resolve(value: string) {
+                  resolves.push(value)
+                  return { id: value, name: 'ALTHEIMER' }
+                },
+              },
+            }}
+          >
+            <JsonForms schema={formSchema} uischema={stringUi} data={{ port: 'USTMR' }} renderers={radixRenderers} />
+          </SearchServiceProvider>
+        </Theme>
+      </StrictMode>,
+    )
+
+    await waitFor(() => {
+      expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('ALTHEIMER (USTMR)')
+    })
+    expect(resolves).toContain('USTMR')
   })
 
   it('writes the service id and templated label for an object-shaped field', async () => {

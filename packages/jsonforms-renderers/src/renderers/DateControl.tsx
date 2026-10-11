@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from 'react'
 import dayjs from 'dayjs'
 
 import { getErrorMessage } from '../utils/error'
+import { timeInputValue, toRfc3339Time } from '../utils/time'
 
 // dayjs().format() defaults to RFC 3339 (e.g. 2026-06-05T12:30:00+05:30) with
 // seconds + local offset, which ajv's strict "date-time" format check requires.
@@ -55,6 +56,7 @@ export const DateControl = ({
   required,
   errors,
   schema,
+  uischema,
   enabled,
   visible = true,
 }: ControlProps) => {
@@ -69,6 +71,10 @@ export const DateControl = ({
   }
   const isValid = errors.length === 0
   const value: string = typeof data === 'string' ? data : ''
+  // Seconds spinner is opt-in. Omitted / false keeps hour+minute only.
+  // Stored values always include seconds so AJV format "time" still passes.
+  const showSeconds = uischema?.options?.showSeconds === true
+  const timeStep = showSeconds ? 1 : 60
 
   const shell = (children: ReactNode) => (
     <FieldShell path={path} label={label} required={required} errors={errors} description={schema.description}>
@@ -81,8 +87,9 @@ export const DateControl = ({
     return shell(
       <TextField.Root
         type="time"
-        value={value}
-        onChange={(e) => handleChange(path, e.target.value)}
+        step={timeStep}
+        value={timeInputValue(value, showSeconds)}
+        onChange={(e) => handleChange(path, toRfc3339Time(e.target.value))}
         disabled={!enabled}
         color={!isValid ? 'red' : undefined}
         id={path}
@@ -93,9 +100,7 @@ export const DateControl = ({
   // date and date-time share the same date input; date-time appends a native time input.
   const hasTime = schema.format === 'date-time'
   const [datePart = '', timeRaw = ''] = value.split('T')
-  // The native <input type="time"> only understands HH:MM(:SS); strip any
-  // timezone suffix from the stored RFC 3339 value before feeding it back.
-  const timeForInput = timeRaw.slice(0, 5)
+  const timeForInput = timeInputValue(timeRaw, showSeconds)
 
   const commit = (nextDate: string, nextTime: string) => {
     if (!nextDate) {
@@ -119,6 +124,7 @@ export const DateControl = ({
       {hasTime && (
         <TextField.Root
           type="time"
+          step={timeStep}
           value={timeForInput}
           disabled={!enabled || !datePart}
           color={!isValid ? 'red' : undefined}

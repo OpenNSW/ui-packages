@@ -16,7 +16,10 @@ import {
 // assignments (not vi.spyOn, which requires the property to already exist)
 // and removed again afterwards rather than restored, for the same reason.
 
-afterEach(() => {
+afterEach(async () => {
+  // downloadBlob revokes on the next turn; wait so cleanup does not delete
+  // revokeObjectURL before that timeout runs.
+  await new Promise((r) => setTimeout(r, 0))
   // @ts-expect-error -- jsdom doesn't declare these; see the stub note above.
   delete URL.createObjectURL
   // @ts-expect-error -- ditto.
@@ -54,7 +57,7 @@ describe('downloadTextFile', () => {
     expect(click).toHaveBeenCalledTimes(1)
   })
 
-  it('revokes the object URL after triggering the download', () => {
+  it('revokes the object URL after triggering the download', async () => {
     URL.createObjectURL = vi.fn().mockReturnValue('blob:mock-url')
     const revokeObjectURL = vi.fn()
     URL.revokeObjectURL = revokeObjectURL
@@ -62,7 +65,8 @@ describe('downloadTextFile', () => {
 
     downloadTextFile('<a>1</a>', 'a.xml', 'application/xml')
 
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url'))
   })
 })
 
