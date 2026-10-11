@@ -35,12 +35,12 @@ The bound schema node must use `format: "file"`:
 
 ## Options
 
-| Option     | Type     | Default                          | Meaning                                                                 |
-| ---------- | -------- | -------------------------------- | ----------------------------------------------------------------------- |
-| `maxFiles` | `number` | `1`                              | Maximum uploads. Greater than 1 requires an array schema.               |
-| `maxSize`  | `number` | `5242880` (5 MiB)                | Per-file size limit in bytes.                                           |
-| `accept`   | `string` | `'image/*,application/pdf'`      | Comma-separated MIME types, wildcards, and/or extensions (e.g. `.xlsx`). |
-| `fileName` | `string` | _(none)_                         | Base name for the row label and Download — see [File name](#file-name). |
+| Option     | Type     | Default                     | Meaning                                                                  |
+| ---------- | -------- | --------------------------- | ------------------------------------------------------------------------ |
+| `maxFiles` | `number` | `1`                         | Maximum uploads. Greater than 1 requires an array schema.                |
+| `maxSize`  | `number` | `5242880` (5 MiB)           | Per-file size limit in bytes.                                            |
+| `accept`   | `string` | `'image/*,application/pdf'` | Comma-separated MIME types, wildcards, and/or extensions (e.g. `.xlsx`). |
+| `fileName` | `string` | _(none)_                    | Base name for the row label and Download — see [File name](#file-name).  |
 
 The same keys may also be set under `uischema.options` for older forms; schema `x-file` wins when both are present.
 
