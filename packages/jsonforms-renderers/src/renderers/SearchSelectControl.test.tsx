@@ -277,8 +277,7 @@ describe('SearchSelectControl dependsOn', () => {
 })
 
 describe('SearchSelectControl defaultFrom', () => {
-  const countryObject = {
-    type: 'object',
+  const countryShape = {
     properties: {
       value: { type: 'string' },
       label: { type: 'string' },
@@ -297,7 +296,7 @@ describe('SearchSelectControl defaultFrom', () => {
           mode: 'small-list',
           displayTemplate: '{name}',
         },
-        ...countryObject,
+        ...countryShape,
       },
       consignee_country: {
         type: 'object',
@@ -308,7 +307,7 @@ describe('SearchSelectControl defaultFrom', () => {
           displayTemplate: '{name}',
           defaultFrom: 'importing_country',
         },
-        ...countryObject,
+        ...countryShape,
       },
     },
   } as unknown as JsonSchema
