@@ -42,7 +42,7 @@ The bound schema node must use `format: "file"`:
 | `accept`   | `string` | `'image/*,application/pdf'` | Comma-separated MIME types, wildcards, and/or extensions (e.g. `.xlsx`). |
 | `fileName` | `string` | _(none)_                    | Base name for the row label and Download — see [File name](#file-name).  |
 
-The same keys may also be set under `uischema.options` for older forms; schema `x-file` wins when both are present.
+`maxFiles`, `maxSize` and `accept` may also be set under `uischema.options` for older forms; schema `x-file` wins when both are present. `fileName` is read from `x-file` only.
 
 ## File name
 
@@ -70,6 +70,6 @@ For a just-uploaded file, both actions use the local blob URL. For a saved form 
 ## Behavior notes
 
 - Upload failures show in the drop zone. View/Download failures show as a per-row message under that row (so they remain visible when the control is read-only or the single-file slot is full), and clear on the next attempt.
-- **Download fetches the signed storage URL in the browser**, so the storage bucket must allow CORS `GET` from the app origin. Confirm that for each deployment (trader app, agency portal, etc.); it is outside this package.
+- **Download fetches the signed storage URL in the browser**, so the storage bucket must allow CORS `GET` from the app origin. Confirm that for each app using this package; it is outside this package.
 - Removing the last file clears the field with `undefined` (not `null`) so a `type: "string"` schema stays valid.
 - The control renders nothing when `visible` is `false`. When read-only with no files, it also renders nothing.

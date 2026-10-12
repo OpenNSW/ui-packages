@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   downloadBlob,
   downloadFromUrl,
@@ -15,19 +15,25 @@ import {
 // is revoked afterwards — not an actual browser download. Stubbed as plain
 // assignments (not vi.spyOn, which requires the property to already exist)
 // and removed again afterwards rather than restored, for the same reason.
+//
+// downloadBlob defers revoke with setTimeout(0). Tests that trigger a download
+// use fake timers so afterEach can flush that timeout before deleting stubs.
 
-afterEach(async () => {
-  // downloadBlob revokes on the next turn; wait so cleanup does not delete
-  // revokeObjectURL before that timeout runs.
-  await new Promise((r) => setTimeout(r, 0))
+afterEach(() => {
+  if (vi.isFakeTimers()) vi.runAllTimers()
   // @ts-expect-error -- jsdom doesn't declare these; see the stub note above.
   delete URL.createObjectURL
   // @ts-expect-error -- ditto.
   delete URL.revokeObjectURL
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 describe('downloadTextFile', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
   it('creates an object URL from the content and mime type given', () => {
     const createObjectURL = vi.fn().mockReturnValue('blob:mock-url')
     URL.createObjectURL = createObjectURL
@@ -57,7 +63,7 @@ describe('downloadTextFile', () => {
     expect(click).toHaveBeenCalledTimes(1)
   })
 
-  it('revokes the object URL after triggering the download', async () => {
+  it('revokes the object URL after triggering the download', () => {
     URL.createObjectURL = vi.fn().mockReturnValue('blob:mock-url')
     const revokeObjectURL = vi.fn()
     URL.revokeObjectURL = revokeObjectURL
@@ -66,11 +72,16 @@ describe('downloadTextFile', () => {
     downloadTextFile('<a>1</a>', 'a.xml', 'application/xml')
 
     expect(revokeObjectURL).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url'))
+    vi.runAllTimers()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
   })
 })
 
 describe('downloadBlob', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
   it('clicks an anchor with the given download name for an existing blob', () => {
     URL.createObjectURL = vi.fn().mockReturnValue('blob:from-blob')
     URL.revokeObjectURL = vi.fn()
@@ -86,6 +97,10 @@ describe('downloadBlob', () => {
 })
 
 describe('downloadFromUrl', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
   })
