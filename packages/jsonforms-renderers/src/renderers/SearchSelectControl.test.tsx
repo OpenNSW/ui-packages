@@ -276,6 +276,148 @@ describe('SearchSelectControl dependsOn', () => {
   })
 })
 
+describe('SearchSelectControl defaultFrom', () => {
+  const countryObject = {
+    type: 'object',
+    properties: {
+      value: { type: 'string' },
+      label: { type: 'string' },
+    },
+    required: ['value'],
+  }
+
+  const defaultFromSchema = {
+    type: 'object',
+    properties: {
+      importing_country: {
+        type: 'object',
+        title: 'Importing Country',
+        'x-search': {
+          service: 'countries',
+          mode: 'small-list',
+          displayTemplate: '{name}',
+        },
+        ...countryObject,
+      },
+      consignee_country: {
+        type: 'object',
+        title: 'Consignee Country',
+        'x-search': {
+          service: 'countries',
+          mode: 'small-list',
+          displayTemplate: '{name}',
+          defaultFrom: 'importing_country',
+        },
+        ...countryObject,
+      },
+    },
+  } as unknown as JsonSchema
+
+  const defaultFromUi = {
+    type: 'VerticalLayout',
+    elements: [
+      { type: 'Control', scope: '#/properties/importing_country' },
+      { type: 'Control', scope: '#/properties/consignee_country' },
+    ],
+  } as UISchemaElement
+
+  it('copies the sibling into this field while it is empty', async () => {
+    const { latest } = renderForm(
+      {},
+      async () => ({ options: [{ id: 'GB', name: 'United Kingdom' }] }),
+      defaultFromSchema,
+      defaultFromUi,
+    )
+
+    fireEvent.focus(screen.getAllByRole('textbox')[0])
+    fireEvent.click(await screen.findByText('United Kingdom'))
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+      expect(latest()?.consignee_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+    })
+  })
+
+  it('does not overwrite a value already set on this field', async () => {
+    const { latest } = renderForm(
+      { consignee_country: { value: 'US', label: 'United States' } },
+      async () => ({
+        options: [
+          { id: 'GB', name: 'United Kingdom' },
+          { id: 'US', name: 'United States' },
+        ],
+      }),
+      defaultFromSchema,
+      defaultFromUi,
+    )
+
+    fireEvent.focus(screen.getAllByRole('textbox')[0])
+    fireEvent.click(await screen.findByText('United Kingdom'))
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+    })
+    expect(latest()?.consignee_country).toEqual({ value: 'US', label: 'United States' })
+  })
+
+  it('fills again after this field is cleared while the sibling still has a value', async () => {
+    const { latest } = renderForm(
+      {
+        importing_country: { value: 'GB', label: 'United Kingdom' },
+        consignee_country: { value: 'US', label: 'United States' },
+      },
+      async () => ({
+        options: [
+          { id: 'GB', name: 'United Kingdom' },
+          { id: 'US', name: 'United States' },
+        ],
+      }),
+      defaultFromSchema,
+      defaultFromUi,
+    )
+
+    // Consignee is the second field; its clear control is the second "Clear selection".
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear selection' })[1])
+
+    await waitFor(() => {
+      expect(latest()?.consignee_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+    })
+  })
+
+  it('does not copy when the form is readonly', async () => {
+    const writes: Data[] = []
+    const services = {
+      countries: {
+        search: async () => ({ options: [{ id: 'GB', name: 'United Kingdom' }] }),
+      },
+    }
+
+    function Harness() {
+      return (
+        <Theme>
+          <SearchServiceProvider services={services}>
+            <JsonForms
+              schema={defaultFromSchema}
+              uischema={defaultFromUi}
+              data={{ importing_country: { value: 'GB', label: 'United Kingdom' } }}
+              renderers={radixRenderers}
+              readonly
+              onChange={({ data }) => writes.push(data as Data)}
+            />
+          </SearchServiceProvider>
+        </Theme>
+      )
+    }
+
+    render(<Harness />)
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('textbox')[0]).toBeTruthy()
+    })
+    expect(writes.every((w) => w.consignee_country == null)).toBe(true)
+  })
+})
+
 describe('SearchSelectControl displayTemplate', () => {
   const portOption = { id: 'USTMR', name: 'ALTHEIMER' }
 
