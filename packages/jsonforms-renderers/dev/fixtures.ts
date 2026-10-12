@@ -422,6 +422,62 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'search-select-default-from',
+    name: 'Search Select (Default from sibling)',
+    schema: {
+      type: 'object',
+      properties: {
+        importing_country: {
+          type: 'object',
+          title: 'Name of Importing Country',
+          description:
+            'Pick a country. Consignee country below copies it while empty, and is overwritten whenever ' +
+            'this field changes. Clearing this field clears consignee country too.',
+          'x-search': { service: 'countries', mode: 'large-searchable-list', displayTemplate: '{name}' },
+          properties: {
+            value: { type: 'string', minLength: 1 },
+            label: { type: 'string' },
+          },
+          required: ['value'],
+        },
+        consignee_country: {
+          type: 'object',
+          title: 'Country of Consignee',
+          description:
+            'x-search.defaultFrom: importing_country. Stays editable — pick a different country and it is kept ' +
+            'until importing country changes again. Clear it while importing country is set and it refills.',
+          'x-search': {
+            service: 'countries',
+            mode: 'large-searchable-list',
+            displayTemplate: '{name}',
+            defaultFrom: 'importing_country',
+          },
+          properties: {
+            value: { type: 'string', minLength: 1 },
+            label: { type: 'string' },
+          },
+          required: ['value'],
+        },
+      },
+      required: ['importing_country', 'consignee_country'],
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/importing_country',
+          options: { placeholder: 'Search for a country…' },
+        },
+        {
+          type: 'Control',
+          scope: '#/properties/consignee_country',
+          options: { placeholder: 'Search for a country…' },
+        },
+      ],
+    } as UISchemaElement,
+  },
+  {
     id: 'search-select-object',
     name: 'Search Select (Object shape)',
     schema: {
