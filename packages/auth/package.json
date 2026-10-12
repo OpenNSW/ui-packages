@@ -1,6 +1,6 @@
 {
   "name": "@opennsw/auth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared OIDC setup for OpenNSW portals: UserManager defaults, IdP config parsing, role mapping and bearer headers.",
   "license": "Apache-2.0",
   "keywords": [
