@@ -1,0 +1,158 @@
+name: PR Labels
+
+# Every PR needs a place in a package's release notes: a Package/<dir> label
+# (which package it belongs to) and a release-notes label (what kind of change
+# it is), or skip-changelog to leave it out. This job fills in what the PR's
+# files, title and author already say, then fails until the labels are there.
+#
+# The release-package skill (.claude/skills/release-package) builds each
+# package's notes from these labels, so a PR without them is easy to miss.
+#
+# pull_request_target, not pull_request: PRs come from forks, and a fork's
+# pull_request token cannot write labels. That is safe only because nothing
+# from the PR is checked out or run — the title, author, file names and labels
+# are read as data in JavaScript, never passed through a shell. Keep it that way.
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  pull-requests: write # add and remove labels on the PR
+  issues: write # create a Package/<dir> label the first time a package needs one
+
+# Serialised per PR and never cancelled, so each run's check sees the labels
+# the run before it added. Labels added with GITHUB_TOKEN start no new run,
+# which is also why labelling and checking share one job.
+concurrency:
+  group: pr-labels-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  release-notes-label:
+    name: Release notes label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label from files, title and author, then require labels
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const BREAKING = 'breaking change';
+            const SKIP = 'skip-changelog';
+            const PACKAGE_PREFIX = 'Package/';
+            const PACKAGE_COLOR = '5319e7';
+            // The labels that place a PR in a package's release notes.
+            const RELEASE_LABELS = [BREAKING, 'Type/New Feature', 'Type/Improvement', 'Type/Bug', 'Type/Task'];
+            // Title types whose section is unambiguous. Anything else is left to a person.
+            const TYPE_LABELS = { feat: 'Type/New Feature', fix: 'Type/Bug' };
+
+            const pr = context.payload.pull_request;
+            const action = context.payload.action;
+            const issue = { ...context.repo, issue_number: pr.number };
+
+            const currentLabels = async () =>
+              new Set((await github.paginate(github.rest.issues.listLabelsOnIssue, { ...issue, per_page: 100 }))
+                .map((label) => label.name));
+            const isPackage = (name) => name.startsWith(PACKAGE_PREFIX);
+            const hasRelease = (labels) => RELEASE_LABELS.some((name) => labels.has(name));
+            const isClassified = (labels) => labels.has(SKIP) || hasRelease(labels);
+
+            const ensurePackageLabel = async (name) => {
+              try {
+                await github.rest.issues.getLabel({ ...context.repo, name });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                try {
+                  await github.rest.issues.createLabel({
+                    ...context.repo,
+                    name,
+                    color: PACKAGE_COLOR,
+                    description: `Changes to packages/${name.slice(PACKAGE_PREFIX.length)}`,
+                  });
+                } catch (createError) {
+                  if (createError.status !== 422) throw createError; // created by a concurrent run
+                }
+              }
+            };
+
+            const before = await currentLabels();
+            const add = new Set();
+
+            // 1. Package labels, from the files the PR changes: one Package/<dir>
+            //    per packages/<dir>/ it touches. Only ever added, so a label a
+            //    person put on a PR that changes nothing in the package stays.
+            if (['opened', 'reopened', 'synchronize'].includes(action)) {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                ...context.repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+              const dirs = new Set();
+              for (const file of files) {
+                for (const path of [file.filename, file.previous_filename]) {
+                  const match = path && /^packages\/([^/]+)\//.exec(path);
+                  if (match) dirs.add(match[1]);
+                }
+              }
+              for (const dir of dirs) {
+                const name = PACKAGE_PREFIX + dir;
+                if (before.has(name)) continue;
+                await ensurePackageLabel(name);
+                add.add(name);
+              }
+            }
+
+            // 2. Release-notes labels. The title is applied when the PR opens or
+            //    its title changes; otherwise only while the PR has no release-notes
+            //    label yet, which also picks up PRs opened before this workflow.
+            //    Label events never get here, so a label a person changed stays.
+            const titleChanged = action === 'edited' && context.payload.changes?.title !== undefined;
+            const backfill = (action === 'reopened' || action === 'synchronize') && !isClassified(before);
+            if (action === 'opened' || titleChanged || backfill) {
+              // Bots and agents (Dependabot, the version-bump workflow, claude[bot], …)
+              // and release bumps stay out of the notes; a maintainer can remove the
+              // label to list one.
+              const isBump = /^chore\(release\):/.test(pr.title);
+              if ((pr.user.type === 'Bot' || isBump) && !isClassified(before)) add.add(SKIP);
+
+              const match = /^(\w+)(\([^)]*\))?(!)?:/.exec(pr.title);
+              const typeLabel = match && TYPE_LABELS[match[1]];
+              if (typeLabel) {
+                add.add(typeLabel);
+                for (const other of Object.values(TYPE_LABELS)) {
+                  if (other === typeLabel || !before.has(other)) continue;
+                  try {
+                    await github.rest.issues.removeLabel({ ...issue, name: other });
+                  } catch (error) {
+                    if (error.status !== 404) throw error; // already removed by someone else
+                  }
+                }
+              }
+              if (match && match[3]) add.add(BREAKING);
+            }
+
+            const missing = [...add].filter((name) => !before.has(name));
+            if (missing.length > 0) {
+              await github.rest.issues.addLabels({ ...issue, labels: missing });
+              core.info(`Added: ${missing.join(', ')}`);
+            }
+
+            // 3. Require labels. Read afresh: step 1 or 2, or a person, may have changed them.
+            const labels = await currentLabels();
+            const packages = [...labels].filter(isPackage);
+            if (labels.has(SKIP) && labels.has(BREAKING)) {
+              core.setFailed(`A breaking change must appear in the release notes. Remove "${SKIP}".`);
+            } else if (!isClassified(labels)) {
+              core.setFailed(
+                'Add a label that places this PR in the release notes: ' +
+                  '"Type/New Feature", "Type/Improvement", "Type/Bug" or "Type/Task" ' +
+                  `(and "${BREAKING}" if consumers must change their code), or "${SKIP}" to leave it out.`,
+              );
+            } else if (!labels.has(SKIP) && packages.length === 0) {
+              core.setFailed(
+                `This PR changes no file under packages/, so it belongs to no package's release notes. ` +
+                  `Add the "${PACKAGE_PREFIX}<package>" label of the package it affects, or "${SKIP}".`,
+              );
+            } else {
+              core.info(`Release notes labels: ${[...labels].filter((name) => name === SKIP || hasRelease(new Set([name])) || isPackage(name)).join(', ')}`);
+            }
