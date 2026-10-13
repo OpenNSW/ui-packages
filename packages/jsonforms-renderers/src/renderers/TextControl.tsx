@@ -4,6 +4,7 @@ import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { getErrorMessage } from '../utils/error'
+import { showRequiredAsterisk } from '../utils/required'
 
 export const TextControl = ({
   data,
@@ -24,12 +25,13 @@ export const TextControl = ({
   }
 
   const isValid = errors.length === 0
+  const showRequired = showRequiredAsterisk({ required, uischema })
 
   return (
     <Box mb="4">
       <Flex direction="column" gap="1">
         <Text as="label" size="2" weight="bold" htmlFor={path}>
-          {label} {required && <Text color="red">*</Text>}
+          {label} {showRequired && <Text color="red">*</Text>}
         </Text>
         <TextField.Root
           value={data || ''}

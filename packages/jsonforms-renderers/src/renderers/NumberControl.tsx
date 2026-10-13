@@ -2,6 +2,7 @@ import { type ControlProps, isNumberControl, type RankedTester, rankWith, isInte
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { getErrorMessage } from '../utils/error'
+import { showRequiredAsterisk } from '../utils/required'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 
 export const NumberControl = ({
@@ -23,6 +24,7 @@ export const NumberControl = ({
   }
 
   const isValid = errors.length === 0
+  const showRequired = showRequiredAsterisk({ required, uischema })
 
   const handleNumberChange = (value: string) => {
     if (value === '') {
@@ -39,7 +41,7 @@ export const NumberControl = ({
     <Box mb="4">
       <Flex direction="column" gap="1">
         <Text as="label" size="2" weight="bold" htmlFor={path}>
-          {label} {required && <Text color="red">*</Text>}
+          {label} {showRequired && <Text color="red">*</Text>}
         </Text>
         <TextField.Root
           type="number"
