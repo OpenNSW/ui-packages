@@ -337,13 +337,14 @@ describe('SearchSelectControl defaultFrom', () => {
     })
   })
 
-  it('does not overwrite a value already set on this field', async () => {
+  it('overwrites this field when the sibling changes', async () => {
     const { latest } = renderForm(
       { consignee_country: { value: 'US', label: 'United States' } },
       async () => ({
         options: [
           { id: 'GB', name: 'United Kingdom' },
           { id: 'US', name: 'United States' },
+          { id: 'AU', name: 'Australia' },
         ],
       }),
       defaultFromSchema,
@@ -355,8 +356,51 @@ describe('SearchSelectControl defaultFrom', () => {
 
     await waitFor(() => {
       expect(latest()?.importing_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+      expect(latest()?.consignee_country).toEqual({ value: 'GB', label: 'United Kingdom' })
     })
-    expect(latest()?.consignee_country).toEqual({ value: 'US', label: 'United States' })
+
+    fireEvent.focus(screen.getAllByRole('textbox')[0])
+    fireEvent.click(await screen.findByText('Australia'))
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toEqual({ value: 'AU', label: 'Australia' })
+      expect(latest()?.consignee_country).toEqual({ value: 'AU', label: 'Australia' })
+    })
+  })
+
+  it('keeps a user edit until the sibling changes', async () => {
+    const { latest } = renderForm(
+      {
+        importing_country: { value: 'GB', label: 'United Kingdom' },
+        consignee_country: { value: 'GB', label: 'United Kingdom' },
+      },
+      async () => ({
+        options: [
+          { id: 'GB', name: 'United Kingdom' },
+          { id: 'US', name: 'United States' },
+          { id: 'AU', name: 'Australia' },
+        ],
+      }),
+      defaultFromSchema,
+      defaultFromUi,
+    )
+
+    // Consignee is the second textbox; open it and pick a different country.
+    fireEvent.focus(screen.getAllByRole('textbox')[1])
+    fireEvent.click(await screen.findByText('United States'))
+
+    await waitFor(() => {
+      expect(latest()?.consignee_country).toEqual({ value: 'US', label: 'United States' })
+      expect(latest()?.importing_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+    })
+
+    fireEvent.focus(screen.getAllByRole('textbox')[0])
+    fireEvent.click(await screen.findByText('Australia'))
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toEqual({ value: 'AU', label: 'Australia' })
+      expect(latest()?.consignee_country).toEqual({ value: 'AU', label: 'Australia' })
+    })
   })
 
   it('fills again after this field is cleared while the sibling still has a value', async () => {

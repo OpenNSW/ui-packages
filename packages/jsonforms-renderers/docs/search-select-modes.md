@@ -92,12 +92,18 @@ had a value clears this field.
 
 ## Default from a sibling (`defaultFrom`)
 
-To prefill this field from another field on the same object while this field is still
-empty, set `x-search.defaultFrom` to that sibling's property name. The control copies the
-sibling's current value (a string, or `{ value, label }`) into this field. The field stays
-editable. A later change to the sibling does **not** overwrite a value that is already
-set — including one that was copied earlier. Clearing this field while the sibling still
-has a value copies again.
+To mirror another field on the same object, set `x-search.defaultFrom` to that sibling's
+property name. The control copies the sibling's current value (a string, or
+`{ value, label }`) into this field:
+
+- while this field is empty (first fill, or after the trader clears it)
+- whenever the sibling **changes** — that overwrite includes a value the trader set by
+  hand
+
+The field stays editable between sibling changes. Used for NPQS "Country of Consignee"
+following "Name of Importing Country" (GeNS-style): change importing country, consignee
+country follows; the trader can still pick a different consignee country until importing
+country changes again.
 
 ```jsonc
 {
@@ -124,8 +130,8 @@ has a value copies again.
 ```
 
 `defaultFrom` is independent of `dependsOn`. Use `dependsOn` when this field's options
-must filter by the sibling; use `defaultFrom` when you only want to copy the sibling's
-value while this field is empty.
+must filter by the sibling; use `defaultFrom` when this field should follow the sibling's
+value.
 
 ## Display template
 
