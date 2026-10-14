@@ -437,13 +437,9 @@ const SearchSelectControl = ({
   }
 
   const placeholder = (uischema?.options?.placeholder as string | undefined) ?? 'Select an option'
-  const closedDisplay = isMulti
-    ? ''
-    : (selectedOption?.name ?? '')
+  const closedDisplay = isMulti ? '' : (selectedOption?.name ?? '')
   const multiSummary =
-    isMulti && selectedValues.length > 0
-      ? selectedValues.map((v) => v.label || v.value).join(', ')
-      : ''
+    isMulti && selectedValues.length > 0 ? selectedValues.map((v) => v.label || v.value).join(', ') : ''
 
   return (
     <Box mb="4">
