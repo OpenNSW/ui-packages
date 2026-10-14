@@ -437,9 +437,8 @@ const SearchSelectControl = ({
   }
 
   const placeholder = (uischema?.options?.placeholder as string | undefined) ?? 'Select an option'
+  // Multi: chips above the field are the selection UI; keep the closed input empty.
   const closedDisplay = isMulti ? '' : (selectedOption?.name ?? '')
-  const multiSummary =
-    isMulti && selectedValues.length > 0 ? selectedValues.map((v) => v.label || v.value).join(', ') : ''
 
   return (
     <Box mb="4">
@@ -487,7 +486,7 @@ const SearchSelectControl = ({
         <div ref={containerRef} style={{ position: 'relative' }}>
           <TextField.Root
             id={path}
-            value={open ? inputValue : isMulti ? multiSummary : closedDisplay}
+            value={open ? inputValue : closedDisplay}
             placeholder={open && modeConfig?.searchable ? 'Search...' : placeholder}
             disabled={!isEnabled}
             readOnly={(open && !modeConfig?.searchable) || (isMulti && !open)}
