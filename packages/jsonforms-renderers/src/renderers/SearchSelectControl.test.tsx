@@ -437,3 +437,59 @@ describe('SearchSelectControl displayTemplate', () => {
     })
   })
 })
+
+describe('SearchSelectControl multi (array of x-search objects)', () => {
+  const multiSchema = {
+    type: 'object',
+    properties: {
+      transit_countries: {
+        type: 'array',
+        title: 'Transit Countries',
+        items: {
+          type: 'object',
+          'x-search': {
+            service: 'countries',
+            mode: 'small-list',
+            displayTemplate: '{name}',
+          },
+          properties: {
+            value: { type: 'string', minLength: 1 },
+            label: { type: 'string' },
+          },
+          required: ['value'],
+        },
+      },
+    },
+  } as unknown as JsonSchema
+
+  const multiUi = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/transit_countries' }],
+  } as UISchemaElement
+
+  it('renders a searchable multi dropdown instead of Add Item cards', async () => {
+    const { latest } = renderForm(
+      {},
+      async () => ({
+        options: [
+          { id: 'IN', name: 'India' },
+          { id: 'SG', name: 'Singapore' },
+        ],
+      }),
+      multiSchema,
+      multiUi,
+    )
+
+    expect(screen.queryByText('+ Add Item')).toBeNull()
+    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(await screen.findByText('India'))
+    fireEvent.click(await screen.findByText('Singapore'))
+
+    await waitFor(() => {
+      expect(latest()?.transit_countries).toEqual([
+        { value: 'IN', label: 'India' },
+        { value: 'SG', label: 'Singapore' },
+      ])
+    })
+  })
+})
