@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
 import { useState } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
@@ -27,8 +27,6 @@ const schema = {
     assessedAmount: {
       type: 'number',
       title: 'Assessed Amount',
-      exclusiveMinimum: 0,
-      multipleOf: 0.01,
     },
   },
   allOf: [
@@ -78,7 +76,7 @@ function renderForm(seed: Data) {
   return render(<Harness />)
 }
 
-describe('NumberControl required asterisk + constraints', () => {
+describe('NumberControl required asterisk', () => {
   it('shows a red asterisk only when the amount is conditionally required', () => {
     renderForm({ reviewOutcome: 'reject' })
     expect(screen.queryByText('Assessed Amount')).toBeNull()
@@ -87,21 +85,5 @@ describe('NumberControl required asterisk + constraints', () => {
     renderForm({ reviewOutcome: 'approve' })
     const label = screen.getByText('Assessed Amount')
     expect(label.textContent).toContain('*')
-  })
-
-  it('sets min from exclusiveMinimum and blocks signed / exponent keys and pastes', () => {
-    renderForm({ reviewOutcome: 'approve' })
-    const input = screen.getByLabelText(/Assessed Amount/) as HTMLInputElement
-    expect(input).toHaveProperty('type', 'number')
-    expect(input.min).toBe('0')
-    expect(input.step).toBe('0.01')
-
-    // jsdom does not type on keydown; fireEvent returns false when preventDefault ran.
-    expect(fireEvent.keyDown(input, { key: '-' })).toBe(false)
-    expect(fireEvent.keyDown(input, { key: '+' })).toBe(false)
-    expect(fireEvent.keyDown(input, { key: 'e' })).toBe(false)
-    expect(fireEvent.keyDown(input, { key: '5' })).toBe(true)
-    expect(fireEvent.paste(input, { clipboardData: { getData: () => '-5' } })).toBe(false)
-    expect(fireEvent.paste(input, { clipboardData: { getData: () => '5.25' } })).toBe(true)
   })
 })

@@ -49,6 +49,90 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'required-conditional',
+    name: 'Required (conditional)',
+    schema: {
+      type: 'object',
+      properties: {
+        reviewOutcome: {
+          type: 'string',
+          title: 'Review Outcome',
+          oneOf: [
+            { const: 'approve', title: 'Approve' },
+            { const: 'reject', title: 'Reject' },
+          ],
+        },
+        notes: { type: 'string', title: 'Notes' },
+        assessedAmount: { type: 'number', title: 'Assessed Amount' },
+        category: {
+          type: 'string',
+          title: 'Category',
+          enum: ['A', 'B', 'C'],
+        },
+        effectiveDate: { type: 'string', title: 'Effective Date', format: 'date' },
+        confirmed: { type: 'boolean', title: 'Confirmed' },
+      },
+      allOf: [
+        {
+          if: {
+            properties: { reviewOutcome: { const: 'approve' } },
+            required: ['reviewOutcome'],
+          },
+          then: {
+            required: ['notes', 'assessedAmount', 'category', 'effectiveDate', 'confirmed'],
+          },
+        },
+      ],
+    } as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/reviewOutcome', options: { format: 'radio' } },
+        {
+          type: 'Control',
+          scope: '#/properties/notes',
+          rule: {
+            effect: 'SHOW',
+            condition: { scope: '#/properties/reviewOutcome', schema: { const: 'approve' } },
+          },
+        },
+        {
+          type: 'Control',
+          scope: '#/properties/assessedAmount',
+          rule: {
+            effect: 'SHOW',
+            condition: { scope: '#/properties/reviewOutcome', schema: { const: 'approve' } },
+          },
+        },
+        {
+          type: 'Control',
+          scope: '#/properties/category',
+          rule: {
+            effect: 'SHOW',
+            condition: { scope: '#/properties/reviewOutcome', schema: { const: 'approve' } },
+          },
+        },
+        {
+          type: 'Control',
+          scope: '#/properties/effectiveDate',
+          rule: {
+            effect: 'SHOW',
+            condition: { scope: '#/properties/reviewOutcome', schema: { const: 'approve' } },
+          },
+        },
+        {
+          type: 'Control',
+          scope: '#/properties/confirmed',
+          rule: {
+            effect: 'SHOW',
+            condition: { scope: '#/properties/reviewOutcome', schema: { const: 'approve' } },
+          },
+        },
+      ],
+    } as UISchemaElement,
+    data: { reviewOutcome: 'approve' },
+  },
+  {
     id: 'boolean',
     name: 'Boolean',
     schema: {
