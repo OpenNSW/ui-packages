@@ -1,6 +1,7 @@
 import { type ControlProps, isStringControl, type RankedTester, rankWith } from '@jsonforms/core'
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useIsRequired } from '../hooks/useIsRequired'
 
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { getErrorMessage } from '../utils/error'
@@ -18,15 +19,13 @@ export const TextControl = ({
   visible = true,
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
+  const showRequired = useIsRequired(path, required)
 
   if (visible === false) {
     return null
   }
 
   const isValid = errors.length === 0
-  // Conditional schema required (allOf if/then) does not set ControlProps.required.
-  // uiSchema options.required marks the red * when the control is shown.
-  const showRequired = required || uischema.options?.required === true
 
   return (
     <Box mb="4">

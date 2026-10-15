@@ -1,8 +1,12 @@
 import { type ControlProps, isNumberControl, type RankedTester, rankWith, isIntegerControl, or } from '@jsonforms/core'
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
+import type { ClipboardEvent, KeyboardEvent } from 'react'
 import { getErrorMessage } from '../utils/error'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useIsRequired } from '../hooks/useIsRequired'
+
+const BLOCKED_NUMBER_KEYS = new Set(['-', '+', 'e', 'E'])
 
 export const NumberControl = ({
   data,
@@ -17,15 +21,20 @@ export const NumberControl = ({
   visible = true,
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
+  const showRequired = useIsRequired(path, required)
 
   if (visible === false) {
     return null
   }
 
   const isValid = errors.length === 0
-  // Conditional schema required (allOf if/then) does not set ControlProps.required.
-  // uiSchema options.required marks the red * when the control is shown.
-  const showRequired = required || uischema.options?.required === true
+
+  const exclusiveMinimum = typeof schema.exclusiveMinimum === 'number' ? schema.exclusiveMinimum : undefined
+  const minimum = typeof schema.minimum === 'number' ? schema.minimum : undefined
+  const minBound = exclusiveMinimum ?? minimum
+  const blockSignedKeys = minBound !== undefined && minBound >= 0
+  const step =
+    typeof schema.multipleOf === 'number' ? schema.multipleOf : schema.type === 'integer' ? 1 : undefined
 
   const handleNumberChange = (value: string) => {
     if (value === '') {
@@ -35,6 +44,20 @@ export const NumberControl = ({
     const num = Number(value)
     if (!isNaN(num)) {
       handleChange(path, num)
+    }
+  }
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (blockSignedKeys && BLOCKED_NUMBER_KEYS.has(e.key)) {
+      e.preventDefault()
+    }
+  }
+
+  const onPaste = (e: ClipboardEvent<HTMLInputElement>) => {
+    if (!blockSignedKeys) return
+    const text = e.clipboardData.getData('text')
+    if (/[-+eE]/.test(text)) {
+      e.preventDefault()
     }
   }
 
@@ -48,6 +71,10 @@ export const NumberControl = ({
           type="number"
           value={data ?? ''}
           onChange={(e) => handleNumberChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          onPaste={onPaste}
+          min={minBound}
+          step={step}
           disabled={!enabled}
           placeholder={uischema.options?.placeholder}
           color={!isValid ? 'red' : undefined}

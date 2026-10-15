@@ -1,6 +1,7 @@
 import { type ControlProps, isEnumControl, type RankedTester, rankWith, isOneOfControl, or } from '@jsonforms/core'
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useIsRequired } from '../hooks/useIsRequired'
 import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
 
 import { Select, Text, Flex, Box, TextField, ScrollArea } from '@radix-ui/themes'
@@ -20,6 +21,7 @@ export const SelectControl = ({
   visible = true,
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
+  const showRequired = useIsRequired(path, required)
 
   // `options.autocomplete: true` swaps the plain dropdown for a type-to-filter combobox over the
   // same enum/oneOf options — no remote service involved (see SearchSelectControl for that case).
@@ -89,7 +91,7 @@ export const SelectControl = ({
       <Box mb="4">
         <Flex direction="column" gap="1">
           <Text as="label" size="2" weight="bold" htmlFor={path}>
-            {label} {required && <Text color="red">*</Text>}
+            {label} {showRequired && <Text color="red">*</Text>}
           </Text>
 
           <div ref={containerRef} style={{ position: 'relative' }}>
@@ -227,7 +229,7 @@ export const SelectControl = ({
     <Box mb="4">
       <Flex direction="column" gap="1">
         <Text as="label" size="2" weight="bold" htmlFor={path}>
-          {label} {required && <Text color="red">*</Text>}
+          {label} {showRequired && <Text color="red">*</Text>}
         </Text>
         <Select.Root value={value} onValueChange={(val) => handleChange(path, val)} disabled={!enabled}>
           <Select.Trigger placeholder={placeholder} color={!isValid ? 'red' : undefined} id={path} />

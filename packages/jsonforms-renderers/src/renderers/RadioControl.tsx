@@ -1,6 +1,7 @@
 import { type ControlProps, isEnumControl, isOneOfControl, or, type RankedTester } from '@jsonforms/core'
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useIsRequired } from '../hooks/useIsRequired'
 
 import { Box, Flex, Text, RadioGroup } from '@radix-ui/themes'
 import { getErrorMessage } from '../utils/error'
@@ -13,18 +14,16 @@ export const RadioControl = ({
   required,
   errors,
   schema,
-  uischema,
   enabled,
   visible = true,
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
+  const showRequired = useIsRequired(path, required)
 
   if (visible === false) {
     return null
   }
   const isValid = errors.length === 0
-  // Conditional schema required (allOf if/then) does not set ControlProps.required.
-  const showRequired = required || uischema.options?.required === true
 
   let options: { value: any; label: string }[] = []
 
