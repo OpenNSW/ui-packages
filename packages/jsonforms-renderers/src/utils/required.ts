@@ -14,6 +14,10 @@ const CONDITIONAL_SCHEMA_KEYS = ['if', 'allOf', 'anyOf', 'oneOf', 'dependentRequ
  * True when the root schema may express conditional required rules that
  * `@jsonforms/core`'s static `isRequired()` misses. Used to skip the per-
  * keystroke AJV clone/validate when a plain `required` array is enough.
+ *
+ * Only the root schema's own keys are inspected. A conditional inside a nested
+ * property, or behind a `$ref`, is not seen, so its fields get no asterisk
+ * until this is widened.
  */
 export function schemaHasConditionalRequired(schema: unknown): boolean {
   if (!schema || typeof schema !== 'object') return false

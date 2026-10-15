@@ -24,9 +24,9 @@ const schema = {
         { const: 'reject', title: 'Reject' },
       ],
     },
-    assessedLevy: {
+    assessedAmount: {
       type: 'number',
-      title: 'Assessed SLTB Levy (LKR)',
+      title: 'Assessed Amount',
       exclusiveMinimum: 0,
       multipleOf: 0.01,
     },
@@ -37,7 +37,7 @@ const schema = {
         properties: { reviewOutcome: { const: 'approve' } },
         required: ['reviewOutcome'],
       },
-      then: { required: ['assessedLevy'] },
+      then: { required: ['assessedAmount'] },
     },
   ],
 } as JsonSchema
@@ -48,7 +48,7 @@ const uischema = {
     { type: 'Control', scope: '#/properties/reviewOutcome', options: { format: 'radio' } },
     {
       type: 'Control',
-      scope: '#/properties/assessedLevy',
+      scope: '#/properties/assessedAmount',
       rule: {
         effect: 'SHOW',
         condition: {
@@ -79,27 +79,29 @@ function renderForm(seed: Data) {
 }
 
 describe('NumberControl required asterisk + constraints', () => {
-  it('shows a red asterisk only when the levy is conditionally required', () => {
+  it('shows a red asterisk only when the amount is conditionally required', () => {
     renderForm({ reviewOutcome: 'reject' })
-    expect(screen.queryByText('Assessed SLTB Levy (LKR)')).toBeNull()
+    expect(screen.queryByText('Assessed Amount')).toBeNull()
 
     cleanup()
     renderForm({ reviewOutcome: 'approve' })
-    const label = screen.getByText('Assessed SLTB Levy (LKR)')
+    const label = screen.getByText('Assessed Amount')
     expect(label.textContent).toContain('*')
   })
 
-  it('sets min from exclusiveMinimum and blocks signed / exponent keys', () => {
+  it('sets min from exclusiveMinimum and blocks signed / exponent keys and pastes', () => {
     renderForm({ reviewOutcome: 'approve' })
-    const input = screen.getByLabelText(/Assessed SLTB Levy/) as HTMLInputElement
+    const input = screen.getByLabelText(/Assessed Amount/) as HTMLInputElement
     expect(input).toHaveProperty('type', 'number')
     expect(input.min).toBe('0')
     expect(input.step).toBe('0.01')
 
-    fireEvent.keyDown(input, { key: '-' })
-    fireEvent.keyDown(input, { key: '+' })
-    fireEvent.keyDown(input, { key: 'e' })
-    // Value stays empty; blocked keys never reach onChange with a signed draft.
-    expect(input.value).toBe('')
+    // jsdom does not type on keydown; fireEvent returns false when preventDefault ran.
+    expect(fireEvent.keyDown(input, { key: '-' })).toBe(false)
+    expect(fireEvent.keyDown(input, { key: '+' })).toBe(false)
+    expect(fireEvent.keyDown(input, { key: 'e' })).toBe(false)
+    expect(fireEvent.keyDown(input, { key: '5' })).toBe(true)
+    expect(fireEvent.paste(input, { clipboardData: { getData: () => '-5' } })).toBe(false)
+    expect(fireEvent.paste(input, { clipboardData: { getData: () => '5.25' } })).toBe(true)
   })
 })
