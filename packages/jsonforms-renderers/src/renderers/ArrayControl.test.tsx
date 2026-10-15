@@ -13,10 +13,9 @@ const itemsSchema: JsonSchema = {
   properties: { name: { type: 'string' } },
 }
 
-function renderArray(
-  options?: ControlElement['options'],
-  overrides: Partial<ArrayControlProps> = {},
-) {
+function renderArray(options?: ControlElement['options'], overrides: Record<string, unknown> = {}) {
+  // Cast once at the boundary: JsonSchema includes draft-04 shapes that are not
+  // assignable to ArrayControlProps' JsonSchema7 fields (e.g. exclusiveMaximum).
   const props = {
     data: [{ name: 'a' }, { name: 'b' }],
     path: 'items',
