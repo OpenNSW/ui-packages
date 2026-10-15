@@ -2,7 +2,7 @@ import TextControl, { TextControlTester } from './TextControl'
 import NumberControl, { NumberControlTester } from './NumberControl'
 import BooleanControl, { BooleanControlTester } from './BooleanControl'
 import RadioControl, { RadioControlTester } from './RadioControl'
-import SelectControl, { SelectControlTester } from './SelectControl'
+import SelectControl, { SelectControlTester, MultiSelectControlTester } from './SelectControl'
 import SearchSelectControl from './SearchSelectControl'
 import { SearchSelectControlTester } from './SearchSelectControlTester'
 import DateControl, { DateControlTester } from './DateControl'
@@ -44,6 +44,7 @@ export const radixRenderers = [
   { tester: RadioControlTester, renderer: RadioControl },
   { tester: SearchSelectControlTester, renderer: SearchSelectControl },
   { tester: SelectControlTester, renderer: SelectControl },
+  { tester: MultiSelectControlTester, renderer: SelectControl },
   { tester: DateControlTester, renderer: DateControl },
   // The layout renderers take their props from withJsonFormsLayoutProps, which
   // evaluates the layout's rule into `visible` and `enabled`, as

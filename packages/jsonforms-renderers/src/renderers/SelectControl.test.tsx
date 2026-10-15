@@ -147,3 +147,70 @@ describe('SelectControl autocomplete', () => {
     expect(screen.getByRole('combobox')).toBeTruthy()
   })
 })
+
+describe('SelectControl multi (array of oneOf)', () => {
+  const multiSchema: JsonSchema = {
+    type: 'object',
+    properties: {
+      packages_description: {
+        type: 'array',
+        title: 'Package Type',
+        uniqueItems: true,
+        items: {
+          type: 'string',
+          oneOf: [
+            { const: 'CT', title: 'Carton' },
+            { const: 'BX', title: 'Box' },
+            { const: 'PX', title: 'Pallet' },
+          ],
+        },
+      },
+    },
+  }
+
+  const multiUi = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/packages_description' }],
+  } as UISchemaElement
+
+  function renderMulti(seed: Data) {
+    const writes: Data[] = []
+    let live = true
+    finishers.push(() => {
+      live = false
+    })
+
+    function Harness() {
+      const [initial] = useState(seed)
+      return (
+        <Theme>
+          <JsonForms
+            schema={multiSchema}
+            uischema={multiUi}
+            data={initial}
+            renderers={radixRenderers}
+            onChange={({ data }) => {
+              if (live) writes.push(data as Data)
+            }}
+          />
+        </Theme>
+      )
+    }
+
+    render(<Harness />)
+    return { writes }
+  }
+
+  it('renders a searchable multi dropdown instead of Add Item cards', async () => {
+    const { writes } = renderMulti({})
+
+    expect(screen.queryByText('+ Add Item')).toBeNull()
+    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(await screen.findByText('Carton'))
+    fireEvent.click(await screen.findByText('Pallet'))
+
+    await waitFor(() => {
+      expect(writes[writes.length - 1]?.packages_description).toEqual(['CT', 'PX'])
+    })
+  })
+})
