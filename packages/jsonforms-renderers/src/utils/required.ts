@@ -1,12 +1,10 @@
 /** Minimal AJV validate function shape (avoids a hard ajv dependency). */
 export type SchemaValidateFunction = ((data: unknown) => boolean) & {
-  errors?:
-    | Array<{
-        keyword: string
-        instancePath?: string
-        params?: { missingProperty?: string }
-      }>
-    | null
+  errors?: Array<{
+    keyword: string
+    instancePath?: string
+    params?: { missingProperty?: string }
+  }> | null
 }
 
 /**
@@ -48,10 +46,7 @@ export function propertyNameFromPath(path: string): string {
   return i === -1 ? path : path.slice(i + 1)
 }
 
-function matchesRequiredError(
-  error: NonNullable<SchemaValidateFunction['errors']>[number],
-  path: string,
-): boolean {
+function matchesRequiredError(error: NonNullable<SchemaValidateFunction['errors']>[number], path: string): boolean {
   if (error.keyword !== 'required') return false
   if (error.params?.missingProperty !== propertyNameFromPath(path)) return false
   return (error.instancePath ?? '') === parentInstancePath(path)

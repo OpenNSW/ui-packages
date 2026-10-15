@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createAjv } from '@jsonforms/core'
-import {
-  cloneDataWithoutPath,
-  isPathRequiredBySchema,
-  parentInstancePath,
-  propertyNameFromPath,
-} from './required'
+import { cloneDataWithoutPath, isPathRequiredBySchema, parentInstancePath, propertyNameFromPath } from './required'
 
 describe('propertyNameFromPath / parentInstancePath', () => {
   it('splits a dotted path', () => {
@@ -80,17 +75,13 @@ describe('isPathRequiredBySchema', () => {
 
   it('still reports required when the field is already filled', () => {
     // Asterisk must remain while the condition holds, not only when empty.
-    expect(
-      isPathRequiredBySchema('assessedLevy', { reviewOutcome: 'approve', assessedLevy: 99 }, validate),
-    ).toBe(true)
+    expect(isPathRequiredBySchema('assessedLevy', { reviewOutcome: 'approve', assessedLevy: 99 }, validate)).toBe(true)
   })
 
   it('matches nested required under a parent instancePath', () => {
     const data = { reviewOutcome: 'approve', address: { city: 'Colombo' } }
     expect(isPathRequiredBySchema('address.city', data, validate)).toBe(true)
-    expect(isPathRequiredBySchema('address.city', { reviewOutcome: 'reject', address: {} }, validate)).toBe(
-      false,
-    )
+    expect(isPathRequiredBySchema('address.city', { reviewOutcome: 'reject', address: {} }, validate)).toBe(false)
   })
 
   it('returns false without a validator', () => {

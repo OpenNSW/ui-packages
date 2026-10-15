@@ -33,8 +33,7 @@ export const NumberControl = ({
   const minimum = typeof schema.minimum === 'number' ? schema.minimum : undefined
   const minBound = exclusiveMinimum ?? minimum
   const blockSignedKeys = minBound !== undefined && minBound >= 0
-  const step =
-    typeof schema.multipleOf === 'number' ? schema.multipleOf : schema.type === 'integer' ? 1 : undefined
+  const step = typeof schema.multipleOf === 'number' ? schema.multipleOf : schema.type === 'integer' ? 1 : undefined
 
   const handleNumberChange = (value: string) => {
     if (value === '') {
