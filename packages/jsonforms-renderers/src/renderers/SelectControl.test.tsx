@@ -16,6 +16,11 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   } as unknown as typeof ResizeObserver
 }
 
+// nor scrollIntoView, which Select.Content calls on the selected item when it opens
+if (typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = () => {}
+}
+
 type Data = Record<string, unknown>
 
 const finishers: (() => void)[] = []
@@ -33,7 +38,7 @@ const schema: JsonSchema = {
   },
 }
 
-function renderForm(uischema: UISchemaElement, seed: Data) {
+function renderForm(uischema: UISchemaElement, seed: Data, formSchema: JsonSchema = schema) {
   const writes: Data[] = []
   let live = true
   finishers.push(() => {
@@ -45,7 +50,7 @@ function renderForm(uischema: UISchemaElement, seed: Data) {
     return (
       <Theme>
         <JsonForms
-          schema={schema}
+          schema={formSchema}
           uischema={uischema}
           data={initial}
           renderers={radixRenderers}
@@ -145,5 +150,128 @@ describe('SelectControl autocomplete', () => {
 
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.getByRole('combobox')).toBeTruthy()
+  })
+})
+
+describe('SelectControl object-shaped field', () => {
+  const objectSchema = {
+    type: 'object',
+    properties: {
+      commodity: {
+        type: 'object',
+        title: 'Commodity',
+        properties: {
+          value: {
+            type: 'string',
+            oneOf: [
+              { const: '7', title: 'Cinnamon quill' },
+              { const: '8', title: 'Cinnamon leaf oil' },
+            ],
+          },
+          label: { type: 'string' },
+        },
+        required: ['value'],
+      },
+    },
+    required: ['commodity'],
+  } as JsonSchema
+
+  const plainUischema = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/commodity' }],
+  } as UISchemaElement
+
+  const autocompleteUischema = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/commodity', options: { autocomplete: true } }],
+  } as UISchemaElement
+
+  it('renders as a dropdown and stores { value, label } from the plain select', async () => {
+    const { writes } = renderForm(plainUischema, {}, objectSchema)
+
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(await screen.findByRole('option', { name: 'Cinnamon quill' }))
+
+    await waitFor(() => {
+      expect(writes[writes.length - 1]?.commodity).toEqual({ value: '7', label: 'Cinnamon quill' })
+    })
+  })
+
+  it('stores { value, label } from the autocomplete', async () => {
+    const { writes } = renderForm(autocompleteUischema, {}, objectSchema)
+
+    const input = screen.getByRole('textbox')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'leaf' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    await waitFor(() => {
+      expect(writes[writes.length - 1]?.commodity).toEqual({ value: '8', label: 'Cinnamon leaf oil' })
+    })
+  })
+
+  it('shows the stored label, not a title renamed since', () => {
+    renderForm(autocompleteUischema, { commodity: { value: '7', label: 'Cinnamon quills' } }, objectSchema)
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Cinnamon quills')
+  })
+
+  it('shows the stored label when its value is no longer an option', () => {
+    renderForm(autocompleteUischema, { commodity: { value: '9', label: 'Cinnamon bark' } }, objectSchema)
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Cinnamon bark')
+  })
+
+  it('shows the stored label in the plain dropdown', () => {
+    renderForm(plainUischema, { commodity: { value: '9', label: 'Cinnamon bark' } }, objectSchema)
+    expect(screen.getByRole('combobox').textContent).toContain('Cinnamon bark')
+  })
+
+  it('shows a legacy bare value saved before the field became an object', () => {
+    renderForm(autocompleteUischema, { commodity: '8' }, objectSchema)
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Cinnamon leaf oil')
+  })
+
+  it('clears the whole object', async () => {
+    const { writes } = renderForm(
+      autocompleteUischema,
+      { commodity: { value: '7', label: 'Cinnamon quill' } },
+      objectSchema,
+    )
+
+    fireEvent.click(screen.getByLabelText('Clear selection'))
+
+    await waitFor(() => {
+      expect(writes[writes.length - 1]?.commodity).toBeUndefined()
+    })
+  })
+
+  it('reports a required field left empty', () => {
+    renderForm(plainUischema, {}, objectSchema)
+    expect(screen.getByText('Commodity is required')).toBeTruthy()
+  })
+
+  it('writes a non-string const as-is', async () => {
+    const numericSchema = {
+      type: 'object',
+      properties: {
+        grade: {
+          type: 'object',
+          properties: { value: { type: 'integer', enum: [1, 2] }, label: { type: 'string' } },
+        },
+      },
+    } as JsonSchema
+    const uischema = {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/grade', options: { autocomplete: true } }],
+    } as UISchemaElement
+    const { writes } = renderForm(uischema, {}, numericSchema)
+
+    const input = screen.getByRole('textbox')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '2' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    await waitFor(() => {
+      expect(writes[writes.length - 1]?.grade).toEqual({ value: 2, label: '2' })
+    })
   })
 })

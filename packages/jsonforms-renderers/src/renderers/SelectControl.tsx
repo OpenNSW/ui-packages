@@ -1,4 +1,13 @@
-import { type ControlProps, isEnumControl, type RankedTester, rankWith, isOneOfControl, or } from '@jsonforms/core'
+import {
+  type ControlProps,
+  isEnumControl,
+  type JsonSchema,
+  type RankedTester,
+  rankWith,
+  isOneOfControl,
+  or,
+  schemaMatches,
+} from '@jsonforms/core'
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
@@ -6,6 +15,18 @@ import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } 
 import { Select, Text, Flex, Box, TextField, ScrollArea } from '@radix-ui/themes'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
 import { getErrorMessage } from '../utils/error'
+
+interface SelectOption {
+  value: string
+  label: string
+  raw: unknown
+}
+
+// shape of `data` for an object-typed field (`type: "object"`); string-typed fields keep `data` as the raw value
+interface SelectValue {
+  value: string | number | boolean
+  label?: string
+}
 
 export const SelectControl = ({
   data,
@@ -47,31 +68,50 @@ export const SelectControl = ({
 
   const isValid = errors.length === 0
 
-  // Derive options
-  let options: { value: string; label: string }[] = []
+  // `type: "object"` fields keep their enum/oneOf under `properties.value` and store
+  // `{ value, label }`, like an object-shaped SearchSelectControl; string fields store the raw value.
+  const isObjectMode = schema.type === 'object'
+  const optionsSchema = isObjectMode ? (schema.properties?.value ?? {}) : schema
 
-  if (schema.enum) {
-    options = schema.enum.map((e) => ({ value: String(e), label: String(e) }))
-  } else if (schema.oneOf) {
-    options = schema.oneOf.map((o) => ({
-      value: String(o.const),
-      label: o.title || String(o.const),
-    }))
+  // Derive options. `raw` is the schema's own const, written as-is in object mode so a
+  // non-string `value` schema still validates; string mode keeps storing String(raw).
+  let options: SelectOption[] = []
+
+  if (optionsSchema.enum) {
+    options = optionsSchema.enum.map((e: unknown) => ({ value: String(e), label: String(e), raw: e }))
+  } else if (optionsSchema.oneOf) {
+    options = optionsSchema.oneOf.map((o) => {
+      const raw: unknown = o.const
+      return { value: String(raw), label: o.title || String(raw), raw }
+    })
   }
 
-  const value = data !== undefined ? String(data) : ''
+  // legacy records may have a bare value in `data` if the field was migrated from `type: "string"` after being saved
+  const normalizedData: SelectValue | undefined = isObjectMode
+    ? typeof data === 'string' || typeof data === 'number' || typeof data === 'boolean'
+      ? { value: data }
+      : ((data as SelectValue | undefined) ?? undefined)
+    : undefined
+  const currentValue = isObjectMode ? normalizedData?.value : (data as SelectValue['value'] | undefined)
+  const currentLabel = normalizedData?.label
+  const value = currentValue !== undefined && currentValue !== null ? String(currentValue) : ''
+  // object-shaped fields already carry the label from submission time; otherwise the option's title
+  const selectedLabel = currentLabel ?? options.find((o) => o.value === value)?.label ?? ''
   const placeholder = uischema.options?.placeholder || 'Select an option'
 
+  const commit = (opt: SelectOption) => {
+    handleChange(path, isObjectMode ? { value: opt.raw, label: opt.label } : opt.value)
+  }
+
   if (isAutocomplete) {
-    const selectedLabel = options.find((o) => o.value === value)?.label ?? ''
     const filteredOptions = open
       ? options.filter((o) => o.label.toLowerCase().includes(inputValue.toLowerCase()))
       : options
     // clamp rather than store out-of-range: the filtered list shrinks as the user keeps typing
     const activeIndex = Math.min(highlightedIndex, filteredOptions.length - 1)
 
-    const onSelect = (opt: { value: string; label: string }) => {
-      handleChange(path, opt.value)
+    const onSelect = (opt: SelectOption) => {
+      commit(opt)
       setOpen(false)
     }
 
@@ -229,8 +269,18 @@ export const SelectControl = ({
         <Text as="label" size="2" weight="bold" htmlFor={path}>
           {label} {required && <Text color="red">*</Text>}
         </Text>
-        <Select.Root value={value} onValueChange={(val) => handleChange(path, val)} disabled={!enabled}>
-          <Select.Trigger placeholder={placeholder} color={!isValid ? 'red' : undefined} id={path} />
+        <Select.Root
+          value={value}
+          onValueChange={(val) => {
+            const selected = options.find((o) => o.value === val)
+            if (selected) commit(selected)
+          }}
+          disabled={!enabled}
+        >
+          <Select.Trigger placeholder={placeholder} color={!isValid ? 'red' : undefined} id={path}>
+            {/* shows the stored label even when its value is no longer one of the options */}
+            {isObjectMode && currentLabel ? currentLabel : undefined}
+          </Select.Trigger>
           <Select.Content>
             {options.map((opt) => (
               <Select.Item key={opt.value} value={opt.value}>
@@ -255,5 +305,16 @@ export const SelectControl = ({
 }
 
 export const SelectControlTester: RankedTester = rankWith(2, or(isEnumControl, isOneOfControl))
+
+// An object field whose `value` property carries the enum/oneOf. Rank 3 like SearchSelectControlTester,
+// which it never ties with: an `x-search` field is left to that control.
+export const SelectObjectControlTester: RankedTester = rankWith(
+  3,
+  schemaMatches((schema: JsonSchema) => {
+    if (schema.type !== 'object' || (schema as Record<string, unknown>)['x-search'] !== undefined) return false
+    const valueSchema = schema.properties?.value
+    return Array.isArray(valueSchema?.enum) || Array.isArray(valueSchema?.oneOf)
+  }),
+)
 
 export default withJsonFormsControlProps(SelectControl)
