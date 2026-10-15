@@ -13,6 +13,7 @@ export const RadioControl = ({
   required,
   errors,
   schema,
+  uischema,
   enabled,
   visible = true,
 }: ControlProps) => {
@@ -22,6 +23,8 @@ export const RadioControl = ({
     return null
   }
   const isValid = errors.length === 0
+  // Conditional schema required (allOf if/then) does not set ControlProps.required.
+  const showRequired = required || uischema.options?.required === true
 
   let options: { value: any; label: string }[] = []
 
@@ -40,7 +43,7 @@ export const RadioControl = ({
     <Box mb="4">
       <Flex direction="column" gap="1">
         <Text as="div" size="2" weight="bold">
-          {label} {required && <Text color="red">*</Text>}
+          {label} {showRequired && <Text color="red">*</Text>}
         </Text>
 
         <RadioGroup.Root
