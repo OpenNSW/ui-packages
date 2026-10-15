@@ -68,8 +68,7 @@ describe('ArrayControl required and errors', () => {
   })
 
   it('renders options.errorMessage when the control has errors', () => {
-    const message =
-      'At least one commodity must be added before submitting the Phytosanitary Certificate application'
+    const message = 'At least one commodity must be added before submitting the Phytosanitary Certificate application'
     const html = renderArray(
       { errorMessage: message },
       {

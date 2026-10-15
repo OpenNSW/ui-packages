@@ -93,12 +93,9 @@ export const ArrayControl = ({
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
   const itemLabel = options.itemLabel || 'Item'
-  const showRequired =
-    required || (typeof actualArraySchema.minItems === 'number' && actualArraySchema.minItems >= 1)
+  const showRequired = required || (typeof actualArraySchema.minItems === 'number' && actualArraySchema.minItems >= 1)
   const isValid = !errors
-  const displayError = !isValid
-    ? options.errorMessage || getErrorMessage(errors, title)
-    : ''
+  const displayError = !isValid ? options.errorMessage || getErrorMessage(errors, title) : ''
 
   const handleRemoveItem = (indexToRemove: number) => {
     if (removeItems) {
