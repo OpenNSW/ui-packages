@@ -13,7 +13,10 @@ const itemsSchema: JsonSchema = {
   properties: { name: { type: 'string' } },
 }
 
-function renderArray(options?: ControlElement['options']) {
+function renderArray(
+  options?: ControlElement['options'],
+  overrides: Partial<ArrayControlProps> = {},
+) {
   const props = {
     data: [{ name: 'a' }, { name: 'b' }],
     path: 'items',
@@ -24,6 +27,9 @@ function renderArray(options?: ControlElement['options']) {
     addItem: () => () => undefined,
     removeItems: () => () => undefined,
     rootSchema: {},
+    required: false,
+    errors: '',
+    ...overrides,
   } as unknown as ArrayControlProps
   return renderToStaticMarkup(<ArrayControl {...props} />)
 }
@@ -41,5 +47,39 @@ describe('ArrayControl itemLabel', () => {
     expect(html).toContain('Item 1')
     expect(html).toContain('Item 2')
     expect(html).not.toContain('Container 1')
+  })
+})
+
+describe('ArrayControl required and errors', () => {
+  it('shows a red asterisk when required', () => {
+    const html = renderArray(undefined, {
+      required: true,
+      schema: { type: 'array', title: 'Commodities List', items: itemsSchema },
+    })
+    expect(html).toContain('Commodities List')
+    expect(html).toContain('*')
+  })
+
+  it('shows a red asterisk when minItems is at least 1', () => {
+    const html = renderArray(undefined, {
+      schema: itemsSchema,
+      arraySchema: { type: 'array', title: 'Commodities List', minItems: 1, items: itemsSchema },
+    })
+    expect(html).toContain('*')
+  })
+
+  it('renders options.errorMessage when the control has errors', () => {
+    const message =
+      'At least one commodity must be added before submitting the Phytosanitary Certificate application'
+    const html = renderArray(
+      { errorMessage: message },
+      {
+        data: [],
+        errors: 'is a required property',
+        schema: itemsSchema,
+        arraySchema: { type: 'array', title: 'Commodities List', minItems: 1, items: itemsSchema },
+      },
+    )
+    expect(html).toContain(message)
   })
 })
