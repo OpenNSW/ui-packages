@@ -7,22 +7,90 @@ export type SchemaValidateFunction = ((data: unknown) => boolean) & {
   }> | null
 }
 
-/** Keywords that can make `required` depend on data (beyond a plain `required` array). */
-const CONDITIONAL_SCHEMA_KEYS = ['if', 'allOf', 'anyOf', 'oneOf', 'dependentRequired', 'dependencies'] as const
+/** Cache `schemaHasConditionalRequired` per schema object identity. */
+const conditionalRequiredCache = new WeakMap<object, boolean>()
 
 /**
- * True when the root schema may express conditional required rules that
+ * True when the schema may express conditional required rules that
  * `@jsonforms/core`'s static `isRequired()` misses. Used to skip the per-
  * keystroke AJV clone/validate when a plain `required` array is enough.
  *
- * Only the root schema's own keys are inspected. A conditional inside a nested
- * property, or behind a `$ref`, is not seen, so its fields get no asterisk
- * until this is widened.
+ * Walks the whole schema (properties, items, then/else, etc.), follows local
+ * `$ref`s into `$defs` / `definitions`, and caches the result per schema object.
+ * Property-level enum `oneOf` / `anyOf` that only list `const` options do not
+ * count; branches that add `required` or further conditionals do.
  */
 export function schemaHasConditionalRequired(schema: unknown): boolean {
   if (!schema || typeof schema !== 'object') return false
-  const s = schema as Record<string, unknown>
-  return CONDITIONAL_SCHEMA_KEYS.some((k) => s[k] != null)
+  const cached = conditionalRequiredCache.get(schema)
+  if (cached !== undefined) return cached
+  const result = scanForConditionalRequired(
+    schema as Record<string, unknown>,
+    schema as Record<string, unknown>,
+    new Set(),
+  )
+  conditionalRequiredCache.set(schema, result)
+  return result
+}
+
+function resolveLocalRef(root: Record<string, unknown>, ref: string): Record<string, unknown> | undefined {
+  if (!ref.startsWith('#/')) return undefined
+  const parts = ref.slice(2).split('/')
+  let cur: unknown = root
+  for (const part of parts) {
+    if (!cur || typeof cur !== 'object') return undefined
+    cur = (cur as Record<string, unknown>)[part]
+  }
+  return cur && typeof cur === 'object' ? (cur as Record<string, unknown>) : undefined
+}
+
+function scanForConditionalRequired(node: unknown, root: Record<string, unknown>, seen: Set<object>): boolean {
+  if (!node || typeof node !== 'object') return false
+  if (seen.has(node)) return false
+  seen.add(node)
+
+  const s = node as Record<string, unknown>
+
+  if (s.if != null || s.dependentRequired != null || s.dependencies != null) return true
+
+  for (const key of ['allOf', 'anyOf', 'oneOf'] as const) {
+    const arr = s[key]
+    if (!Array.isArray(arr)) continue
+    for (const item of arr) {
+      if (!item || typeof item !== 'object') continue
+      const branch = item as Record<string, unknown>
+      if (Array.isArray(branch.required) && branch.required.length > 0) return true
+      if (scanForConditionalRequired(branch, root, seen)) return true
+    }
+  }
+
+  if (typeof s.$ref === 'string') {
+    const target = resolveLocalRef(root, s.$ref)
+    if (target && scanForConditionalRequired(target, root, seen)) return true
+  }
+
+  for (const key of ['then', 'else', 'not', 'contains', 'additionalProperties', 'items'] as const) {
+    const child = s[key]
+    if (child && typeof child === 'object' && !Array.isArray(child)) {
+      if (scanForConditionalRequired(child, root, seen)) return true
+    }
+  }
+
+  if (Array.isArray(s.items)) {
+    for (const item of s.items) {
+      if (scanForConditionalRequired(item, root, seen)) return true
+    }
+  }
+
+  for (const mapKey of ['properties', 'patternProperties', '$defs', 'definitions'] as const) {
+    const map = s[mapKey]
+    if (!map || typeof map !== 'object') continue
+    for (const child of Object.values(map as Record<string, unknown>)) {
+      if (scanForConditionalRequired(child, root, seen)) return true
+    }
+  }
+
+  return false
 }
 
 /**

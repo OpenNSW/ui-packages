@@ -16,13 +16,61 @@ describe('schemaHasConditionalRequired', () => {
     expect(schemaHasConditionalRequired(undefined)).toBe(false)
   })
 
+  it('is false for property-level enum oneOf without required branches', () => {
+    expect(
+      schemaHasConditionalRequired({
+        type: 'object',
+        properties: {
+          status: {
+            oneOf: [
+              { const: 'a', title: 'A' },
+              { const: 'b', title: 'B' },
+            ],
+          },
+        },
+      }),
+    ).toBe(false)
+  })
+
   it('is true when the root uses conditional constructs', () => {
-    expect(schemaHasConditionalRequired({ allOf: [] })).toBe(true)
     expect(schemaHasConditionalRequired({ if: {}, then: {} })).toBe(true)
-    expect(schemaHasConditionalRequired({ oneOf: [] })).toBe(true)
-    expect(schemaHasConditionalRequired({ anyOf: [] })).toBe(true)
+    expect(schemaHasConditionalRequired({ oneOf: [{ required: ['a'] }, { required: ['b'] }] })).toBe(true)
+    expect(schemaHasConditionalRequired({ allOf: [{ if: {}, then: { required: ['x'] } }] })).toBe(true)
     expect(schemaHasConditionalRequired({ dependentRequired: { a: ['b'] } })).toBe(true)
     expect(schemaHasConditionalRequired({ dependencies: { a: ['b'] } })).toBe(true)
+  })
+
+  it('is true for nested if/then under properties', () => {
+    expect(
+      schemaHasConditionalRequired({
+        type: 'object',
+        properties: {
+          address: {
+            type: 'object',
+            if: { properties: { country: { const: 'XX' } } },
+            then: { required: ['district'] },
+          },
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('is true when a conditional is reached via $ref into $defs', () => {
+    expect(
+      schemaHasConditionalRequired({
+        type: 'object',
+        properties: {
+          address: { $ref: '#/$defs/address' },
+        },
+        $defs: {
+          address: {
+            type: 'object',
+            if: { properties: { country: { const: 'XX' } } },
+            then: { required: ['district'] },
+          },
+        },
+      }),
+    ).toBe(true)
   })
 })
 
