@@ -72,6 +72,39 @@ describe('schemaHasConditionalRequired', () => {
       }),
     ).toBe(true)
   })
+
+  it('handles a self-referential $ref without looping', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        node: { $ref: '#/$defs/node' },
+      },
+      $defs: {
+        node: {
+          type: 'object',
+          properties: {
+            child: { $ref: '#/$defs/node' },
+          },
+        },
+      },
+    }
+    expect(schemaHasConditionalRequired(schema)).toBe(false)
+
+    const withConditional = {
+      ...schema,
+      $defs: {
+        node: {
+          type: 'object',
+          if: { properties: { kind: { const: 'leaf' } } },
+          then: { required: ['value'] },
+          properties: {
+            child: { $ref: '#/$defs/node' },
+          },
+        },
+      },
+    }
+    expect(schemaHasConditionalRequired(withConditional)).toBe(true)
+  })
 })
 
 describe('propertyNameFromPath / parentInstancePath', () => {

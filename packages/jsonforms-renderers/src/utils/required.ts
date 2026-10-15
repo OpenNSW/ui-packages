@@ -24,11 +24,7 @@ export function schemaHasConditionalRequired(schema: unknown): boolean {
   if (!schema || typeof schema !== 'object') return false
   const cached = conditionalRequiredCache.get(schema)
   if (cached !== undefined) return cached
-  const result = scanForConditionalRequired(
-    schema as Record<string, unknown>,
-    schema as Record<string, unknown>,
-    new Set(),
-  )
+  const result = scanForConditionalRequired(schema, schema as Record<string, unknown>, new Set())
   conditionalRequiredCache.set(schema, result)
   return result
 }
@@ -105,14 +101,14 @@ export function cloneDataWithoutPath(data: unknown, path: string): unknown {
   let parent: Record<string, unknown> | unknown[] | null = root as Record<string, unknown> | unknown[]
 
   for (let i = 0; i < segments.length - 1; i++) {
-    const seg = segments[i]!
+    const seg = segments[i]
     if (parent == null || typeof parent !== 'object') return root
     const next = (parent as Record<string, unknown>)[seg]
     if (next == null || typeof next !== 'object') return root
     parent = next as Record<string, unknown> | unknown[]
   }
 
-  const last = segments[segments.length - 1]!
+  const last = segments[segments.length - 1]
   if (parent != null && typeof parent === 'object') {
     delete (parent as Record<string, unknown>)[last]
   }
