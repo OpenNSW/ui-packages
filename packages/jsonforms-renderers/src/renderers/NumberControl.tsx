@@ -23,6 +23,9 @@ export const NumberControl = ({
   }
 
   const isValid = errors.length === 0
+  // Conditional schema required (allOf if/then) does not set ControlProps.required.
+  // uiSchema options.required marks the red * when the control is shown.
+  const showRequired = required || uischema.options?.required === true
 
   const handleNumberChange = (value: string) => {
     if (value === '') {
@@ -39,7 +42,7 @@ export const NumberControl = ({
     <Box mb="4">
       <Flex direction="column" gap="1">
         <Text as="label" size="2" weight="bold" htmlFor={path}>
-          {label} {required && <Text color="red">*</Text>}
+          {label} {showRequired && <Text color="red">*</Text>}
         </Text>
         <TextField.Root
           type="number"
