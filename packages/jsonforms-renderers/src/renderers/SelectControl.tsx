@@ -21,7 +21,7 @@ export const SelectControl = ({
   visible = true,
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
-  const showRequired = useIsRequired(path, required)
+  const showRequired = useIsRequired(path, required, visible)
 
   // `options.autocomplete: true` swaps the plain dropdown for a type-to-filter combobox over the
   // same enum/oneOf options — no remote service involved (see SearchSelectControl for that case).

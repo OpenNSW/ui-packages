@@ -21,7 +21,7 @@ export const NumberControl = ({
   visible = true,
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
-  const showRequired = useIsRequired(path, required)
+  const showRequired = useIsRequired(path, required, visible)
 
   if (visible === false) {
     return null

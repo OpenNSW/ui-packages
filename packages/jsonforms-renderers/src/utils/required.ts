@@ -7,6 +7,20 @@ export type SchemaValidateFunction = ((data: unknown) => boolean) & {
   }> | null
 }
 
+/** Keywords that can make `required` depend on data (beyond a plain `required` array). */
+const CONDITIONAL_SCHEMA_KEYS = ['if', 'allOf', 'anyOf', 'oneOf', 'dependentRequired', 'dependencies'] as const
+
+/**
+ * True when the root schema may express conditional required rules that
+ * `@jsonforms/core`'s static `isRequired()` misses. Used to skip the per-
+ * keystroke AJV clone/validate when a plain `required` array is enough.
+ */
+export function schemaHasConditionalRequired(schema: unknown): boolean {
+  if (!schema || typeof schema !== 'object') return false
+  const s = schema as Record<string, unknown>
+  return CONDITIONAL_SCHEMA_KEYS.some((k) => s[k] != null)
+}
+
 /**
  * Deep-clone form data and remove the value at `path` (dot-separated, as
  * JSONForms uses). Used to ask AJV whether that property is currently required.

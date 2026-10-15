@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest'
 import { createAjv } from '@jsonforms/core'
-import { cloneDataWithoutPath, isPathRequiredBySchema, parentInstancePath, propertyNameFromPath } from './required'
+import {
+  cloneDataWithoutPath,
+  isPathRequiredBySchema,
+  parentInstancePath,
+  propertyNameFromPath,
+  schemaHasConditionalRequired,
+} from './required'
+
+describe('schemaHasConditionalRequired', () => {
+  it('is false for plain required / properties schemas', () => {
+    expect(
+      schemaHasConditionalRequired({ type: 'object', required: ['a'], properties: { a: { type: 'string' } } }),
+    ).toBe(false)
+    expect(schemaHasConditionalRequired(undefined)).toBe(false)
+  })
+
+  it('is true when the root uses conditional constructs', () => {
+    expect(schemaHasConditionalRequired({ allOf: [] })).toBe(true)
+    expect(schemaHasConditionalRequired({ if: {}, then: {} })).toBe(true)
+    expect(schemaHasConditionalRequired({ oneOf: [] })).toBe(true)
+    expect(schemaHasConditionalRequired({ anyOf: [] })).toBe(true)
+    expect(schemaHasConditionalRequired({ dependentRequired: { a: ['b'] } })).toBe(true)
+    expect(schemaHasConditionalRequired({ dependencies: { a: ['b'] } })).toBe(true)
+  })
+})
 
 describe('propertyNameFromPath / parentInstancePath', () => {
   it('splits a dotted path', () => {

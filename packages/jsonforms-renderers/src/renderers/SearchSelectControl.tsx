@@ -5,6 +5,7 @@ import { ChevronDownIcon } from '@radix-ui/react-icons'
 import { useState, useRef, useEffect, useCallback, useMemo, type KeyboardEvent } from 'react'
 import { useSearchService, type SearchOption } from '../contexts/SearchServiceContext'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
 import { renderTemplate } from '../utils/template'
 import * as React from 'react'
@@ -349,6 +350,7 @@ const SearchSelectControl = ({
   // satisfy, so a hidden-then-shown field would be stuck on "must be string".
   // undefined restores the pristine "nothing selected" state in either mode.
   useClearWhenHidden(visible, path, handleChange)
+  const showRequired = useIsRequired(path, required, visible)
 
   if (visible === false) {
     return null
@@ -390,7 +392,7 @@ const SearchSelectControl = ({
     <Box mb="4">
       <Flex direction="column" gap="1">
         <Text as="label" size="2" weight="bold" htmlFor={path}>
-          {label} {required && <Text color="red">*</Text>}
+          {label} {showRequired && <Text color="red">*</Text>}
         </Text>
 
         <div ref={containerRef} style={{ position: 'relative' }}>

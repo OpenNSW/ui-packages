@@ -14,6 +14,7 @@ import { useUpload } from '../contexts/UploadContext'
 import { getErrorMessage } from '../utils/error'
 import { formatBytes, formatAccept } from '../utils/format'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useIsRequired } from '../hooks/useIsRequired'
 import { downloadFromUrl, downloadName } from '../utils/download'
 import { isBrowserViewable, matchesAccept } from '../utils/file'
 import * as React from 'react'
@@ -76,6 +77,7 @@ const FileControl = ({
   // shown field stuck on "must be string". undefined restores the pristine
   // "nothing selected" state instead.
   useClearWhenHidden(visible, path, handleChange)
+  const showRequired = useIsRequired(path, required, visible)
 
   const isValid = !errors || errors.length === 0
 
@@ -277,7 +279,7 @@ const FileControl = ({
       <Flex align="center" justify="between" mb="2">
         <Text as="label" size="2" weight="bold">
           {label}
-          {required && <Text color="red"> *</Text>}
+          {showRequired && <Text color="red"> *</Text>}
         </Text>
         <Text size="1" color="gray">
           {isMulti
