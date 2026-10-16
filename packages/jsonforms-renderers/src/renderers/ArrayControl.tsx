@@ -3,6 +3,8 @@ import { withJsonFormsArrayControlProps, JsonFormsDispatch, useJsonForms } from 
 import { useRef, type RefObject } from 'react'
 import { stampRowTemplates } from '../utils/sequence'
 import type { SequenceCounters } from '../utils/sequence'
+import { getErrorMessage } from '../utils/error'
+import { useIsRequired } from '../hooks/useIsRequired'
 import { Card, Button, Flex, Text, Box } from '@radix-ui/themes'
 import { PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 
@@ -56,6 +58,8 @@ export const ArrayControl = ({
   removeItems,
   rootSchema,
   arraySchema,
+  required = false,
+  errors = '',
 }: ArrayControlProps) => {
   // Numbers already handed out to this array's numbered `x-template` fields.
   // A ref, not state: it must survive a row being removed, or the next row
@@ -64,6 +68,9 @@ export const ArrayControl = ({
   // row. It does NOT survive this control unmounting — see SequenceCounters
   // in utils/sequence.ts for what that costs and what covers it.
   const sequences = useRef<SequenceCounters>({})
+  // Above the early returns: hooks must run unconditionally. Also covers
+  // arrays that become required through allOf/if/then (#112).
+  const conditionallyRequired = useIsRequired(path, required, visible)
 
   // If `arraySchema` is present, `schema` is already our `itemsSchema`, else fall back to `schema.items`
   const itemsSchema = arraySchema ? schema : schema.items
@@ -81,10 +88,24 @@ export const ArrayControl = ({
 
   const items = Array.isArray(data) ? data : []
   const title = actualArraySchema.title || 'Array Items'
-  const options = (uischema.options ?? {}) as { addable?: boolean; removable?: boolean; itemLabel?: string }
+  const options = (uischema.options ?? {}) as {
+    addable?: boolean
+    removable?: boolean
+    itemLabel?: string
+    errorMessage?: string
+  }
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
   const itemLabel = options.itemLabel || 'Item'
+  // minItems >= 1 is separate from schema `required`: an empty array fails
+  // with a minItems error, not a required error, so useIsRequired alone
+  // would miss it.
+  const showRequired =
+    conditionallyRequired || (typeof actualArraySchema.minItems === 'number' && actualArraySchema.minItems >= 1)
+  const isValid = !errors
+  // options.errorMessage is for the empty-array case (required / minItems).
+  // Other array errors (e.g. maxItems) keep AJV's message.
+  const displayError = !isValid ? (items.length === 0 && options.errorMessage) || getErrorMessage(errors, title) : ''
 
   const handleRemoveItem = (indexToRemove: number) => {
     if (removeItems) {
@@ -97,7 +118,7 @@ export const ArrayControl = ({
     <Box mb="6">
       <Flex direction="column" gap="4">
         <Text as="div" size="4" weight="bold">
-          {title}
+          {title} {showRequired && <Text color="red">*</Text>}
         </Text>
 
         {items.length === 0 && (
@@ -106,6 +127,12 @@ export const ArrayControl = ({
               No items have been added yet.
             </Text>
           </Box>
+        )}
+
+        {!isValid && (
+          <Text color="red" size="1">
+            {displayError}
+          </Text>
         )}
 
         {items.map((_item, index) => {

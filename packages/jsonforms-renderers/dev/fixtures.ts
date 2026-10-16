@@ -1231,7 +1231,9 @@ export const fixtures: Fixture[] = [
       properties: {
         items: {
           type: 'array',
-          description: 'List of line items',
+          title: 'Line Items',
+          description: 'List of line items; minItems 1 shows a required asterisk',
+          minItems: 1,
           items: {
             type: 'object',
             properties: {
@@ -1245,7 +1247,15 @@ export const fixtures: Fixture[] = [
     },
     uischema: {
       type: 'VerticalLayout',
-      elements: [{ type: 'Control', scope: '#/properties/items' }],
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/items',
+          options: {
+            errorMessage: 'Add at least one line item before submitting.',
+          },
+        },
+      ],
     } as UISchemaElement,
     data: { items: [{ description: 'First item', qty: 1 }] },
   },
