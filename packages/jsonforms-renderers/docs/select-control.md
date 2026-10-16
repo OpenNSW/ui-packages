@@ -52,7 +52,7 @@ reads the submission later, such as a status template or a certificate, can show
 
 Picking "Cinnamon quill" stores `{ "value": "7", "label": "Cinnamon quill" }`. It is the
 same shape an object-typed `x-search` field stores (see
-[search-control-design.md](search-control-design.md)).
+[search-select-modes.md](search-select-modes.md#display-template)).
 
 - The list stays under `value`, so validation still checks that the stored code is one
   of the options. `const` is stored as-is, so a `value` of `"type": "integer"` with
@@ -63,9 +63,10 @@ same shape an object-typed `x-search` field stores (see
   option is removed later. A removed option no longer validates, so the control also
   says `"<label>" is no longer an available option` until a current one is picked.
 - A record saved while the field was still `type: "string"` holds a bare code. The
-  control shows it by its option's title and stores `{ value, label }` the next time it
-  is changed.
-- Clearing the field removes it, as with the string shape.
+  control shows it by its option's title, but the form fails validation ("must be
+  object") until the field is picked again, which stores `{ value, label }`.
+- With `options.autocomplete`, clearing the field removes it, as with the string shape.
+  The plain dropdown has no clear control.
 
 Switching a field from `type: "string"` to `type: "object"` changes what it stores, so
 whatever reads it has to change with it. A workflow condition reads `.value`
