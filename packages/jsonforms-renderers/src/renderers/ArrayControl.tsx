@@ -4,6 +4,7 @@ import { useRef, type RefObject } from 'react'
 import { stampRowTemplates } from '../utils/sequence'
 import type { SequenceCounters } from '../utils/sequence'
 import { getErrorMessage } from '../utils/error'
+import { useIsRequired } from '../hooks/useIsRequired'
 import { Card, Button, Flex, Text, Box } from '@radix-ui/themes'
 import { PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 
@@ -67,6 +68,9 @@ export const ArrayControl = ({
   // row. It does NOT survive this control unmounting — see SequenceCounters
   // in utils/sequence.ts for what that costs and what covers it.
   const sequences = useRef<SequenceCounters>({})
+  // Above the early returns: hooks must run unconditionally. Also covers
+  // arrays that become required through allOf/if/then (#112).
+  const conditionallyRequired = useIsRequired(path, required, visible)
 
   // If `arraySchema` is present, `schema` is already our `itemsSchema`, else fall back to `schema.items`
   const itemsSchema = arraySchema ? schema : schema.items
@@ -93,9 +97,15 @@ export const ArrayControl = ({
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
   const itemLabel = options.itemLabel || 'Item'
-  const showRequired = required || (typeof actualArraySchema.minItems === 'number' && actualArraySchema.minItems >= 1)
+  // minItems >= 1 is separate from schema `required`: an empty array fails
+  // with a minItems error, not a required error, so useIsRequired alone
+  // would miss it.
+  const showRequired =
+    conditionallyRequired || (typeof actualArraySchema.minItems === 'number' && actualArraySchema.minItems >= 1)
   const isValid = !errors
-  const displayError = !isValid ? options.errorMessage || getErrorMessage(errors, title) : ''
+  // options.errorMessage is for the empty-array case (required / minItems).
+  // Other array errors (e.g. maxItems) keep AJV's message.
+  const displayError = !isValid ? (items.length === 0 && options.errorMessage) || getErrorMessage(errors, title) : ''
 
   const handleRemoveItem = (indexToRemove: number) => {
     if (removeItems) {
