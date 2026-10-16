@@ -38,6 +38,13 @@ export const fixtures: Fixture[] = [
       properties: {
         price: { type: 'number', description: 'Decimal value' },
         quantity: { type: 'integer', minimum: 0, description: 'Whole number ≥ 0' },
+        assessedAmount: {
+          type: 'number',
+          title: 'Assessed Amount',
+          exclusiveMinimum: 0,
+          multipleOf: 0.01,
+          description: 'Positive amount; exclusiveMinimum 0 and multipleOf 0.01',
+        },
       },
     },
     uischema: {
@@ -45,6 +52,7 @@ export const fixtures: Fixture[] = [
       elements: [
         { type: 'Control', scope: '#/properties/price' },
         { type: 'Control', scope: '#/properties/quantity' },
+        { type: 'Control', scope: '#/properties/assessedAmount' },
       ],
     } as UISchemaElement,
   },
