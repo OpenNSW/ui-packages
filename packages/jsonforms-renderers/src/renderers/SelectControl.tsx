@@ -66,8 +66,6 @@ export const SelectControl = ({
     return null
   }
 
-  const isValid = errors.length === 0
-
   // `type: "object"` fields keep their enum/oneOf under `properties.value` and store
   // `{ value, label }`, like an object-shaped SearchSelectControl; string fields store the raw value.
   const isObjectMode = schema.type === 'object'
@@ -98,6 +96,16 @@ export const SelectControl = ({
   // object-shaped fields already carry the label from submission time; otherwise the option's title
   const selectedLabel = currentLabel ?? options.find((o) => o.value === value)?.label ?? ''
   const placeholder = uischema.options?.placeholder || 'Select an option'
+
+  // In object mode the options validate `value`, below this control's path, so a stored value that
+  // is no longer an option fails the form without its error reaching `errors`. Say so here instead.
+  const unavailable = isObjectMode && value !== '' && !options.some((o) => o.value === value)
+  const errorMessage = errors
+    ? getErrorMessage(errors, label)
+    : unavailable
+      ? `"${selectedLabel || value}" is no longer an available option`
+      : ''
+  const isValid = errorMessage === ''
 
   const commit = (opt: SelectOption) => {
     handleChange(path, isObjectMode ? { value: opt.raw, label: opt.label } : opt.value)
@@ -250,7 +258,7 @@ export const SelectControl = ({
 
           {!isValid && (
             <Text color="red" size="1">
-              {getErrorMessage(errors, label)}
+              {errorMessage}
             </Text>
           )}
           {schema.description && (
@@ -291,7 +299,7 @@ export const SelectControl = ({
         </Select.Root>
         {!isValid && (
           <Text color="red" size="1">
-            {getErrorMessage(errors, label)}
+            {errorMessage}
           </Text>
         )}
         {schema.description && (

@@ -60,7 +60,8 @@ same shape an object-typed `x-search` field stores (see
 - `label` is the `title` at the time of picking, or the value itself for a plain `enum`.
   The control shows the stored `label`, as an object-typed `x-search` field does, so a
   saved form keeps showing what the trader picked even if the title is renamed or the
-  option is removed later.
+  option is removed later. A removed option no longer validates, so the control also
+  says `"<label>" is no longer an available option` until a current one is picked.
 - A record saved while the field was still `type: "string"` holds a bare code. The
   control shows it by its option's title and stores `{ value, label }` the next time it
   is changed.

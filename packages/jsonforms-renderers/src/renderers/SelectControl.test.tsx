@@ -212,12 +212,22 @@ describe('SelectControl object-shaped field', () => {
 
   it('shows the stored label, not a title renamed since', () => {
     renderForm(autocompleteUischema, { commodity: { value: '7', label: 'Cinnamon quills' } }, objectSchema)
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Cinnamon quills')
+    expect(screen.getByRole<HTMLInputElement>('textbox').value).toBe('Cinnamon quills')
   })
 
   it('shows the stored label when its value is no longer an option', () => {
     renderForm(autocompleteUischema, { commodity: { value: '9', label: 'Cinnamon bark' } }, objectSchema)
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Cinnamon bark')
+    expect(screen.getByRole<HTMLInputElement>('textbox').value).toBe('Cinnamon bark')
+  })
+
+  it('says when the stored value is no longer an option', () => {
+    renderForm(plainUischema, { commodity: { value: '9', label: 'Cinnamon bark' } }, objectSchema)
+    expect(screen.getByText('"Cinnamon bark" is no longer an available option')).toBeTruthy()
+  })
+
+  it('says so in the autocomplete too', () => {
+    renderForm(autocompleteUischema, { commodity: { value: '9', label: 'Cinnamon bark' } }, objectSchema)
+    expect(screen.getByText('"Cinnamon bark" is no longer an available option')).toBeTruthy()
   })
 
   it('shows the stored label in the plain dropdown', () => {
@@ -227,7 +237,7 @@ describe('SelectControl object-shaped field', () => {
 
   it('shows a legacy bare value saved before the field became an object', () => {
     renderForm(autocompleteUischema, { commodity: '8' }, objectSchema)
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Cinnamon leaf oil')
+    expect(screen.getByRole<HTMLInputElement>('textbox').value).toBe('Cinnamon leaf oil')
   })
 
   it('clears the whole object', async () => {
