@@ -12,6 +12,7 @@ import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { useEffect, type ReactNode } from 'react'
 import dayjs from 'dayjs'
 
+import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
 import { timeInputValue, toRfc3339Time } from '../utils/time'
 
@@ -65,6 +66,7 @@ export const DateControl = ({
       handleChange(path, undefined)
     }
   }, [visible, path, handleChange])
+  const showRequired = useIsRequired(path, required, visible)
 
   if (visible === false) {
     return null
@@ -77,7 +79,7 @@ export const DateControl = ({
   const timeStep = showSeconds ? 1 : 60
 
   const shell = (children: ReactNode) => (
-    <FieldShell path={path} label={label} required={required} errors={errors} description={schema.description}>
+    <FieldShell path={path} label={label} required={showRequired} errors={errors} description={schema.description}>
       {children}
     </FieldShell>
   )
