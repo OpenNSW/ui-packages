@@ -6,6 +6,8 @@ import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
 import { radixRenderers } from './index'
+import SearchSelectControl from './SearchSelectControl'
+import SelectControl from './SelectControl'
 
 // jsdom has no ResizeObserver; Radix's Select.Content mounts one via its internal ScrollArea
 if (typeof globalThis.ResizeObserver === 'undefined') {
@@ -283,5 +285,34 @@ describe('SelectControl object-shaped field', () => {
     await waitFor(() => {
       expect(writes[writes.length - 1]?.grade).toEqual({ value: 2, label: '2' })
     })
+  })
+
+  // JSON Forms renders a control with the highest-ranked renderer, the first registered on a
+  // tie. An object field with a value list is the dropdown's; with `x-search` it stays
+  // SearchSelectControl's, even when its `value` lists options too, and outranks the dropdown
+  // rather than winning on registration order.
+  it('takes an object field with a value list, and leaves an x-search field to SearchSelectControl', () => {
+    const rendererFor = (field: JsonSchema) => {
+      const rootSchema = { type: 'object', properties: { field } } as JsonSchema
+      const control = { type: 'Control', scope: '#/properties/field' } as UISchemaElement
+      const ranked = radixRenderers.map(({ tester, renderer }) => ({
+        renderer,
+        rank: tester(control, rootSchema, { rootSchema, config: {} }),
+      }))
+      const top = Math.max(...ranked.map((r) => r.rank))
+      const winners = ranked.filter((r) => r.rank === top)
+      expect(winners).toHaveLength(1)
+      return winners[0]?.renderer
+    }
+    const value = { type: 'string', oneOf: [{ const: '7', title: 'Cinnamon quill' }] }
+
+    expect(rendererFor({ type: 'object', properties: { value, label: { type: 'string' } } })).toBe(SelectControl)
+    expect(
+      rendererFor({
+        type: 'object',
+        'x-search': { service: 'static-data' },
+        properties: { value, label: { type: 'string' } },
+      } as JsonSchema),
+    ).toBe(SearchSelectControl)
   })
 })
