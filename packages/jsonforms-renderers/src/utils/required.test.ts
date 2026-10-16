@@ -16,13 +16,94 @@ describe('schemaHasConditionalRequired', () => {
     expect(schemaHasConditionalRequired(undefined)).toBe(false)
   })
 
+  it('is false for property-level enum oneOf without required branches', () => {
+    expect(
+      schemaHasConditionalRequired({
+        type: 'object',
+        properties: {
+          status: {
+            oneOf: [
+              { const: 'a', title: 'A' },
+              { const: 'b', title: 'B' },
+            ],
+          },
+        },
+      }),
+    ).toBe(false)
+  })
+
   it('is true when the root uses conditional constructs', () => {
-    expect(schemaHasConditionalRequired({ allOf: [] })).toBe(true)
     expect(schemaHasConditionalRequired({ if: {}, then: {} })).toBe(true)
-    expect(schemaHasConditionalRequired({ oneOf: [] })).toBe(true)
-    expect(schemaHasConditionalRequired({ anyOf: [] })).toBe(true)
+    expect(schemaHasConditionalRequired({ oneOf: [{ required: ['a'] }, { required: ['b'] }] })).toBe(true)
+    expect(schemaHasConditionalRequired({ allOf: [{ if: {}, then: { required: ['x'] } }] })).toBe(true)
     expect(schemaHasConditionalRequired({ dependentRequired: { a: ['b'] } })).toBe(true)
     expect(schemaHasConditionalRequired({ dependencies: { a: ['b'] } })).toBe(true)
+  })
+
+  it('is true for nested if/then under properties', () => {
+    expect(
+      schemaHasConditionalRequired({
+        type: 'object',
+        properties: {
+          address: {
+            type: 'object',
+            if: { properties: { country: { const: 'XX' } } },
+            then: { required: ['district'] },
+          },
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('is true when a conditional is reached via $ref into $defs', () => {
+    expect(
+      schemaHasConditionalRequired({
+        type: 'object',
+        properties: {
+          address: { $ref: '#/$defs/address' },
+        },
+        $defs: {
+          address: {
+            type: 'object',
+            if: { properties: { country: { const: 'XX' } } },
+            then: { required: ['district'] },
+          },
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('handles a self-referential $ref without looping', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        node: { $ref: '#/$defs/node' },
+      },
+      $defs: {
+        node: {
+          type: 'object',
+          properties: {
+            child: { $ref: '#/$defs/node' },
+          },
+        },
+      },
+    }
+    expect(schemaHasConditionalRequired(schema)).toBe(false)
+
+    const withConditional = {
+      ...schema,
+      $defs: {
+        node: {
+          type: 'object',
+          if: { properties: { kind: { const: 'leaf' } } },
+          then: { required: ['value'] },
+          properties: {
+            child: { $ref: '#/$defs/node' },
+          },
+        },
+      },
+    }
+    expect(schemaHasConditionalRequired(withConditional)).toBe(true)
   })
 })
 
@@ -110,5 +191,26 @@ describe('isPathRequiredBySchema', () => {
 
   it('returns false without a validator', () => {
     expect(isPathRequiredBySchema('assessedLevy', { reviewOutcome: 'approve' }, undefined)).toBe(false)
+  })
+
+  it('treats property-array dependencies as required when the trigger is present', () => {
+    // AJV reports these under keyword `dependencies`, not `required`.
+    const depsSchema = {
+      type: 'object',
+      properties: {
+        billingSameAsShipping: { type: 'boolean' },
+        billingAddress: { type: 'string' },
+      },
+      dependencies: {
+        billingSameAsShipping: ['billingAddress'],
+      },
+    }
+    const depsValidate = createAjv().compile(depsSchema)
+
+    expect(isPathRequiredBySchema('billingAddress', {}, depsValidate)).toBe(false)
+    expect(
+      isPathRequiredBySchema('billingAddress', { billingSameAsShipping: true, billingAddress: '1 Main' }, depsValidate),
+    ).toBe(true)
+    expect(isPathRequiredBySchema('billingAddress', { billingSameAsShipping: true }, depsValidate)).toBe(true)
   })
 })

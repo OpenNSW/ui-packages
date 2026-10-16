@@ -9,7 +9,7 @@ import { isPathRequiredBySchema, schemaHasConditionalRequired } from '../utils/r
  * `isRequired()` ignores.
  *
  * Skips the AJV path when the control is hidden, already statically required,
- * or the root schema has no conditional-required constructs.
+ * or the schema has no conditional-required constructs (including nested / `$ref`).
  */
 export function useIsRequired(path: string, staticRequired = false, visible = true): boolean {
   const ctx = useJsonForms()
