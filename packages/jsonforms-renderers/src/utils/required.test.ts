@@ -192,4 +192,25 @@ describe('isPathRequiredBySchema', () => {
   it('returns false without a validator', () => {
     expect(isPathRequiredBySchema('assessedLevy', { reviewOutcome: 'approve' }, undefined)).toBe(false)
   })
+
+  it('treats property-array dependencies as required when the trigger is present', () => {
+    // AJV reports these under keyword `dependencies`, not `required`.
+    const depsSchema = {
+      type: 'object',
+      properties: {
+        billingSameAsShipping: { type: 'boolean' },
+        billingAddress: { type: 'string' },
+      },
+      dependencies: {
+        billingSameAsShipping: ['billingAddress'],
+      },
+    }
+    const depsValidate = createAjv().compile(depsSchema)
+
+    expect(isPathRequiredBySchema('billingAddress', {}, depsValidate)).toBe(false)
+    expect(
+      isPathRequiredBySchema('billingAddress', { billingSameAsShipping: true, billingAddress: '1 Main' }, depsValidate),
+    ).toBe(true)
+    expect(isPathRequiredBySchema('billingAddress', { billingSameAsShipping: true }, depsValidate)).toBe(true)
+  })
 })

@@ -129,16 +129,18 @@ export function propertyNameFromPath(path: string): string {
 }
 
 function matchesRequiredError(error: NonNullable<SchemaValidateFunction['errors']>[number], path: string): boolean {
-  if (error.keyword !== 'required') return false
+  // Property-array `dependencies` reports under its own keyword; schema-form
+  // dependencies that use nested `required` already come through as `required`.
+  if (error.keyword !== 'required' && error.keyword !== 'dependencies') return false
   if (error.params?.missingProperty !== propertyNameFromPath(path)) return false
   return (error.instancePath ?? '') === parentInstancePath(path)
 }
 
 /**
  * True when submitting the form with this path empty would produce a
- * `required` AJV error for that property. Covers plain `required`,
- * `allOf`/`if`/`then`, `oneOf`, `dependentRequired`, etc., without parsing
- * those constructs by hand.
+ * missing-property AJV error for that field. Covers plain `required`,
+ * `allOf`/`if`/`then`, `oneOf`, property-array `dependencies`, etc., without
+ * parsing those constructs by hand.
  */
 export function isPathRequiredBySchema(
   path: string,
