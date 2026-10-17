@@ -456,6 +456,66 @@ export const fixtures: Fixture[] = [
     data: { country: { value: 'au', label: 'Australia' } },
   },
   {
+    id: 'search-select-multi',
+    name: 'Search Select (Multi)',
+    schema: {
+      type: 'object',
+      properties: {
+        transitCountries: {
+          type: 'array',
+          title: 'Transit Countries (object items)',
+          description:
+            'Array whose items carry x-search. Renders as one multi SearchSelect with chips (not Add Item cards). ' +
+            'Object items store [{ value, label }, …]. maxItems: 3 stops further picks in the UI.',
+          maxItems: 3,
+          items: {
+            type: 'object',
+            'x-search': { service: 'countries', mode: 'large-searchable-list', displayTemplate: '{name}' },
+            properties: {
+              value: { type: 'string', minLength: 1 },
+              label: { type: 'string' },
+            },
+            required: ['value'],
+          },
+        },
+        transitCountryIds: {
+          type: 'array',
+          title: 'Transit Countries (string items)',
+          description:
+            'Same multi SearchSelect, but items are type string so the form stores ["au","lk"]. ' +
+            'Chips resolve labels via the service on mount.',
+          maxItems: 3,
+          items: {
+            type: 'string',
+            'x-search': { service: 'countries', mode: 'large-searchable-list', displayTemplate: '{name}' },
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/transitCountries',
+          options: { placeholder: 'Search for countries…' },
+        },
+        {
+          type: 'Control',
+          scope: '#/properties/transitCountryIds',
+          options: { placeholder: 'Search for countries…' },
+        },
+      ],
+    } as UISchemaElement,
+    data: {
+      transitCountries: [
+        { value: 'au', label: 'Australia' },
+        { value: 'lk', label: 'Sri Lanka' },
+      ],
+      transitCountryIds: ['au', 'lk'],
+    },
+  },
+  {
     id: 'search-select-templates',
     name: 'Search Select (Display template)',
     schema: {

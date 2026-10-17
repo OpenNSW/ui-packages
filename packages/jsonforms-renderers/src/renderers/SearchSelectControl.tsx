@@ -8,6 +8,7 @@ import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
 import { renderTemplate } from '../utils/template'
+import { searchSelectTargetSchema } from './SearchSelectControlTester'
 import * as React from 'react'
 
 export type SearchSelectMode = 'small-list' | 'large-searchable-list' | 'large-paginated-list'
@@ -80,6 +81,15 @@ interface SearchSelectValue {
   label?: string
 }
 
+function asSearchSelectValue(raw: unknown): SearchSelectValue | undefined {
+  if (typeof raw === 'string' && raw.length > 0) return { value: raw }
+  if (raw && typeof raw === 'object' && typeof (raw as SearchSelectValue).value === 'string') {
+    const v = raw as SearchSelectValue
+    return { value: v.value, label: v.label }
+  }
+  return undefined
+}
+
 type SearchSelectProps = ControlProps & {
   schema: JsonSchema & { 'x-search'?: XSearchOptions }
 }
@@ -110,7 +120,9 @@ const SearchSelectControl = ({
   schema,
   uischema,
 }: SearchSelectProps) => {
-  const xSearch = ((schema as Record<string, unknown>)?.['x-search'] as XSearchOptions) ?? {
+  const isMulti = schema.type === 'array'
+  const itemSchema = (searchSelectTargetSchema(schema) ?? schema) as JsonSchema & { 'x-search'?: XSearchOptions }
+  const xSearch = (itemSchema['x-search'] as XSearchOptions | undefined) ?? {
     service: '',
     displayTemplate: '',
   }
@@ -138,15 +150,33 @@ const SearchSelectControl = ({
   }, [parentValues, parentValuesKey, xSearch.params])
   const service = useSearchService(serviceName)
 
-  const isObjectMode = schema.type === 'object'
-  // legacy records may have a bare string in `data` if the field was migrated from `type: "string"` after being saved
-  const normalizedData: SearchSelectValue | undefined = isObjectMode
-    ? typeof data === 'string'
-      ? { value: data }
-      : ((data as SearchSelectValue | undefined) ?? undefined)
-    : undefined
-  const currentValue = isObjectMode ? normalizedData?.value : (data as string | undefined)
-  const currentLabel = normalizedData?.label
+  const isObjectMode = itemSchema.type === 'object'
+  const maxItems = typeof schema.maxItems === 'number' ? schema.maxItems : undefined
+  const selectedValues: SearchSelectValue[] = useMemo(() => {
+    if (isMulti) {
+      if (!Array.isArray(data)) return []
+      return data.map(asSearchSelectValue).filter((v): v is SearchSelectValue => !!v)
+    }
+    const one = asSearchSelectValue(isObjectMode ? data : typeof data === 'string' ? data : undefined)
+    return one ? [one] : []
+  }, [data, isMulti, isObjectMode])
+
+  // Single-select helpers (unchanged behaviour for string/object fields).
+  const currentValue = !isMulti ? selectedValues[0]?.value : undefined
+  const currentLabel = !isMulti ? selectedValues[0]?.label : undefined
+  const selectedIds = useMemo(() => new Set(selectedValues.map((v) => v.value)), [selectedValues])
+  const hasSelection = selectedValues.length > 0
+  // Multi string arrays only store ids; keep labels from onSelect / resolve for chips.
+  const multiLabelCacheRef = useRef<Record<string, string>>({})
+  const [multiLabelVersion, setMultiLabelVersion] = useState(0)
+  const chipLabels = useMemo(() => {
+    const labels: Record<string, string> = {}
+    for (const v of selectedValues) {
+      labels[v.value] = v.label || multiLabelCacheRef.current[v.value] || v.value
+    }
+    return labels
+  }, [selectedValues, multiLabelVersion])
+  const atMaxItems = isMulti && maxItems !== undefined && selectedValues.length >= maxItems
 
   const configError = !serviceName
     ? 'Search not configured.'
@@ -178,18 +208,61 @@ const SearchSelectControl = ({
   const lastResolvedRef = useRef<{ value: string; label?: string } | undefined>(undefined)
   const lastParentRef = useRef<Record<string, string | undefined> | undefined>(undefined)
 
+  const commitSelection = useCallback(
+    (next: SearchSelectValue[]) => {
+      if (isMulti) {
+        handleChange(path, next.length > 0 ? next.map((v) => (isObjectMode ? v : v.value)) : undefined)
+        return
+      }
+      const one = next[0]
+      if (!one) {
+        handleChange(path, undefined)
+        return
+      }
+      handleChange(path, isObjectMode ? { value: one.value, label: one.label } : one.value)
+    },
+    [handleChange, path, isMulti, isObjectMode],
+  )
+
   useEffect(() => {
     if (!parentValues) return
     const prev = lastParentRef.current
     lastParentRef.current = parentValues
-    if (!prev || !currentValue) return
+    if (!prev || !hasSelection) return
     // same rule as the original single-sibling check: only a previously-set value
     // changing (including to unset) clears; going from unset → set does not
     const changed = Object.keys(parentValues).some((k) => prev[k] !== undefined && prev[k] !== parentValues[k])
-    if (changed) handleChange(path, isObjectMode ? undefined : null)
-  }, [parentValuesKey, currentValue, handleChange, path, isObjectMode])
+    if (changed) handleChange(path, undefined)
+  }, [parentValuesKey, hasSelection, handleChange, path])
 
   useEffect(() => {
+    if (isMulti) {
+      // String arrays store only ids; object items already carry labels. Resolve
+      // any id that still lacks a chip label (preload / remount).
+      if (configError || isObjectMode) return
+      const missing = selectedValues.filter((v) => !v.label && !multiLabelCacheRef.current[v.value])
+      if (missing.length === 0) return
+      if (!service?.resolve) return
+
+      let cancelled = false
+      void Promise.all(
+        missing.map(async (v) => {
+          try {
+            const opt = await service.resolve!(v.value, searchParams)
+            if (cancelled || !opt) return
+            multiLabelCacheRef.current[v.value] = presentOption(opt, displayTemplate).name
+          } catch {
+            // keep the raw id on the chip
+          }
+        }),
+      ).then(() => {
+        if (!cancelled) setMultiLabelVersion((n) => n + 1)
+      })
+      return () => {
+        cancelled = true
+      }
+    }
+
     if (configError) {
       setSelectedOption(undefined)
       lastResolvedRef.current = undefined
@@ -235,7 +308,17 @@ const SearchSelectControl = ({
     return () => {
       cancelled = true
     }
-  }, [configError, currentValue, currentLabel, isObjectMode, service, searchParams, displayTemplate])
+  }, [
+    configError,
+    currentValue,
+    currentLabel,
+    isObjectMode,
+    isMulti,
+    selectedValues,
+    service,
+    searchParams,
+    displayTemplate,
+  ])
 
   const runSearch = useCallback(
     async (q: string, isLoadMore = false) => {
@@ -366,7 +449,22 @@ const SearchSelectControl = ({
   }
 
   const onSelect = (option: SearchOption) => {
-    handleChange(path, isObjectMode ? { value: option.id, label: option.name } : option.id)
+    if (isMulti) {
+      const exists = selectedIds.has(option.id)
+      if (!exists && atMaxItems) return
+      const next = exists
+        ? selectedValues.filter((v) => v.value !== option.id)
+        : [...selectedValues, { value: option.id, label: option.name }]
+      if (!exists) {
+        multiLabelCacheRef.current[option.id] = option.name
+        setMultiLabelVersion((n) => n + 1)
+      }
+      commitSelection(next)
+      // keep the dropdown open so more countries can be added
+      setInputValue('')
+      return
+    }
+    commitSelection([{ value: option.id, label: option.name }])
     setSelectedOption(option)
     // prevent resolve effect from re-running for the just-selected value
     lastResolvedRef.current = { value: option.id, label: isObjectMode ? option.name : undefined }
@@ -382,11 +480,18 @@ const SearchSelectControl = ({
     setSelectedOption(undefined)
   }
 
+  const onRemoveChip = (e: React.SyntheticEvent, value: string) => {
+    e.stopPropagation()
+    commitSelection(selectedValues.filter((v) => v.value !== value))
+  }
+
   const onClearKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
     if (e.key === 'Enter' || e.key === ' ') onClear(e)
   }
 
   const placeholder = (uischema?.options?.placeholder as string | undefined) ?? 'Select an option'
+  // Multi: chips above the field are the selection UI; keep the closed input empty.
+  const closedDisplay = isMulti ? '' : (selectedOption?.name ?? '')
 
   return (
     <Box mb="4">
@@ -395,13 +500,49 @@ const SearchSelectControl = ({
           {label} {showRequired && <Text color="red">*</Text>}
         </Text>
 
+        {isMulti && selectedValues.length > 0 && (
+          <Flex gap="1" wrap="wrap" mb="1">
+            {selectedValues.map((v) => (
+              <Flex
+                key={v.value}
+                align="center"
+                gap="1"
+                px="2"
+                py="1"
+                style={{
+                  background: 'var(--accent-3)',
+                  borderRadius: 'var(--radius-2)',
+                  fontSize: 'var(--font-size-1)',
+                }}
+              >
+                <Text size="1">{chipLabels[v.value] ?? v.value}</Text>
+                {isEnabled && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Remove ${chipLabels[v.value] ?? v.value}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => onRemoveChip(e, v.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') onRemoveChip(e, v.value)
+                    }}
+                    style={{ lineHeight: 1, color: 'var(--gray-11)', cursor: 'pointer' }}
+                  >
+                    ×
+                  </span>
+                )}
+              </Flex>
+            ))}
+          </Flex>
+        )}
+
         <div ref={containerRef} style={{ position: 'relative' }}>
           <TextField.Root
             id={path}
-            value={open ? inputValue : (selectedOption?.name ?? '')}
+            value={open ? inputValue : closedDisplay}
             placeholder={open && modeConfig?.searchable ? 'Search...' : placeholder}
             disabled={!isEnabled}
-            readOnly={open && !modeConfig?.searchable}
+            readOnly={(open && !modeConfig?.searchable) || (isMulti && !open)}
             style={!isValid ? { outline: '2px solid var(--red-7)', outlineOffset: '-1px' } : undefined}
             onChange={(e) => {
               if (!modeConfig?.searchable) return
@@ -417,7 +558,7 @@ const SearchSelectControl = ({
           >
             <TextField.Slot side="right">
               <Flex align="center" gap="1">
-                {currentValue && isEnabled && (
+                {hasSelection && isEnabled && (
                   <span
                     role="button"
                     tabIndex={0}
@@ -487,23 +628,38 @@ const SearchSelectControl = ({
                       </Box>
                     )}
 
-                    {options.map((opt) => (
-                      <Box
-                        key={opt.id}
-                        px="3"
-                        py="2"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => onSelect(opt)}
-                        style={{
-                          cursor: 'pointer',
-                          borderRadius: 'var(--radius-2)',
-                          backgroundColor: opt.id === currentValue ? 'var(--accent-3)' : undefined,
-                        }}
-                        className="hover:bg-(--gray-3)"
-                      >
-                        <Text size="2">{opt.name}</Text>
-                      </Box>
-                    ))}
+                    {options.map((opt) => {
+                      const selected = selectedIds.has(opt.id)
+                      const capped = atMaxItems && !selected
+                      return (
+                        <Box
+                          key={opt.id}
+                          px="3"
+                          py="2"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            if (!capped) onSelect(opt)
+                          }}
+                          aria-disabled={capped || undefined}
+                          style={{
+                            cursor: capped ? 'not-allowed' : 'pointer',
+                            opacity: capped ? 0.5 : 1,
+                            borderRadius: 'var(--radius-2)',
+                            backgroundColor: selected ? 'var(--accent-3)' : undefined,
+                          }}
+                          className={capped ? undefined : 'hover:bg-(--gray-3)'}
+                        >
+                          <Flex align="center" justify="between" gap="2">
+                            <Text size="2">{opt.name}</Text>
+                            {isMulti && selected && (
+                              <Text size="1" color="gray">
+                                ✓
+                              </Text>
+                            )}
+                          </Flex>
+                        </Box>
+                      )
+                    })}
 
                     {modeConfig?.paginated && hasMore && !loadingMore && (
                       <Box px="3" py="2">

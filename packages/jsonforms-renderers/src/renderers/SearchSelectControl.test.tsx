@@ -437,3 +437,129 @@ describe('SearchSelectControl displayTemplate', () => {
     })
   })
 })
+
+describe('SearchSelectControl multi (array of x-search objects)', () => {
+  const multiSchema = {
+    type: 'object',
+    properties: {
+      transit_countries: {
+        type: 'array',
+        title: 'Transit Countries',
+        maxItems: 2,
+        items: {
+          type: 'object',
+          'x-search': {
+            service: 'countries',
+            mode: 'small-list',
+            displayTemplate: '{name}',
+          },
+          properties: {
+            value: { type: 'string', minLength: 1 },
+            label: { type: 'string' },
+          },
+          required: ['value'],
+        },
+      },
+    },
+  } as unknown as JsonSchema
+
+  const multiUi = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/transit_countries' }],
+  } as UISchemaElement
+
+  const multiOptions = [
+    { id: 'IN', name: 'India' },
+    { id: 'SG', name: 'Singapore' },
+    { id: 'LK', name: 'Sri Lanka' },
+  ]
+
+  it('renders a searchable multi dropdown instead of Add Item cards', async () => {
+    const { latest } = renderForm({}, async () => ({ options: multiOptions }), multiSchema, multiUi)
+
+    expect(screen.queryByRole('button', { name: /Add Item/ })).toBeNull()
+    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(await screen.findByText('India'))
+    fireEvent.click(await screen.findByText('Singapore'))
+
+    await waitFor(() => {
+      expect(latest()?.transit_countries).toEqual([
+        { value: 'IN', label: 'India' },
+        { value: 'SG', label: 'Singapore' },
+      ])
+    })
+  })
+
+  it('does not add another option once schema.maxItems is reached', async () => {
+    const { latest } = renderForm({}, async () => ({ options: multiOptions }), multiSchema, multiUi)
+
+    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(await screen.findByText('India'))
+    fireEvent.click(await screen.findByText('Singapore'))
+    fireEvent.click(await screen.findByText('Sri Lanka'))
+
+    await waitFor(() => {
+      expect(latest()?.transit_countries).toEqual([
+        { value: 'IN', label: 'India' },
+        { value: 'SG', label: 'Singapore' },
+      ])
+    })
+  })
+
+  it('resolves string-array ids to chip labels on mount', async () => {
+    const stringMultiSchema = {
+      type: 'object',
+      properties: {
+        transit_countries: {
+          type: 'array',
+          title: 'Transit Countries',
+          items: {
+            type: 'string',
+            'x-search': {
+              service: 'countries',
+              mode: 'small-list',
+              displayTemplate: '{name}',
+            },
+          },
+        },
+      },
+    } as unknown as JsonSchema
+
+    const names: Record<string, string> = { IN: 'India', SG: 'Singapore' }
+    const writes: Data[] = []
+    const services = {
+      countries: {
+        search: async () => ({ options: multiOptions }),
+        async resolve(value: string) {
+          return { id: value, name: names[value] ?? value }
+        },
+      },
+    }
+
+    function Harness() {
+      const [data, setData] = useState<Data>({ transit_countries: ['IN', 'SG'] })
+      return (
+        <Theme>
+          <SearchServiceProvider services={services}>
+            <JsonForms
+              schema={stringMultiSchema}
+              uischema={multiUi}
+              data={data}
+              renderers={radixRenderers}
+              onChange={({ data: next }) => {
+                writes.push(next as Data)
+                setData(next as Data)
+              }}
+            />
+          </SearchServiceProvider>
+        </Theme>
+      )
+    }
+
+    render(<Harness />)
+
+    expect(await screen.findByText('India')).toBeTruthy()
+    expect(screen.getByText('Singapore')).toBeTruthy()
+    expect(screen.queryByText('IN')).toBeNull()
+  })
+})
