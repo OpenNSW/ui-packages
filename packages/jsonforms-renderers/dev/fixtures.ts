@@ -482,7 +482,7 @@ export const fixtures: Fixture[] = [
           type: 'array',
           title: 'Transit Countries (string items)',
           description:
-            'Same multi SearchSelect, but items are type string so the form stores ["au","nz"]. ' +
+            'Same multi SearchSelect, but items are type string so the form stores ["au","lk"]. ' +
             'Chips resolve labels via the service on mount.',
           maxItems: 3,
           items: {
@@ -510,9 +510,9 @@ export const fixtures: Fixture[] = [
     data: {
       transitCountries: [
         { value: 'au', label: 'Australia' },
-        { value: 'nz', label: 'New Zealand' },
+        { value: 'lk', label: 'Sri Lanka' },
       ],
-      transitCountryIds: ['au', 'nz'],
+      transitCountryIds: ['au', 'lk'],
     },
   },
   {
