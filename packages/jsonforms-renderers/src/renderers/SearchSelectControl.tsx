@@ -20,6 +20,10 @@ interface XSearchOptions {
   params?: Record<string, unknown>
   // sibling property name (sent as params.parent), or param-key → sibling property for several live filters
   dependsOn?: string | Record<string, string>
+  // Sibling property this field mirrors. Copies while empty, and whenever the sibling
+  // changes (overwriting a prior value — including a user edit). The field stays editable.
+  // Same Resolve path as dependsOn: relative to this control's parent object.
+  defaultFrom?: string
   // `{id}` / `{name}` string used as the dropdown / selected label. Required —
   // a missing or empty value shows a config error instead of falling back to `name`.
   displayTemplate: string
@@ -72,6 +76,49 @@ function resolveDependsOnValues(
     values[paramKey] = dependsOnConst(Resolve.data(data, parentPath ? `${parentPath}.${siblingProp}` : siblingProp))
   }
   return values
+}
+
+function isSearchSelectEmpty(data: unknown, isObjectMode: boolean): boolean {
+  if (data == null || data === '') return true
+  if (isObjectMode) {
+    if (typeof data === 'string') return data.length === 0
+    if (typeof data === 'object') {
+      const value = (data as SearchSelectValue).value
+      return typeof value !== 'string' || value.length === 0
+    }
+  }
+  return false
+}
+
+// Shape this field's stored value from a sibling's current data. Object-mode fields keep
+// { value, label }; string-mode fields store the id only.
+function valueFromDefaultSibling(sibling: unknown, isObjectMode: boolean): unknown {
+  if (sibling == null || sibling === '') return undefined
+  if (typeof sibling === 'string') {
+    return sibling.length > 0 ? (isObjectMode ? { value: sibling } : sibling) : undefined
+  }
+  if (typeof sibling === 'object') {
+    const value = (sibling as SearchSelectValue).value
+    if (typeof value !== 'string' || value.length === 0) return undefined
+    if (isObjectMode) {
+      const label = (sibling as SearchSelectValue).label
+      return typeof label === 'string' && label.length > 0 ? { value, label } : { value }
+    }
+    return value
+  }
+  return undefined
+}
+
+function searchSelectValuesEqual(a: unknown, b: unknown, isObjectMode: boolean): boolean {
+  if (isSearchSelectEmpty(a, isObjectMode) && (b === undefined || isSearchSelectEmpty(b, isObjectMode))) {
+    return true
+  }
+  if (isObjectMode) {
+    const av = typeof a === 'object' && a !== null ? (a as SearchSelectValue) : undefined
+    const bv = typeof b === 'object' && b !== null ? (b as SearchSelectValue) : undefined
+    return av?.value === bv?.value && (av?.label ?? undefined) === (bv?.label ?? undefined)
+  }
+  return a === b
 }
 
 // shape of `data` for an object-typed `x-search` field (`type: "object"`); string-typed fields keep `data` as the raw id
@@ -188,6 +235,39 @@ const SearchSelectControl = ({
     const changed = Object.keys(parentValues).some((k) => prev[k] !== undefined && prev[k] !== parentValues[k])
     if (changed) handleChange(path, isObjectMode ? undefined : null)
   }, [parentValuesKey, currentValue, handleChange, path, isObjectMode])
+
+  const defaultFrom =
+    typeof xSearch.defaultFrom === 'string' && xSearch.defaultFrom.length > 0 ? xSearch.defaultFrom : undefined
+  const formReadonly = ctx.readonly === true
+  const defaultFromSibling = useMemo(() => {
+    if (!defaultFrom) return undefined
+    return Resolve.data(ctx.core?.data, parentPath ? `${parentPath}.${defaultFrom}` : defaultFrom)
+  }, [defaultFrom, ctx.core?.data, parentPath])
+  const defaultFromSiblingKey = useMemo(() => JSON.stringify(defaultFromSibling ?? null), [defaultFromSibling])
+  // Tracks the last sibling snapshot we reacted to so a sibling change always syncs,
+  // while a user edit of this field alone does not.
+  const lastDefaultFromSiblingKey = useRef<string | undefined>(undefined)
+
+  useEffect(() => {
+    if (!defaultFrom || !visible || !isEnabled || formReadonly) return
+    const next = valueFromDefaultSibling(defaultFromSibling, isObjectMode)
+    const prevKey = lastDefaultFromSiblingKey.current
+    const siblingChanged = prevKey !== undefined && prevKey !== defaultFromSiblingKey
+    lastDefaultFromSiblingKey.current = defaultFromSiblingKey
+
+    if (siblingChanged) {
+      // Importing country (etc.) changed: mirror it, including clearing this field.
+      if (searchSelectValuesEqual(data, next ?? undefined, isObjectMode)) return
+      handleChange(path, next === undefined ? undefined : next)
+      return
+    }
+
+    // Sibling unchanged: only fill while empty (initial select, or after a clear).
+    if (isSearchSelectEmpty(data, isObjectMode) && next !== undefined) {
+      handleChange(path, next)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultFrom, defaultFromSiblingKey, data, isObjectMode, visible, isEnabled, formReadonly])
 
   useEffect(() => {
     if (configError) {

@@ -90,6 +90,49 @@ query-param name → sibling property (`dependsOn: { "commodity": "commodity_com
 Fetching waits until every listed sibling has a value; changing any sibling that already
 had a value clears this field.
 
+## Default from a sibling (`defaultFrom`)
+
+To mirror another field on the same object, set `x-search.defaultFrom` to that sibling's
+property name. The control copies the sibling's current value (a string, or
+`{ value, label }`) into this field:
+
+- while this field is empty (first fill, or after the trader clears it)
+- whenever the sibling **changes** — that overwrite includes a value the trader set by
+  hand
+
+The field stays editable between sibling changes. Used for NPQS "Country of Consignee"
+following "Name of Importing Country" (GeNS-style): change importing country, consignee
+country follows; the trader can still pick a different consignee country until importing
+country changes again.
+
+```jsonc
+{
+  "importing_country": {
+    "type": "object",
+    "x-search": {
+      "service": "static-data",
+      "mode": "large-searchable-list",
+      "displayTemplate": "{name}",
+      "params": { "id": "countries", "version": "1" },
+    },
+  },
+  "consignee_country": {
+    "type": "object",
+    "x-search": {
+      "service": "static-data",
+      "mode": "large-searchable-list",
+      "displayTemplate": "{name}",
+      "params": { "id": "countries", "version": "1" },
+      "defaultFrom": "importing_country",
+    },
+  },
+}
+```
+
+`defaultFrom` is independent of `dependsOn`. Use `dependsOn` when this field's options
+must filter by the sibling; use `defaultFrom` when this field should follow the sibling's
+value.
+
 ## Display template
 
 `displayTemplate` is required on every `x-search` field. `{id}` and `{name}` are
