@@ -538,6 +538,10 @@ describe('SearchSelectControl multi (array of x-search objects)', () => {
 
     function Harness() {
       const [data, setData] = useState<Data>({ transit_countries: ['IN', 'SG'] })
+      let live = true
+      finishers.push(() => {
+        live = false
+      })
       return (
         <Theme>
           <SearchServiceProvider services={services}>
@@ -547,6 +551,7 @@ describe('SearchSelectControl multi (array of x-search objects)', () => {
               data={data}
               renderers={radixRenderers}
               onChange={({ data: next }) => {
+                if (!live) return
                 writes.push(next as Data)
                 setData(next as Data)
               }}
