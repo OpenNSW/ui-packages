@@ -1508,6 +1508,48 @@ export const fixtures: Fixture[] = [
       ],
     } as UISchemaElement,
   },
+  {
+    id: 'categorization-stepper',
+    name: 'Categorization (stepper)',
+    schema: {
+      type: 'object',
+      properties: {
+        exporter: { type: 'string', title: 'Exporter name' },
+        consignee: { type: 'string', title: 'Consignee name' },
+        export_date: { type: 'string', format: 'date', title: 'Intended export date' },
+        vessel: { type: 'string', title: 'Vessel name' },
+        notes: { type: 'string', title: 'Notes' },
+      },
+      required: ['exporter', 'consignee', 'export_date'],
+    },
+    uischema: {
+      type: 'Categorization',
+      options: { variant: 'stepper' },
+      elements: [
+        {
+          type: 'Category',
+          label: 'Consignment',
+          elements: [
+            { type: 'Control', scope: '#/properties/exporter' },
+            { type: 'Control', scope: '#/properties/consignee' },
+          ],
+        },
+        {
+          type: 'Category',
+          label: 'Transport',
+          elements: [
+            { type: 'Control', scope: '#/properties/export_date' },
+            { type: 'Control', scope: '#/properties/vessel' },
+          ],
+        },
+        {
+          type: 'Category',
+          label: 'Notes',
+          elements: [{ type: 'Control', scope: '#/properties/notes', options: { multi: true } }],
+        },
+      ],
+    } as UISchemaElement,
+  },
 
   {
     id: 'label',
