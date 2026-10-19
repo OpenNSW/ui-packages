@@ -6,6 +6,9 @@ exposing `loadOnOpen` / `searchable` / `paginated` as three independent flags (m
 the 8 combinations don't make sense), the control only accepts one of the three modes
 below.
 
+Tester rank is 4 (above ArrayControl at 3 and Select at 2), so array fields whose
+`items` carry `x-search` render as this control instead of Add Item cards.
+
 ```jsonc
 {
   "type": "string",
@@ -124,6 +127,46 @@ instead of fetching.
 
 Object-typed fields store `{ value: id, label: templated name }`. A later open
 uses the saved label and does not re-resolve.
+
+## Multi-select (`type: "array"`)
+
+Multi mode is inferred from `schema.type === "array"` with `x-search` on `items`.
+There is no separate `multiple` flag. Single string/object fields stay single-select.
+
+Stored shapes:
+
+- `items.type: "object"` (with `value` / `label`): `[{ value, label }, …]`
+- `items.type: "string"`: `["id", …]`. Chips keep labels from the pick, and on mount
+  each id is resolved through the service so preloaded forms show names, not raw ids.
+
+`schema.maxItems` is enforced in the UI: once the cap is reached, further picks are
+ignored (unselected options are disabled). Removal and de-selection still work. AJV
+still validates preloaded data that already exceeds the cap.
+
+`dependsOn` behaves like single-select: changing a previously set sibling clears the
+whole multi selection.
+
+```jsonc
+{
+  "transitCountries": {
+    "type": "array",
+    "maxItems": 5,
+    "items": {
+      "type": "object",
+      "x-search": {
+        "service": "countries",
+        "mode": "large-searchable-list",
+        "displayTemplate": "{name}",
+      },
+      "properties": {
+        "value": { "type": "string" },
+        "label": { "type": "string" },
+      },
+      "required": ["value"],
+    },
+  },
+}
+```
 
 ## The three modes
 
