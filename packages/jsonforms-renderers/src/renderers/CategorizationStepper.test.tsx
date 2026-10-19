@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
@@ -171,6 +172,21 @@ describe('Categorization stepper', () => {
     fireEvent.click(continueButton())
     fireEvent.click(continueButton())
     expect(screen.getByRole('button', { name: 'Save as draft' })).toBeTruthy()
+  })
+
+  it('scrolls to a newly chosen step, but not on mount', () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    render(
+      <StrictMode>
+        <Form uischema={stepper()} data={{ exporter: 'A' }} />
+      </StrictMode>,
+    )
+    expect(scroll).not.toHaveBeenCalled()
+
+    fireEvent.click(continueButton())
+
+    expect(scroll).toHaveBeenCalledOnce()
   })
 
   it('shows every step on one page when the form is read-only', () => {

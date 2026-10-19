@@ -86,14 +86,13 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
     notifyHost()
   }, [step, count, lastStep])
 
-  // Bring the top of the new step into view, but not on the first render.
+  // Bring the top of a newly chosen step into view. Compared with the step
+  // last shown rather than skipping the first run, which StrictMode repeats.
   const top = useRef<HTMLDivElement>(null)
-  const firstRender = useRef(true)
+  const shownStep = useRef(step)
   useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false
-      return
-    }
+    if (shownStep.current === step) return
+    shownStep.current = step
     top.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
   }, [step])
 
@@ -148,7 +147,7 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
     }))
 
   return (
-    <Flex ref={top} gap="5" align="start" style={{ scrollMarginTop: 16 }}>
+    <Flex ref={top} gap="5" align="start" style={{ scrollMarginTop: 96 /* clear of a sticky app header */ }}>
       <Box
         asChild
         display={{ initial: 'none', sm: 'block' }}
