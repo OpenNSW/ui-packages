@@ -4,7 +4,7 @@ import type { JsonFormsCellRendererRegistryEntry, JsonFormsRendererRegistryEntry
 import { Box, Button, Callout, Flex, Heading, Progress, Text } from '@radix-ui/themes'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
 import { type CSSProperties, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { useFormSteps } from '../contexts/FormStepsContext'
+import { useFormSteps } from '../contexts/formSteps'
 import {
   type StepError,
   type StepProblem,
@@ -212,7 +212,7 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
           <Progress value={((step + 1) / totalSteps) * 100} size="1" mt="4" aria-label="Progress through the form" />
         </Box>
 
-        <Box px={{ initial: '4', sm: '6' }} pb="5">
+        <Box px={{ initial: '4', sm: '6' }} pb="5" data-form-review={onReview ? '' : undefined}>
           {onReview &&
             (incomplete.length ? (
               <ProblemCallout title="Some steps are not complete yet:" items={incomplete} />
@@ -441,7 +441,12 @@ function ProblemCallout({
   )
 }
 
-/** Every visible Category one after another, each under its heading: a read-only stepper. */
+/**
+ * Every visible Category one after another, each under its heading: a
+ * read-only stepper. Like the review step, it carries `data-form-review`, so
+ * a host can show its read-only values as plain answers rather than as
+ * disabled inputs.
+ */
 const CategorizationSections = ({ uischema, schema, path, renderers, cells }: Props) => {
   const host = useFormSteps()
   const categories = useVisibleCategories(uischema, path)
@@ -453,7 +458,7 @@ const CategorizationSections = ({ uischema, schema, path, renderers, cells }: Pr
   }, [count])
 
   return (
-    <Flex direction="column" gap="6">
+    <Flex direction="column" gap="6" p={{ initial: '4', sm: '6' }} style={panelStyle} data-form-review="">
       {categories.map((category, index) => (
         <Box key={`${path}-${index}`}>
           <Heading size="3" as="h3" mb="3">

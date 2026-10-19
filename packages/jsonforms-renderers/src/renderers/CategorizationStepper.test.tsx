@@ -6,7 +6,8 @@ import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
 import { radixRenderers } from './index'
-import { FormStepsProvider, type FormStepState } from '../contexts/FormStepsContext'
+import { FormStepsProvider } from '../contexts/FormStepsContext'
+import type { FormStepState } from '../contexts/formSteps'
 import type { ReactNode } from 'react'
 
 afterEach(cleanup)
