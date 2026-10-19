@@ -436,6 +436,10 @@ describe('SearchSelectControl defaultFrom', () => {
     }
 
     function Harness() {
+      let live = true
+      finishers.push(() => {
+        live = false
+      })
       return (
         <Theme>
           <SearchServiceProvider services={services}>
@@ -445,7 +449,10 @@ describe('SearchSelectControl defaultFrom', () => {
               data={{ importing_country: { value: 'GB', label: 'United Kingdom' } }}
               renderers={radixRenderers}
               readonly
-              onChange={({ data }) => writes.push(data as Data)}
+              onChange={({ data }) => {
+                if (!live) return
+                writes.push(data as Data)
+              }}
             />
           </SearchServiceProvider>
         </Theme>
