@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { ControlElement, JsonSchema } from '@jsonforms/core'
-import { emptyRequiredPaths, errorDataPath, isStepperUiSchema, stepProblems, stepSummary } from './steps'
+import {
+  emptyRequiredPaths,
+  errorDataPath,
+  hasAnswers,
+  isRequiredAt,
+  isStepperUiSchema,
+  stepProblems,
+  stepSummary,
+} from './steps'
 
 describe('isStepperUiSchema', () => {
   it('matches only a Categorization with the stepper variant', () => {
@@ -76,5 +84,49 @@ describe('stepSummary', () => {
     expect(stepSummary([ctl('a'), ctl('b')], {}, schema)).toBe('2 fields')
     expect(stepSummary([ctl('a')], {}, schema)).toBe('1 field')
     expect(stepSummary([ctl('b'), ctl('rows')], {}, schema)).toBe('Optional')
+  })
+})
+
+describe('a Categorization below the data root', () => {
+  const schema: JsonSchema = {
+    type: 'object',
+    properties: { rows: { type: 'array', items: { type: 'object', required: ['qty'], properties: { qty: {} } } } },
+  }
+  const qty: ControlElement = { type: 'Control', scope: '#/properties/qty', label: 'Quantity' }
+
+  it('matches root-relative errors to its controls', () => {
+    const errors = [{ instancePath: '/rows/1', keyword: 'required', params: { missingProperty: 'qty' } }]
+    expect(stepProblems([qty], errors, [], schema, 'rows.1')).toEqual([{ path: 'rows.1.qty', label: 'Quantity' }])
+    expect(stepProblems([qty], errors, [], schema, 'rows.0')).toEqual([])
+  })
+
+  it('reads its answers and required fields at its own path', () => {
+    expect(hasAnswers([qty], { rows: [{}, { qty: '2' }] }, 'rows.1')).toBe(true)
+    expect(hasAnswers([qty], { rows: [{}, { qty: '2' }] }, 'rows.0')).toBe(false)
+    expect(stepSummary([qty], {}, schema, 'rows.0')).toBe('1 field')
+  })
+})
+
+describe('isRequiredAt', () => {
+  const schema: JsonSchema = {
+    type: 'object',
+    required: ['a'],
+    properties: {
+      a: { type: 'object', required: ['b'], properties: { b: {}, c: {} } },
+      list: { type: 'array', items: { type: 'object', required: ['x'], properties: { x: {} } } },
+    },
+  }
+
+  it('follows nested objects and array items', () => {
+    expect(isRequiredAt(schema, 'a')).toBe(true)
+    expect(isRequiredAt(schema, 'a.b')).toBe(true)
+    expect(isRequiredAt(schema, 'a.c')).toBe(false)
+    expect(isRequiredAt(schema, 'list.0.x')).toBe(true)
+    expect(isRequiredAt(schema, 'missing.b')).toBe(false)
+  })
+
+  it('makes a step of nested required fields not optional', () => {
+    const b: ControlElement = { type: 'Control', scope: '#/properties/a/properties/b' }
+    expect(stepSummary([b], {}, schema)).toBe('1 field')
   })
 })

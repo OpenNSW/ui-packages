@@ -5,6 +5,7 @@ import {
   type JsonFormsCore,
   type JsonSchema,
   type UISchemaElement,
+  composePaths,
   isVisible,
   Resolve,
   toDataPath,
@@ -39,18 +40,25 @@ export function categoriesOf(categorization: Categorization): Category[] {
 /**
  * Every Control under `element` that its rules currently show. A layout whose
  * rule hides it hides all of its controls too, as the layout renderers do.
+ * `path` is where the Categorization sits in the data ('' at the root).
  */
 export function visibleControls(
   element: UISchemaElement,
   data: unknown,
   ajv: JsonFormsCore['ajv'],
   config: unknown,
+  path = '',
 ): ControlElement[] {
-  if (ajv && element.rule && !isVisible(element, data, '', ajv, config)) return []
+  if (ajv && element.rule && !isVisible(element, data, path, ajv, config)) return []
   if (element.type === 'Control') return [element as ControlElement]
   const children = (element as { elements?: UISchemaElement[] }).elements
   if (!Array.isArray(children)) return []
-  return children.flatMap((child) => visibleControls(child, data, ajv, config))
+  return children.flatMap((child) => visibleControls(child, data, ajv, config, path))
+}
+
+/** The full dotted data path of a control under a Categorization at `path`. */
+export function controlPath(control: ControlElement, path = ''): string {
+  return composePaths(path, toDataPath(control.scope))
 }
 
 /** The dotted data path an AJV error points at, `required` errors included. */
@@ -94,9 +102,9 @@ function isEmpty(value: unknown): boolean {
   return Array.isArray(value) && value.length === 0
 }
 
-/** True when `path` is `controlPath` or inside it. */
-function within(path: string, controlPath: string): boolean {
-  return path === controlPath || path.startsWith(`${controlPath}.`)
+/** True when `path` is `base` or inside it. */
+function within(path: string, base: string): boolean {
+  return path === base || path.startsWith(`${base}.`)
 }
 
 /** The label a control shows, for naming it in a step's error summary. */
@@ -111,17 +119,19 @@ export function controlLabel(control: ControlElement, rootSchema: JsonSchema): s
 
 /**
  * The controls of one step that still have an error or an empty required
- * value, one entry per control, in the order the step shows them.
+ * value, one entry per control, in the order the step shows them. Error and
+ * empty paths are from the data root; `path` is where the Categorization sits.
  */
 export function stepProblems(
   controls: ControlElement[],
   errors: StepError[],
   emptyPaths: string[],
   rootSchema: JsonSchema,
+  path = '',
 ): StepProblem[] {
   const failing = [...errors.map(errorDataPath), ...emptyPaths]
   return controls
-    .map((control) => ({ control, path: toDataPath(control.scope) }))
+    .map((control) => ({ control, path: controlPath(control, path) }))
     .filter(({ path }) => failing.some((f) => within(f, path)))
     .map(({ control, path }) => ({ path, label: controlLabel(control, rootSchema) }))
 }
@@ -131,13 +141,20 @@ export function stepProblems(
  * "2 items added" once a list on it has rows, otherwise "4 fields", or
  * "Optional" when none of its fields is required.
  */
-export function stepSummary(controls: ControlElement[], data: unknown, rootSchema: JsonSchema): string {
-  const paths = controls.map((c) => toDataPath(c.scope))
+export function stepSummary(controls: ControlElement[], data: unknown, rootSchema: JsonSchema, path = ''): string {
+  const paths = controls.map((c) => controlPath(c, path))
   const rows = paths.map((p) => valueAt(data, p)).find((v) => Array.isArray(v) && v.length > 0) as unknown[] | undefined
   if (rows) return rows.length === 1 ? '1 item added' : `${rows.length} items added`
-  const required = paths.some((p) => !p.includes('.') && (rootSchema.required ?? []).includes(p))
-  if (!required) return 'Optional'
+  if (!paths.some((p) => isRequiredAt(rootSchema, p))) return 'Optional'
   return controls.length === 1 ? '1 field' : `${controls.length} fields`
+}
+
+/** True when any of a step's controls holds a value, as it does in a saved draft. */
+export function hasAnswers(controls: ControlElement[], data: unknown, path = ''): boolean {
+  return controls.some((c) => {
+    const value = valueAt(data, controlPath(c, path))
+    return value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0)
+  })
 }
 
 function valueAt(data: unknown, path: string): unknown {
@@ -145,4 +162,21 @@ function valueAt(data: unknown, path: string): unknown {
     if (cur == null || typeof cur !== 'object') return undefined
     return (cur as Record<string, unknown>)[key]
   }, data)
+}
+
+/**
+ * Whether the value at a dotted data path is in its parent object's `required`
+ * list. Plain `properties` and `items` only: no `$ref` and no conditional
+ * `required`.
+ */
+export function isRequiredAt(rootSchema: JsonSchema, path: string): boolean {
+  const segments = path.split('.')
+  const key = segments.pop()
+  let parent: JsonSchema | undefined = rootSchema
+  for (const segment of segments) {
+    const items: JsonSchema | undefined = parent?.items && !Array.isArray(parent.items) ? parent.items : undefined
+    parent = /^\d+$/.test(segment) && items ? items : parent?.properties?.[segment]
+    if (!parent) return false
+  }
+  return key !== undefined && (parent.required ?? []).includes(key)
 }

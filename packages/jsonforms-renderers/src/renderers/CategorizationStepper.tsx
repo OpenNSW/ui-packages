@@ -10,12 +10,17 @@ import {
   type StepProblem,
   categoriesOf,
   emptyRequiredPaths,
+  hasAnswers,
   stepProblems,
   stepSummary,
   visibleControls,
 } from '../utils/steps'
 
 const REVIEW_LABEL = 'Review and Submit'
+
+// How far below the top of the viewport the step list sticks, and where a new
+// step scrolls to: set --form-steps-offset to clear a fixed app header.
+const OFFSET = 'var(--form-steps-offset, 16px)'
 
 interface Props {
   uischema: Categorization
@@ -59,41 +64,53 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
   // The review step comes after the last Category.
   const lastStep = count
 
-  const [current, setCurrent] = useState(0)
-  // The furthest step reached through Continue; the step list can go back to
-  // any step up to it, but not skip ahead of a step never checked.
-  const [reached, setReached] = useState(0)
-  // Steps where Continue was refused, so their summary shows.
-  const [attempted, setAttempted] = useState<ReadonlySet<number>>(new Set())
-  // A rule can hide a step after the trader has moved past it.
-  const step = Math.min(current, lastStep)
-  const onReview = step === lastStep
-
   const errors = useMemo(
     () => [...(core?.errors ?? []), ...(core?.additionalErrors ?? [])] as StepError[],
     [core?.errors, core?.additionalErrors],
   )
   const emptyPaths = useMemo(() => emptyRequiredPaths(rootSchema, data), [rootSchema, data])
   const problems: StepProblem[][] = useMemo(
-    () => categories.map((c) => stepProblems(visibleControls(c, data, ajv, config), errors, emptyPaths, rootSchema)),
+    () =>
+      categories.map((c) =>
+        stepProblems(visibleControls(c, data, ajv, config, path), errors, emptyPaths, rootSchema, path),
+      ),
     // categories is rebuilt every render; its content follows uischema, data and rules.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [uischema, data, ajv, config, errors, emptyPaths, rootSchema],
+    [uischema, path, data, ajv, config, errors, emptyPaths, rootSchema],
   )
+
+  const [current, setCurrent] = useState(0)
+  // The furthest step the step list can go to: any step up to it, but not
+  // ahead of a step never checked. A form opened with saved answers (a draft)
+  // starts with its answered, complete steps open, up to the first that isn't.
+  const [reached, setReached] = useState(() => {
+    const open = (c: Category, i: number) =>
+      problems[i].length === 0 && hasAnswers(visibleControls(c, data, ajv, config, path), data, path)
+    const first = categories.findIndex((c, i) => !open(c, i))
+    return first === -1 ? lastStep : first
+  })
+  // Steps where Continue was refused, so their summary shows.
+  const [attempted, setAttempted] = useState<ReadonlySet<number>>(new Set())
+  // A rule can hide a step after the trader has moved past it.
+  const step = Math.min(current, lastStep)
+  const onReview = step === lastStep
 
   const notifyHost = useEffectEvent(() => host?.onStepChange?.({ step, count, last: step === lastStep }))
   useEffect(() => {
     notifyHost()
   }, [step, count, lastStep])
 
-  // Bring the top of a newly chosen step into view. Compared with the step
-  // last shown rather than skipping the first run, which StrictMode repeats.
+  // Bring a newly chosen step into view and move focus to its title, so a
+  // screen reader announces it. Compared with the step last shown rather than
+  // skipping the first run, which StrictMode repeats.
   const top = useRef<HTMLDivElement>(null)
+  const title = useRef<HTMLHeadingElement>(null)
   const shownStep = useRef(step)
   useEffect(() => {
     if (shownStep.current === step) return
     shownStep.current = step
     top.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    title.current?.focus({ preventScroll: true })
   }, [step])
 
   if (!count) return null
@@ -130,7 +147,7 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
     if (index === lastStep) return 'Check and submit'
     if (toFix(index, status) > 0) return `${toFix(index, status)} to fix`
     if (status === 'done') return 'Done'
-    return stepSummary(visibleControls(categories[index], data, ajv, config), data, rootSchema)
+    return stepSummary(visibleControls(categories[index], data, ajv, config, path), data, rootSchema, path)
   }
   const description = onReview ? undefined : (categories[step]?.options?.description as string | undefined)
   // On the review step: each step still incomplete, linking back to it.
@@ -147,12 +164,19 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
     }))
 
   return (
-    <Flex ref={top} gap="5" align="start" style={{ scrollMarginTop: 96 /* clear of a sticky app header */ }}>
+    <Flex ref={top} gap="5" align="start" style={{ scrollMarginTop: OFFSET }}>
       <Box
         asChild
         display={{ initial: 'none', sm: 'block' }}
         p="4"
-        style={{ ...panelStyle, flex: '0 0 248px', position: 'sticky', top: 16 }}
+        style={{
+          ...panelStyle,
+          flex: '0 0 248px',
+          position: 'sticky',
+          top: OFFSET,
+          maxHeight: `calc(100vh - 2 * ${OFFSET})`,
+          overflowY: 'auto',
+        }}
       >
         <nav aria-label="Form steps">
           <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
@@ -201,7 +225,7 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
           >
             Step {step + 1} of {totalSteps}
           </Text>
-          <Heading size="5" as="h2" mt="1">
+          <Heading ref={title} tabIndex={-1} size="5" as="h2" mt="1" style={{ outline: 'none' }}>
             {labels[step]}
           </Heading>
           {description && (
@@ -237,7 +261,12 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
                     <Heading size="3" as="h3">
                       {category.label}
                     </Heading>
-                    <Button type="button" variant="ghost" onClick={() => goTo(index)}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => goTo(index)}
+                      aria-label={`Edit ${category.label}`}
+                    >
                       Edit
                     </Button>
                   </Flex>
@@ -380,7 +409,8 @@ function StepLink({
               <Flex
                 align="center"
                 justify="center"
-                aria-label={`${errorCount} to fix`}
+                aria-hidden
+                data-testid="step-error-count"
                 style={{
                   minWidth: 20,
                   height: 20,

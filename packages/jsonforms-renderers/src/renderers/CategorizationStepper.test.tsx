@@ -119,7 +119,7 @@ describe('Categorization stepper', () => {
     fireEvent.click(continueButton())
     fireEvent.click(continueButton())
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Parties' }))
 
     expect(shownInput('Exporter name')).toBe(true)
     expect(shownInput('Vessel name')).toBe(false)
@@ -163,7 +163,9 @@ describe('Categorization stepper', () => {
 
     fireEvent.click(continueButton())
 
-    expect(screen.getByLabelText('1 to fix')).toBeTruthy()
+    const nav = screen.getByRole('navigation', { name: 'Form steps' })
+    expect(nav.textContent).toContain('1 to fix')
+    expect(screen.getByTestId('step-error-count').textContent).toBe('1')
   })
 
   it("shows the host's buttons in the footer on every step", () => {
@@ -188,6 +190,25 @@ describe('Categorization stepper', () => {
     fireEvent.click(continueButton())
 
     expect(scroll).toHaveBeenCalledOnce()
+  })
+
+  it('moves focus to the new step title on Continue', () => {
+    render(<Form uischema={stepper()} data={{ exporter: 'A' }} />)
+
+    fireEvent.click(continueButton())
+
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Transport' }))
+  })
+
+  it('opens the answered, complete steps of a saved draft in the step list', () => {
+    render(<Form uischema={stepper()} data={{ exporter: 'A' }} />)
+    const step = (name: string) =>
+      Array.from(screen.getByRole('navigation', { name: 'Form steps' }).querySelectorAll('button')).find((b) =>
+        b.textContent?.includes(name),
+      )
+
+    expect(step('Transport')?.disabled).toBe(false)
+    expect(step('Review')?.disabled).toBe(true)
   })
 
   it('shows every step on one page when the form is read-only', () => {
