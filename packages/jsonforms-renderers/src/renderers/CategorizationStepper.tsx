@@ -15,7 +15,7 @@ import {
   visibleControls,
 } from '../utils/steps'
 
-const REVIEW_LABEL = 'Review and submit'
+const REVIEW_LABEL = 'Review and Submit'
 
 interface Props {
   uischema: Categorization
@@ -29,7 +29,7 @@ interface Props {
 /**
  * A Categorization shown one Category at a time: a step list at the side
  * ("Step 2 of 5" on narrow screens), Back/Continue at the bottom, and a final
- * read-only "Review and submit" step.
+ * read-only "Review and Submit" step.
  *
  * Continue checks only the step on screen, and lists what is still missing
  * there instead of moving on. Every step stays mounted and the others are

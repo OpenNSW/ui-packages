@@ -15,7 +15,7 @@ A `Categorization` renders as tabs by default. With `options.variant: "stepper"`
 
 - A step list at the side notes each step: **Done**, "2 items added", "4 fields", **Optional**, or a red count of what is left to fix. On narrow screens, "Step 2 of 5" sits above the step instead.
 - **Continue** checks only the step on screen. If a control there has an error, or a required value that is present but empty (`""`, `[]`), the step does not change and a summary links to those fields.
-- The last step, **Review and submit**, shows every step read-only, each with an **Edit** button.
+- The last step, **Review and Submit**, shows every step read-only, each with an **Edit** button.
 - A Category's `options.description` shows under its title. A Category hidden by its `rule` drops out of the steps.
 - Every step stays mounted while off screen, so controls that write from effects (computed fields, spreadsheet sources, clearing a hidden field) behave as on a single-page form.
 - A read-only form (`<JsonForms readonly>`) shows every step on one page, without the step list or buttons.

@@ -12,7 +12,7 @@ export interface FormStepState {
   step: number
   /** Number of form steps, not counting the review step. */
   count: number
-  /** True on the final "Review and submit" step. */
+  /** True on the final "Review and Submit" step. */
   last: boolean
 }
 
