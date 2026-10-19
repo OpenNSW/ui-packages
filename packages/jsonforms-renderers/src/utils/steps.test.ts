@@ -76,14 +76,14 @@ describe('stepSummary', () => {
   const ctl = (name: string): ControlElement => ({ type: 'Control', scope: `#/properties/${name}` })
 
   it('counts the rows of a list on the step', () => {
-    expect(stepSummary([ctl('rows')], { rows: [{}, {}] }, schema)).toBe('2 items added')
-    expect(stepSummary([ctl('rows')], { rows: [{}] }, schema)).toBe('1 item added')
+    expect(stepSummary([ctl('rows')], { rows: [{}, {}] }, schema)).toEqual({ kind: 'items', count: 2 })
+    expect(stepSummary([ctl('rows')], { rows: [{}] }, schema)).toEqual({ kind: 'items', count: 1 })
   })
 
   it('counts fields, or says the step is optional', () => {
-    expect(stepSummary([ctl('a'), ctl('b')], {}, schema)).toBe('2 fields')
-    expect(stepSummary([ctl('a')], {}, schema)).toBe('1 field')
-    expect(stepSummary([ctl('b'), ctl('rows')], {}, schema)).toBe('Optional')
+    expect(stepSummary([ctl('a'), ctl('b')], {}, schema)).toEqual({ kind: 'fields', count: 2 })
+    expect(stepSummary([ctl('a')], {}, schema)).toEqual({ kind: 'fields', count: 1 })
+    expect(stepSummary([ctl('b'), ctl('rows')], {}, schema)).toEqual({ kind: 'optional' })
   })
 })
 
@@ -103,7 +103,7 @@ describe('a Categorization below the data root', () => {
   it('reads its answers and required fields at its own path', () => {
     expect(hasAnswers([qty], { rows: [{}, { qty: '2' }] }, 'rows.1')).toBe(true)
     expect(hasAnswers([qty], { rows: [{}, { qty: '2' }] }, 'rows.0')).toBe(false)
-    expect(stepSummary([qty], {}, schema, 'rows.0')).toBe('1 field')
+    expect(stepSummary([qty], {}, schema, 'rows.0')).toEqual({ kind: 'fields', count: 1 })
   })
 })
 
@@ -127,6 +127,6 @@ describe('isRequiredAt', () => {
 
   it('makes a step of nested required fields not optional', () => {
     const b: ControlElement = { type: 'Control', scope: '#/properties/a/properties/b' }
-    expect(stepSummary([b], {}, schema)).toBe('1 field')
+    expect(stepSummary([b], {}, schema)).toEqual({ kind: 'fields', count: 1 })
   })
 })

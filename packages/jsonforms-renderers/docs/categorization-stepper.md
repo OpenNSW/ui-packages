@@ -22,7 +22,6 @@ A `Categorization` renders as tabs by default. With `options.variant: "stepper"`
 - A form opened with saved answers (a draft) has its answered, complete steps open in the step list.
 - On a step change, the page scrolls to the stepper and focus moves to the step's title. If the app has a fixed header, set `--form-steps-offset` to its height plus a gap (default `16px`); the step list sticks that far from the top too.
 - The **Complete these fields** links focus a field through its input `id` (its data path). Text, number, date, select and checkbox controls set one; radio, list and file controls don't, so their links do nothing.
-- Wording is in English; the package has no translation layer yet.
 
 ## The host's part
 
@@ -45,3 +44,11 @@ const [onLastStep, setOnLastStep] = useState(() => !isStepperUiSchema(uiSchema))
 - `onStepChange({ step, count, last })` fires on mount and on every step change; `last` is true on the review step. Offer the submit button only then.
 - `onInvalidStep()` fires when Continue is refused. A host that renders with `validationMode="ValidateAndHide"` can switch to `ValidateAndShow` here, so the fields turn red too.
 - `actions` is shown in the stepper's footer, between **Back** and **Continue**, so the form has one row of buttons. Pass **Save as draft** (on every step) and submit (on the last) here.
+
+## Translation
+
+Everything the stepper writes goes through the form's JSON Forms translator (`<JsonForms i18n={{ translate }}>`); without one, it is English.
+
+- **Its own wording** is looked up as `stepper.<key>`, with the English text as the default. The keys and their English are exported as `STEPPER_MESSAGES` (for example `stepper.continue` → "Continue", `stepper.stepOf` → "Step {step} of {total}"). `{name}` placeholders are filled in after translation, so a translation keeps them.
+- **Step names** are translated as JSON Forms translates any layout's label: under `<i18n>.label` when the Category has an `i18n` key, otherwise under the label text itself. A step's description uses `<i18n>.description` the same way.
+- **Field names** in the summaries use the same key as the control's own label, so they match what the field shows.

@@ -1,4 +1,13 @@
-import { type Categorization, type Category, type JsonSchema, isVisible } from '@jsonforms/core'
+import {
+  type Categorization,
+  type Category,
+  type JsonSchema,
+  type Translator,
+  defaultTranslator,
+  deriveLabelForUISchemaElement,
+  getI18nKeyPrefixBySchema,
+  isVisible,
+} from '@jsonforms/core'
 import { JsonFormsDispatch, useJsonForms } from '@jsonforms/react'
 import type { JsonFormsCellRendererRegistryEntry, JsonFormsRendererRegistryEntry } from '@jsonforms/core'
 import { Box, Button, Callout, Flex, Heading, Progress, Text } from '@radix-ui/themes'
@@ -15,8 +24,7 @@ import {
   stepSummary,
   visibleControls,
 } from '../utils/steps'
-
-const REVIEW_LABEL = 'Review and Submit'
+import { type StepperMessage, stepperText } from '../utils/stepperText'
 
 // How far below the top of the viewport the step list sticks, and where a new
 // step scrolls to: set --form-steps-offset to clear a fixed app header.
@@ -59,6 +67,8 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
   const data: unknown = core?.data
   const ajv = core?.ajv
   const config: unknown = ctx.config
+  const translate = ctx.i18n?.translate
+  const t = (key: StepperMessage, values?: Record<string, string | number>) => stepperText(translate, key, values)
   const categories = useVisibleCategories(uischema, path)
   const count = categories.length
   // The review step comes after the last Category.
@@ -72,11 +82,11 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
   const problems: StepProblem[][] = useMemo(
     () =>
       categories.map((c) =>
-        stepProblems(visibleControls(c, data, ajv, config, path), errors, emptyPaths, rootSchema, path),
+        stepProblems(visibleControls(c, data, ajv, config, path), errors, emptyPaths, rootSchema, path, translate),
       ),
     // categories is rebuilt every render; its content follows uischema, data and rules.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [uischema, path, data, ajv, config, errors, emptyPaths, rootSchema],
+    [uischema, path, data, ajv, config, errors, emptyPaths, rootSchema, translate],
   )
 
   const [current, setCurrent] = useState(0)
@@ -131,7 +141,7 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
     setReached((r) => Math.max(r, to))
   }
 
-  const labels = [...categories.map((c) => c.label), REVIEW_LABEL]
+  const labels = [...categories.map((c) => categoryLabel(c, translate)), t('review')]
   const totalSteps = labels.length
   const stepStatus = (index: number): StepStatus => {
     if (index === step) return 'current'
@@ -144,19 +154,23 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
   const toFix = (index: number, status: StepStatus): number =>
     status === 'error' || (status === 'current' && attempted.has(index)) ? (problems[index]?.length ?? 0) : 0
   const stepNote = (index: number, status: StepStatus): string => {
-    if (index === lastStep) return 'Check and submit'
-    if (toFix(index, status) > 0) return `${toFix(index, status)} to fix`
-    if (status === 'done') return 'Done'
-    return stepSummary(visibleControls(categories[index], data, ajv, config, path), data, rootSchema, path)
+    if (index === lastStep) return t('noteReview')
+    if (toFix(index, status) > 0) return t('noteToFix', { count: toFix(index, status) })
+    if (status === 'done') return t('noteDone')
+    const summary = stepSummary(visibleControls(categories[index], data, ajv, config, path), data, rootSchema, path)
+    if (summary.kind === 'optional') return t('noteOptional')
+    const one = summary.count === 1
+    if (summary.kind === 'items') return t(one ? 'noteItem' : 'noteItems', { count: summary.count })
+    return t(one ? 'noteField' : 'noteFields', { count: summary.count })
   }
-  const description = onReview ? undefined : (categories[step]?.options?.description as string | undefined)
+  const description = onReview ? undefined : categoryDescription(categories[step], translate)
   // On the review step: each step still incomplete, linking back to it.
-  const incomplete = categories
-    .map((category, index) => ({ category, index, p: problems[index] }))
+  const incomplete = problems
+    .map((p, index) => ({ index, p }))
     .filter(({ p }) => p.length)
-    .map(({ category, index, p }) => ({
+    .map(({ index, p }) => ({
       key: String(index),
-      label: `${category.label}: ${p.map((x) => x.label).join(', ')}`,
+      label: `${labels[index]}: ${p.map((x) => x.label).join(', ')}`,
       onClick: () => {
         setAttempted((prev) => new Set(prev).add(index))
         goTo(index)
@@ -178,7 +192,7 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
           overflowY: 'auto',
         }}
       >
-        <nav aria-label="Form steps">
+        <nav aria-label={t('navLabel')}>
           <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {labels.map((label, index) => {
               const status = stepStatus(index)
@@ -223,7 +237,7 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
             color="gray"
             style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}
           >
-            Step {step + 1} of {totalSteps}
+            {t('stepOf', { step: step + 1, total: totalSteps })}
           </Text>
           <Heading ref={title} tabIndex={-1} size="5" as="h2" mt="1" style={{ outline: 'none' }}>
             {labels[step]}
@@ -233,16 +247,16 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
               {description}
             </Text>
           )}
-          <Progress value={((step + 1) / totalSteps) * 100} size="1" mt="4" aria-label="Progress through the form" />
+          <Progress value={((step + 1) / totalSteps) * 100} size="1" mt="4" aria-label={t('progressLabel')} />
         </Box>
 
         <Box px={{ initial: '4', sm: '6' }} pb="5" data-form-review={onReview ? '' : undefined}>
           {onReview &&
             (incomplete.length ? (
-              <ProblemCallout title="Some steps are not complete yet:" items={incomplete} />
+              <ProblemCallout title={t('incompleteSteps')} items={incomplete} />
             ) : (
               <Text as="p" size="2" color="gray" mb="5">
-                Check your answers below, then submit.
+                {t('reviewHint')}
               </Text>
             ))}
 
@@ -259,21 +273,21 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
                     style={{ borderBottom: '1px solid var(--gray-a4)' }}
                   >
                     <Heading size="3" as="h3">
-                      {category.label}
+                      {labels[index]}
                     </Heading>
                     <Button
                       type="button"
                       variant="ghost"
                       onClick={() => goTo(index)}
-                      aria-label={`Edit ${category.label}`}
+                      aria-label={t('editStep', { step: labels[index] })}
                     >
-                      Edit
+                      {t('edit')}
                     </Button>
                   </Flex>
                 )}
                 {!onReview && attempted.has(index) && problems[index].length > 0 && (
                   <ProblemCallout
-                    title="Complete these fields to continue:"
+                    title={t('missingFields')}
                     items={problems[index].map((p) => ({
                       key: p.path,
                       label: p.label,
@@ -312,14 +326,14 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
           {step > 0 && (
             <Button type="button" variant="ghost" color="gray" size="3" onClick={() => setCurrent(step - 1)}>
               <ChevronLeftIcon />
-              Back
+              {t('back')}
             </Button>
           )}
           <Box flexGrow="1" />
           {host?.actions}
           {step < lastStep && (
             <Button type="button" size="3" onClick={next}>
-              Continue
+              {t('continue')}
               <ChevronRightIcon />
             </Button>
           )}
@@ -478,6 +492,7 @@ function ProblemCallout({
  * disabled inputs.
  */
 const CategorizationSections = ({ uischema, schema, path, renderers, cells }: Props) => {
+  const translate = useJsonForms().i18n?.translate
   const host = useFormSteps()
   const categories = useVisibleCategories(uischema, path)
   const count = categories.length
@@ -492,7 +507,7 @@ const CategorizationSections = ({ uischema, schema, path, renderers, cells }: Pr
       {categories.map((category, index) => (
         <Box key={`${path}-${index}`}>
           <Heading size="3" as="h3" mb="3">
-            {category.label}
+            {categoryLabel(category, translate)}
           </Heading>
           <CategoryFields
             category={category}
@@ -540,4 +555,17 @@ function CategoryFields({
       ))}
     </Flex>
   )
+}
+
+/** A Category's label, translated as JSON Forms translates a layout's label. */
+function categoryLabel(category: Category, translate: Translator | undefined): string {
+  return deriveLabelForUISchemaElement(category, translate ?? defaultTranslator) ?? category.label
+}
+
+/** A Category's `options.description`, translated under the same key prefix as its label. */
+function categoryDescription(category: Category | undefined, translate: Translator | undefined): string | undefined {
+  const description = category?.options?.description as string | undefined
+  if (!category || !description) return undefined
+  const prefix = getI18nKeyPrefixBySchema(undefined, category)
+  return (translate ?? defaultTranslator)(prefix ? `${prefix}.description` : description, description)
 }

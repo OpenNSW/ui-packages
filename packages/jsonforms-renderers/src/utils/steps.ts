@@ -4,8 +4,11 @@ import {
   type ControlElement,
   type JsonFormsCore,
   type JsonSchema,
+  type Translator,
   type UISchemaElement,
   composePaths,
+  defaultTranslator,
+  getI18nKey,
   isVisible,
   Resolve,
   toDataPath,
@@ -107,14 +110,25 @@ function within(path: string, base: string): boolean {
   return path === base || path.startsWith(`${base}.`)
 }
 
-/** The label a control shows, for naming it in a step's error summary. */
-export function controlLabel(control: ControlElement, rootSchema: JsonSchema): string {
-  if (typeof control.label === 'string' && control.label) return control.label
+/**
+ * The label a control shows, for naming it in a step's error summary: the
+ * same text and i18n key JSON Forms gives the control itself. `path` is the
+ * control's full data path.
+ */
+export function controlLabel(
+  control: ControlElement,
+  rootSchema: JsonSchema,
+  path = toDataPath(control.scope),
+  translate: Translator = defaultTranslator,
+): string {
   const resolved = Resolve.schema(rootSchema, control.scope, rootSchema)
-  if (resolved?.title) return resolved.title
   const last = control.scope.split('/').pop() ?? ''
   const words = last.replace(/[_-]+/g, ' ').trim()
-  return words.charAt(0).toUpperCase() + words.slice(1)
+  const label =
+    (typeof control.label === 'string' && control.label) ||
+    resolved?.title ||
+    words.charAt(0).toUpperCase() + words.slice(1)
+  return translate(getI18nKey(resolved, control, path, 'label'), label)
 }
 
 /**
@@ -128,25 +142,28 @@ export function stepProblems(
   emptyPaths: string[],
   rootSchema: JsonSchema,
   path = '',
+  translate: Translator = defaultTranslator,
 ): StepProblem[] {
   const failing = [...errors.map(errorDataPath), ...emptyPaths]
   return controls
     .map((control) => ({ control, path: controlPath(control, path) }))
     .filter(({ path }) => failing.some((f) => within(f, path)))
-    .map(({ control, path }) => ({ path, label: controlLabel(control, rootSchema) }))
+    .map(({ control, path }) => ({ path, label: controlLabel(control, rootSchema, path, translate) }))
 }
 
+/** What a step not yet reached holds, for the note under it in the step list. */
+export type StepSummary = { kind: 'items' | 'fields'; count: number } | { kind: 'optional' }
+
 /**
- * A short note on what a step not yet reached holds, for the step list:
- * "2 items added" once a list on it has rows, otherwise "4 fields", or
- * "Optional" when none of its fields is required.
+ * The rows of a list on the step once it has some ("2 items added"),
+ * otherwise its number of fields, or optional when none of them is required.
  */
-export function stepSummary(controls: ControlElement[], data: unknown, rootSchema: JsonSchema, path = ''): string {
+export function stepSummary(controls: ControlElement[], data: unknown, rootSchema: JsonSchema, path = ''): StepSummary {
   const paths = controls.map((c) => controlPath(c, path))
   const rows = paths.map((p) => valueAt(data, p)).find((v) => Array.isArray(v) && v.length > 0) as unknown[] | undefined
-  if (rows) return rows.length === 1 ? '1 item added' : `${rows.length} items added`
-  if (!paths.some((p) => isRequiredAt(rootSchema, p))) return 'Optional'
-  return controls.length === 1 ? '1 field' : `${controls.length} fields`
+  if (rows) return { kind: 'items', count: rows.length }
+  if (!paths.some((p) => isRequiredAt(rootSchema, p))) return { kind: 'optional' }
+  return { kind: 'fields', count: controls.length }
 }
 
 /** True when any of a step's controls holds a value, as it does in a saved draft. */

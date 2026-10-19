@@ -211,6 +211,39 @@ describe('Categorization stepper', () => {
     expect(step('Review')?.disabled).toBe(true)
   })
 
+  it("translates its wording, step names and field names through the form's i18n", () => {
+    const sinhala: Record<string, string> = {
+      'stepper.continue': 'ඉදිරියට',
+      'stepper.stepOf': 'පියවර {step} / {total}',
+      'stepper.review': 'සමාලෝචනය',
+      'stepper.missingFields': 'මෙම ක්ෂේත්ර පුරවන්න:',
+      'parties.label': 'පාර්ශව',
+      'exporter.label': 'අපනයනකරු',
+    }
+    const uischema = stepper()
+    ;(uischema.elements[0] as { i18n?: string }).i18n = 'parties'
+    render(
+      <Theme>
+        <JsonForms
+          schema={schema}
+          uischema={uischema as UISchemaElement}
+          data={{}}
+          renderers={radixRenderers}
+          i18n={{ translate: (id: string, fallback?: string) => sinhala[id] ?? fallback }}
+        />
+      </Theme>,
+    )
+
+    expect(screen.getByText('පියවර 1 / 3')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'පාර්ශව' })).toBeTruthy()
+    expect(screen.getByRole('navigation', { name: 'Form steps' }).textContent).toContain('සමාලෝචනය')
+
+    fireEvent.click(screen.getByRole('button', { name: 'ඉදිරියට' }))
+
+    expect(screen.getByText('මෙම ක්ෂේත්ර පුරවන්න:')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'අපනයනකරු' })).toBeTruthy()
+  })
+
   it('shows every step on one page when the form is read-only', () => {
     const steps: FormStepState[] = []
     render(
