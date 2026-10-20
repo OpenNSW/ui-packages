@@ -19,7 +19,6 @@ export const STEPPER_MESSAGES = {
   noteItems: '{count} items added',
   noteField: '{count} field',
   noteFields: '{count} fields',
-  noteOptional: 'Optional',
   noteReview: 'Check and submit',
   missingFields: 'Complete these fields to continue:',
   incompleteSteps: 'Some steps are not complete yet:',

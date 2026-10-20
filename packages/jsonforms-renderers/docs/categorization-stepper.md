@@ -13,8 +13,8 @@ A `Categorization` renders as tabs by default. With `options.variant: "stepper"`
 }
 ```
 
-- A step list at the side notes each step: **Done**, "2 items added", "4 fields", **Optional**, or a red count of what is left to fix. On narrow screens, "Step 2 of 5" sits above the step instead.
-- **Continue** checks only the step on screen. If a control there has an error, or a required value that is present but empty (`""`, `[]`), the step does not change and a summary links to those fields.
+- A step list at the side notes each step: **Done**, "2 items added", "4 fields", or a red count of what is left to fix. On narrow screens, "Step 2 of 5" sits above the step instead.
+- **Continue** looks only at the step on screen. If the form's errors (JSON Forms' own, whatever the validation mode shows, plus the host's `additionalErrors`) point at a control there, the step does not change and a summary links to those fields. The stepper adds no checks of its own: a rule such as "a required field may not be blank" belongs in the schema, the controls or the host's `additionalErrors`.
 - The last step, **Review and Submit**, shows every step read-only, each with an **Edit** button. It and the read-only form carry `data-form-review`, so the host can style read-only values as plain answers.
 - A Category's `options.description` shows under its title. A Category hidden by its `rule` drops out of the steps.
 - Every step stays mounted while off screen, so controls that write from effects (computed fields, spreadsheet sources, clearing a hidden field) behave as on a single-page form.

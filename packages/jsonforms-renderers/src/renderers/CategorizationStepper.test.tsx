@@ -87,14 +87,6 @@ describe('Categorization stepper', () => {
     expect(onInvalidStep).toHaveBeenCalledOnce()
   })
 
-  it('treats a required field typed into and cleared as missing', () => {
-    render(<Form uischema={stepper()} data={{ exporter: '  ' }} />)
-
-    fireEvent.click(continueButton())
-
-    expect(screen.getByRole('button', { name: 'Exporter name' })).toBeTruthy()
-  })
-
   it('moves on once the step is complete, and ends on a review step', () => {
     const steps: FormStepState[] = []
     render(<Form uischema={stepper()} data={{ exporter: 'A', vessel: 'V' }} onStepChange={(s) => steps.push(s)} />)

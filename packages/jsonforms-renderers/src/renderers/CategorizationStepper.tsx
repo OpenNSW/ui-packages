@@ -15,10 +15,9 @@ import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, ExclamationTriangleIcon }
 import { type CSSProperties, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useFormSteps } from '../contexts/formSteps'
 import {
-  type StepError,
+  type FormError,
   type StepProblem,
   categoriesOf,
-  emptyRequiredPaths,
   hasAnswers,
   stepProblems,
   stepSummary,
@@ -75,19 +74,20 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
   // The review step comes after the last Category.
   const lastStep = count
 
-  const errors = useMemo(
-    () => [...(core?.errors ?? []), ...(core?.additionalErrors ?? [])] as StepError[],
+  // The form's own errors, whatever the validation mode shows: JSON Forms'
+  // and any the host added. The stepper adds no checks of its own.
+  const errors = useMemo<FormError[]>(
+    () => [...(core?.errors ?? []), ...(core?.additionalErrors ?? [])],
     [core?.errors, core?.additionalErrors],
   )
-  const emptyPaths = useMemo(() => emptyRequiredPaths(rootSchema, data), [rootSchema, data])
   const problems: StepProblem[][] = useMemo(
     () =>
       categories.map((c) =>
-        stepProblems(visibleControls(c, data, ajv, config, path), errors, emptyPaths, rootSchema, path, translate),
+        stepProblems(visibleControls(c, data, ajv, config, path), errors, rootSchema, path, translate),
       ),
     // categories is rebuilt every render; its content follows uischema, data and rules.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [uischema, path, data, ajv, config, errors, emptyPaths, rootSchema, translate],
+    [uischema, path, data, ajv, config, errors, rootSchema, translate],
   )
 
   const [current, setCurrent] = useState(0)
@@ -158,8 +158,7 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
     if (index === lastStep) return t('noteReview')
     if (toFix(index, status) > 0) return t('noteToFix', { count: toFix(index, status) })
     if (status === 'done') return t('noteDone')
-    const summary = stepSummary(visibleControls(categories[index], data, ajv, config, path), data, rootSchema, path)
-    if (summary.kind === 'optional') return t('noteOptional')
+    const summary = stepSummary(visibleControls(categories[index], data, ajv, config, path), data, path)
     const one = summary.count === 1
     if (summary.kind === 'items') return t(one ? 'noteItem' : 'noteItems', { count: summary.count })
     return t(one ? 'noteField' : 'noteFields', { count: summary.count })
