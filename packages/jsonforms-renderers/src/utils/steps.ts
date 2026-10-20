@@ -99,6 +99,7 @@ export function emptyRequiredPaths(schema: JsonSchema | undefined, data: unknown
   return out
 }
 
+/** True for a value a trader has cleared: null, a blank string or an empty list. */
 function isEmpty(value: unknown): boolean {
   if (value === null) return true
   if (typeof value === 'string') return value.trim() === ''
@@ -174,6 +175,7 @@ export function hasAnswers(controls: ControlElement[], data: unknown, path = '')
   })
 }
 
+/** The value at a dotted data path, or undefined. */
 function valueAt(data: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((cur, key) => {
     if (cur == null || typeof cur !== 'object') return undefined

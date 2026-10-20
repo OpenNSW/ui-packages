@@ -136,6 +136,7 @@ export interface CategorizationLayoutProps extends LayoutProps {
   data: any
 }
 
+/** Renders a Categorization as tabs, or as a stepper with `options.variant: "stepper"`. */
 export const CategorizationLayoutRenderer = (props: CategorizationLayoutProps) => {
   if (props.visible === false) {
     return null
@@ -157,6 +158,7 @@ export const CategorizationLayoutRenderer = (props: CategorizationLayoutProps) =
   return <CategorizationTabs {...props} />
 }
 
+/** A Categorization as tabs, one per Category. */
 const CategorizationTabs = ({ uischema, schema, path, renderers, cells, enabled }: CategorizationLayoutProps) => {
   const categorization = uischema as CategorizationInterface
   const categories = categorization.elements.filter((e): e is CategoryInterface => e.type === 'Category')

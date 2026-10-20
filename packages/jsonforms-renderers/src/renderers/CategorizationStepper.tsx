@@ -59,6 +59,7 @@ interface Props {
 export const CategorizationStepper = (props: Props) =>
   props.enabled ? <EditableStepper {...props} /> : <CategorizationSections {...props} />
 
+/** The stepper a trader fills in: step list, current step, footer. */
 const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: Props) => {
   const ctx = useJsonForms()
   const core = ctx.core
@@ -353,6 +354,7 @@ const panelStyle = {
   boxShadow: 'var(--shadow-2)',
 } as const
 
+/** One step in the step list: its number or tick, label, note and error count. */
 function StepLink({
   index,
   label,
@@ -459,6 +461,7 @@ function focusField(path: string) {
   el?.focus()
 }
 
+/** A red summary of what is missing, each item a link that goes to it. */
 function ProblemCallout({
   title,
   items,
@@ -532,6 +535,7 @@ function useVisibleCategories(uischema: Categorization, path: string): Category[
   return categoriesOf(uischema).filter((c) => !c.rule || !ajv || isVisible(c, data, path, ajv, config))
 }
 
+/** A Category's elements, one under another. */
 function CategoryFields({
   category,
   schema,
