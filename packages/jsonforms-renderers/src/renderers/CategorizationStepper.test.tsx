@@ -274,4 +274,42 @@ describe('Categorization stepper', () => {
     expect(screen.getAllByRole('tab')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
   })
+
+  // The step checks belong to the stepper alone: any other layout renders as
+  // before, with no step UI, and never calls the host's step callbacks.
+  it.each([
+    ['a VerticalLayout', { type: 'VerticalLayout', elements: [control('exporter'), control('vessel')] }],
+    ['a Group', { type: 'Group', label: 'Parties', elements: [control('exporter'), control('vessel')] }],
+    ['a Categorization without the stepper variant', { ...stepper(), options: {} }],
+  ])('leaves %s alone', (_name, uischema) => {
+    const onStepChange = vi.fn()
+    const onInvalidStep = vi.fn()
+    render(<Form uischema={uischema} data={{}} onStepChange={onStepChange} onInvalidStep={onInvalidStep} />)
+
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    expect(screen.queryByRole('navigation', { name: 'Form steps' })).toBeNull()
+    expect(screen.queryByText('Complete these fields to continue:')).toBeNull()
+    expect(onStepChange).not.toHaveBeenCalled()
+    expect(onInvalidStep).not.toHaveBeenCalled()
+  })
+
+  it("refusing Continue does not change the form's data or errors", () => {
+    const changes: unknown[] = []
+    render(
+      <Theme>
+        <JsonForms
+          schema={schema}
+          uischema={stepper() as UISchemaElement}
+          data={{}}
+          renderers={radixRenderers}
+          onChange={(state) => changes.push(state)}
+        />
+      </Theme>,
+    )
+    const before = changes.length
+
+    fireEvent.click(continueButton())
+
+    expect(changes.length).toBe(before)
+  })
 })
