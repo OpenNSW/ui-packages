@@ -28,9 +28,9 @@ interface FileEntry {
   blobUrl?: string
 }
 
-// What a saved file is, as getDownloadUrl reported it. A saved form's value is
-// an opaque reference, so nothing about the file can be read from it.
-interface SavedFile {
+// Where a file is fetched from, and what it is when getDownloadUrl says so.
+interface ResolvedFile {
+  url?: string
   extension?: string
   type?: string
 }
@@ -111,48 +111,27 @@ const FileControl = ({
   const [error, setError] = useState<string | null>(null)
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
   const [fileEntries, setFileEntries] = useState<Record<string, FileEntry>>({})
-  const [savedFiles, setSavedFiles] = useState<Record<string, SavedFile>>({})
-  const describing = useRef<Set<string>>(new Set())
   const activeBlobs = useRef<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
 
   const currentKeys = normalizeData(data)
   const atLimit = currentKeys.length >= maxFiles
 
-  const getDownloadUrl = uploadContext?.getDownloadUrl
-
-  // A file uploaded here is described by its local entry; a saved one only by
-  // what getDownloadUrl reports, asked once per file. Until it answers, the
-  // file is undescribed: no extension in its name and no View.
-  const undescribed = currentKeys.filter((key) => !fileEntries[key] && !savedFiles[key])
-  const undescribedKeys = undescribed.join('\n')
-
-  useEffect(() => {
-    if (!getDownloadUrl || !undescribedKeys) return
-    for (const key of undescribedKeys.split('\n')) {
-      if (describing.current.has(key)) continue
-      describing.current.add(key)
-      const describe = (file: SavedFile) => setSavedFiles((prev) => ({ ...prev, [key]: file }))
-      getDownloadUrl(key).then(
-        (result) => describe({ extension: result?.extension, type: result?.mimeType }),
-        () => describe({}),
-      )
-    }
-  }, [getDownloadUrl, undescribedKeys])
-
-  // The file's original name and type, or its extension and type when saved.
-  const describeFile = (key: string): { name?: string; extension?: string; type?: string } => {
-    const entry = fileEntries[key]
-    if (entry) return { name: entry.name, type: entry.type }
-    return savedFiles[key] ?? {}
-  }
-
-  const resolveFileUrl = async (key: string): Promise<string | undefined> => {
+  // A file uploaded here is its local blob. A saved one is an opaque reference,
+  // so getDownloadUrl is asked only when it is viewed or downloaded, and its
+  // answer is the only place its extension and type come from.
+  const resolveFile = async (key: string): Promise<ResolvedFile> => {
     const blobUrl = fileEntries[key]?.blobUrl
-    if (blobUrl) return blobUrl
-    const result = await uploadContext?.getDownloadUrl?.(key)
-    return result?.url
+    if (blobUrl) return { url: blobUrl }
+    const getDownloadUrl = uploadContext?.getDownloadUrl
+    if (!getDownloadUrl) return {}
+    const result = await getDownloadUrl(key)
+    return { url: result?.url, extension: result?.extension, type: result?.mimeType }
   }
+
+  // The name a file downloads as, once its extension is known.
+  const nameFor = (key: string, index: number, resolved: ResolvedFile) =>
+    downloadName(fileNameTemplate, { index }, { name: fileEntries[key]?.name, extension: resolved.extension })
 
   const setRowError = (key: string, message: string) => {
     setRowErrors((prev) => ({ ...prev, [key]: message }))
@@ -268,7 +247,7 @@ const FileControl = ({
     handleChange(path, isMulti ? (newKeys.length > 0 ? newKeys : undefined) : newKeys[0])
   }
 
-  const onView = async (e: React.MouseEvent<HTMLButtonElement>, key: string) => {
+  const onView = async (e: React.MouseEvent<HTMLButtonElement>, key: string, index: number) => {
     e.preventDefault()
     clearRowError(key)
 
@@ -281,27 +260,35 @@ const FileControl = ({
     const newWindow = window.open('', '_blank')
     if (!newWindow) return
     try {
-      const url = await resolveFileUrl(key)
-      if (url) newWindow.location.href = url
-      else {
+      const resolved = await resolveFile(key)
+      if (!resolved.url) {
         newWindow.close()
         setRowError(key, 'Unable to open file.')
+        return
       }
+      if (isBrowserViewable(resolved)) {
+        newWindow.location.href = resolved.url
+        return
+      }
+      // A type the browser cannot show would only download from the tab, and
+      // under the reference's name, so download it here under its own.
+      newWindow.close()
+      await onDownload(key, index, resolved)
     } catch {
       newWindow.close()
       setRowError(key, 'Unable to open file.')
     }
   }
 
-  const onDownload = async (key: string, name: string) => {
+  const onDownload = async (key: string, index: number, known?: ResolvedFile) => {
     clearRowError(key)
     try {
-      const url = await resolveFileUrl(key)
-      if (!url) {
+      const resolved = known ?? (await resolveFile(key))
+      if (!resolved.url) {
         setRowError(key, 'Unable to download file.')
         return
       }
-      await downloadFromUrl(url, name)
+      await downloadFromUrl(resolved.url, nameFor(key, index, resolved))
     } catch {
       setRowError(key, 'Unable to download file.')
     }
@@ -349,14 +336,14 @@ const FileControl = ({
       {/* ── Uploaded file rows ── */}
       {currentKeys.map((key, position) => {
         const index = position + 1
-        const file = describeFile(key)
-        const originalName = file.name
-        const name = downloadName(fileNameTemplate, { index }, file)
-        const labelText = fileNameTemplate ? name : (originalName ?? UNNAMED_FILE)
+        const entry = fileEntries[key]
+        const originalName = entry?.name
+        // A saved file's extension is not known until it is fetched, so its
+        // label has none and it is offered View.
+        const labelText = fileNameTemplate ? nameFor(key, index, {}) : (originalName ?? UNNAMED_FILE)
         const showSecondary = Boolean(fileNameTemplate && originalName)
         const rowError = rowErrors[key]
-        const pending = Boolean(getDownloadUrl) && undescribed.includes(key)
-        const canView = !pending && isBrowserViewable(file)
+        const canView = isBrowserViewable({ name: originalName, type: entry?.type })
 
         return (
           <Card key={key} size="2" variant="surface" mb="2">
@@ -402,7 +389,7 @@ const FileControl = ({
               </Box>
               <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
                 {canView && (
-                  <Button variant="soft" color="blue" size="1" onClick={(e) => void onView(e, key)}>
+                  <Button variant="soft" color="blue" size="1" onClick={(e) => void onView(e, key, index)}>
                     View
                   </Button>
                 )}
@@ -411,7 +398,7 @@ const FileControl = ({
                     variant="ghost"
                     color="gray"
                     aria-label="Download"
-                    onClick={() => void onDownload(key, name)}
+                    onClick={() => void onDownload(key, index)}
                   >
                     <DownloadIcon />
                   </IconButton>

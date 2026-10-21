@@ -62,12 +62,12 @@ Without `fileName`, the row label and Download use the original upload name when
 
 Each uploaded row has:
 
-- **View** — only when the file matches the browser-viewable allowlist (common images, PDF, HTML, plain text). Opens in a new tab (`window.open`). Types such as `.xlsx` do not show View.
+- **View** — for a just-uploaded file, only when it matches the browser-viewable allowlist (common images, PDF, HTML, plain text); types such as `.xlsx` do not show View. Opens in a new tab (`window.open`). A saved file always shows View (see below).
 - **Download** — on every row. Fetches the file and saves it under the name from [File name](#file-name).
 
 For a just-uploaded file, both actions use the local blob URL. For a saved form that only has a reference, they call `UploadProvider.getDownloadUrl`.
 
-`getDownloadUrl` should also return the file's `extension` (with its dot, e.g. `.xlsx`) and `mimeType` when it knows them. The control asks it once for each saved file it shows, and uses them to name the download and to decide whether to offer View. Until it answers, the row's name has no extension and View is hidden. When it reports neither, the row has no extension and View is offered.
+`getDownloadUrl` should also return the file's `extension` (with its dot, e.g. `.xlsx`) and `mimeType` when it knows them. The control asks it only when a saved file is viewed or downloaded, each time, so nothing about a saved file is known before then: its row name has no extension and it is offered View. Download names the file with the reported extension. View opens a type the browser can show and downloads any other type instead. When `getDownloadUrl` reports neither, the file downloads without an extension and View opens it.
 
 ## Behavior notes
 

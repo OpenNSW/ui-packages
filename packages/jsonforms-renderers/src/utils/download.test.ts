@@ -152,6 +152,17 @@ describe('downloadName', () => {
     expect(downloadName(undefined, { index: 1 }, { extension: '.pdf' })).toBe('Uploaded File.pdf')
   })
 
+  it('falls back to the original name when the template renders to nothing but an extension', () => {
+    expect(downloadName('.pdf', { index: 1 }, { name: 'invoice.pdf' })).toBe('invoice.pdf')
+    expect(downloadName(' ', { index: 1 }, { extension: '.pdf' })).toBe('Uploaded File.pdf')
+  })
+
+  it('drops an extension that is not a dot and letters or digits', () => {
+    expect(downloadName('Attachment_{index}', { index: 1 }, { extension: '.pdf/../x' })).toBe('Attachment_1')
+    expect(downloadName('Attachment_{index}', { index: 1 }, { extension: '.p:df' })).toBe('Attachment_1')
+    expect(downloadName(undefined, { index: 1 }, { extension: 'pdf' })).toBe('Uploaded File')
+  })
+
   it('adds no extension when none is known', () => {
     expect(downloadName('Attachment_{index}', { index: 1 }, {})).toBe('Attachment_1')
     expect(downloadName(undefined, { index: 1 }, {})).toBe('Uploaded File')

@@ -47,11 +47,20 @@ export function downloadName(
   file: { name?: string; extension?: string },
 ): string {
   if (!template && file.name) return file.name
-  const base = template ? renderFileName(template, values, UNNAMED_FILE) : UNNAMED_FILE
-  const ext = fileExtension(file.name ?? '') ?? file.extension
+  const base = template
+    ? renderFileName(template, values, sanitizeFileName(file.name ?? '', UNNAMED_FILE))
+    : UNNAMED_FILE
+  const ext = safeExtension(fileExtension(file.name ?? '') ?? file.extension)
   if (!ext) return base
   if (base.toLowerCase().endsWith(ext.toLowerCase())) return base
   return `${base}${ext}`
+}
+
+// An extension is a dot and letters or digits. Anything else, such as one a
+// backend took from an uploaded name (`.pdf/../x`), is dropped rather than
+// appended to a name that was made safe.
+function safeExtension(ext: string | undefined): string | undefined {
+  return ext && /^\.[A-Za-z0-9]+$/.test(ext) ? ext : undefined
 }
 
 // Path separators, the characters Windows reserves, and control characters:

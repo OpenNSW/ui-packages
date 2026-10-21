@@ -16,7 +16,7 @@ export interface DownloadUrlResult {
   /**
    * The file's extension with its dot (`.xlsx`), when known. A saved form's
    * value is an opaque reference, so this and `mimeType` are how the control
-   * names a saved file's download and decides whether to offer View.
+   * names a saved file's download and decides whether View opens or downloads it.
    */
   extension?: string
   mimeType?: string
