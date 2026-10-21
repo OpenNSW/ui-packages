@@ -1,6 +1,6 @@
 # File upload (`x-file` / `format: "file"`)
 
-`FileControl` is a `Control` renderer for uploading files into form data. The bound field stores one storage key (`type: "string"`) or an array of keys (`type: "array"` of strings), not the file bytes. Upload and download URLs come from `UploadProvider` in the host app.
+`FileControl` is a `Control` renderer for uploading files into form data. The bound field stores one file reference (`type: "string"`) or an array of them (`type: "array"` of strings), not the file bytes. The control treats a reference as opaque: it reads nothing about the file from it. Upload and download URLs come from `UploadProvider` in the host app.
 
 ## What triggers it
 
@@ -46,7 +46,7 @@ The bound schema node must use `format: "file"`:
 
 ## File name
 
-`fileName` is a **base name** template. The file's real extension (from the original name, else the storage key) is appended unless the rendered name already ends with that extension.
+`fileName` is a **base name** template. The file's real extension (from the original name, else the `extension` `getDownloadUrl` reports for a saved file) is appended unless the rendered name already ends with that extension.
 
 ```jsonc
 "fileName": "Attachment_{index}"  // Attachment_1.xlsx for the first .xlsx upload
@@ -56,7 +56,7 @@ The bound schema node must use `format: "file"`:
 - Other placeholders follow the same `{name}` / `{today(…)}` rules as export `fileName`, but only `{index}` is supplied today (form values and `{seq(…)}` are a follow-up).
 - Unsafe characters in the rendered name become `_`.
 
-Without `fileName`, the row label and Download use the original upload name when known, otherwise the storage key.
+Without `fileName`, the row label and Download use the original upload name when known. A saved file's original name is not, so its row reads `Uploaded File` and it downloads as `Uploaded File` plus its extension.
 
 ## View and Download
 
@@ -65,7 +65,9 @@ Each uploaded row has:
 - **View** — only when the file matches the browser-viewable allowlist (common images, PDF, HTML, plain text). Opens in a new tab (`window.open`). Types such as `.xlsx` do not show View.
 - **Download** — on every row. Fetches the file and saves it under the name from [File name](#file-name).
 
-For a just-uploaded file, both actions use the local blob URL. For a saved form that only has a storage key, they call `UploadProvider.getDownloadUrl`.
+For a just-uploaded file, both actions use the local blob URL. For a saved form that only has a reference, they call `UploadProvider.getDownloadUrl`.
+
+`getDownloadUrl` should also return the file's `extension` (with its dot, e.g. `.xlsx`) and `mimeType` when it knows them. The control asks it once for each saved file it shows, and uses them to name the download and to decide whether to offer View. Until it answers, the row's name has no extension and View is hidden. When it reports neither, the row has no extension and View is offered.
 
 ## Behavior notes
 

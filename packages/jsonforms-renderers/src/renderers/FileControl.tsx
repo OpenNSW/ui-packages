@@ -15,7 +15,7 @@ import { getErrorMessage } from '../utils/error'
 import { formatBytes, formatAccept } from '../utils/format'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { useIsRequired } from '../hooks/useIsRequired'
-import { downloadFromUrl, downloadName } from '../utils/download'
+import { UNNAMED_FILE, downloadFromUrl, downloadName } from '../utils/download'
 import { isBrowserViewable, matchesAccept } from '../utils/file'
 import * as React from 'react'
 
@@ -24,6 +24,13 @@ interface FileEntry {
   name: string
   type?: string
   blobUrl?: string
+}
+
+// What a saved file is, as getDownloadUrl reported it. A saved form's value is
+// an opaque reference, so nothing about the file can be read from it.
+interface SavedFile {
+  extension?: string
+  type?: string
 }
 
 interface XFileOptions {
@@ -97,15 +104,40 @@ const FileControl = ({
   const [error, setError] = useState<string | null>(null)
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
   const [fileEntries, setFileEntries] = useState<Record<string, FileEntry>>({})
+  const [savedFiles, setSavedFiles] = useState<Record<string, SavedFile>>({})
+  const describing = useRef<Set<string>>(new Set())
   const activeBlobs = useRef<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
 
   const currentKeys = normalizeData(data)
   const atLimit = currentKeys.length >= maxFiles
 
-  const fileForViewability = (key: string) => {
+  const getDownloadUrl = uploadContext?.getDownloadUrl
+
+  // A file uploaded here is described by its local entry; a saved one only by
+  // what getDownloadUrl reports, asked once per file. Until it answers, the
+  // file is undescribed: no extension in its name and no View.
+  const undescribed = currentKeys.filter((key) => !fileEntries[key] && !savedFiles[key])
+  const undescribedKeys = undescribed.join('\n')
+
+  useEffect(() => {
+    if (!getDownloadUrl || !undescribedKeys) return
+    for (const key of undescribedKeys.split('\n')) {
+      if (describing.current.has(key)) continue
+      describing.current.add(key)
+      const describe = (file: SavedFile) => setSavedFiles((prev) => ({ ...prev, [key]: file }))
+      getDownloadUrl(key).then(
+        (result) => describe({ extension: result?.extension, type: result?.mimeType }),
+        () => describe({}),
+      )
+    }
+  }, [getDownloadUrl, undescribedKeys])
+
+  // The file's original name and type, or its extension and type when saved.
+  const describeFile = (key: string): { name?: string; extension?: string; type?: string } => {
     const entry = fileEntries[key]
-    return { name: entry?.name ?? key, type: entry?.type }
+    if (entry) return { name: entry.name, type: entry.type }
+    return savedFiles[key] ?? {}
   }
 
   const resolveFileUrl = async (key: string): Promise<string | undefined> => {
@@ -291,12 +323,14 @@ const FileControl = ({
       {/* ── Uploaded file rows ── */}
       {currentKeys.map((key, position) => {
         const index = position + 1
-        const originalName = fileEntries[key]?.name
-        const name = downloadName(fileNameTemplate, { index }, { name: originalName, key })
-        const labelText = fileNameTemplate ? name : (originalName ?? 'Uploaded File')
+        const file = describeFile(key)
+        const originalName = file.name
+        const name = downloadName(fileNameTemplate, { index }, file)
+        const labelText = fileNameTemplate ? name : (originalName ?? UNNAMED_FILE)
         const showSecondary = Boolean(fileNameTemplate && originalName)
         const rowError = rowErrors[key]
-        const canView = isBrowserViewable(fileForViewability(key))
+        const pending = Boolean(getDownloadUrl) && undescribed.includes(key)
+        const canView = !pending && isBrowserViewable(file)
 
         return (
           <Card key={key} size="2" variant="surface" mb="2">

@@ -42,6 +42,13 @@ describe('isBrowserViewable', () => {
 
   it('treats no type and no extension as viewable', () => {
     expect(isBrowserViewable({ name: '0f8e7c1a' })).toBe(true)
+    expect(isBrowserViewable({})).toBe(true)
+  })
+
+  it("takes a saved file's extension when its name is not known", () => {
+    expect(isBrowserViewable({ extension: '.pdf' })).toBe(true)
+    expect(isBrowserViewable({ extension: '.xlsx' })).toBe(false)
+    expect(isBrowserViewable({ extension: '.xlsx', type: 'application/pdf' })).toBe(true)
   })
 })
 

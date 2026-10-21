@@ -133,27 +133,28 @@ describe('downloadFromUrl', () => {
 
 describe('downloadName', () => {
   it('renders a template and appends the real extension', () => {
-    expect(downloadName('Attachment_{index}', { index: 1 }, { name: 'report.xlsx', key: 'k1' })).toBe(
-      'Attachment_1.xlsx',
-    )
+    expect(downloadName('Attachment_{index}', { index: 1 }, { name: 'report.xlsx' })).toBe('Attachment_1.xlsx')
   })
 
   it('does not double the extension when the template already ends with it', () => {
-    expect(downloadName('Attachment_{index}.xlsx', { index: 2 }, { name: 'report.xlsx', key: 'k1' })).toBe(
-      'Attachment_2.xlsx',
-    )
+    expect(downloadName('Attachment_{index}.xlsx', { index: 2 }, { name: 'report.xlsx' })).toBe('Attachment_2.xlsx')
   })
 
   it('falls back to the original name when there is no template', () => {
-    expect(downloadName(undefined, { index: 1 }, { name: 'report.xlsx', key: 'k1' })).toBe('report.xlsx')
+    expect(downloadName(undefined, { index: 1 }, { name: 'report.xlsx' })).toBe('report.xlsx')
   })
 
-  it('falls back to the key when there is no template and no name', () => {
-    expect(downloadName(undefined, { index: 1 }, { key: '0f8e.xlsx' })).toBe('0f8e.xlsx')
+  it('takes the extension a saved file reports when the original name is missing', () => {
+    expect(downloadName('Attachment_{index}', { index: 1 }, { extension: '.xlsx' })).toBe('Attachment_1.xlsx')
   })
 
-  it('takes the extension from the key when the original name is missing', () => {
-    expect(downloadName('Attachment_{index}', { index: 1 }, { key: '0f8e.xlsx' })).toBe('Attachment_1.xlsx')
+  it('names a saved file with no template Uploaded File plus its extension', () => {
+    expect(downloadName(undefined, { index: 1 }, { extension: '.pdf' })).toBe('Uploaded File.pdf')
+  })
+
+  it('adds no extension when none is known', () => {
+    expect(downloadName('Attachment_{index}', { index: 1 }, {})).toBe('Attachment_1')
+    expect(downloadName(undefined, { index: 1 }, {})).toBe('Uploaded File')
   })
 })
 
