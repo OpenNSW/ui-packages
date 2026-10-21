@@ -1,10 +1,10 @@
-import { withJsonFormsControlProps } from '@jsonforms/react'
+import { useJsonForms, withJsonFormsControlProps } from '@jsonforms/react'
 import type { ControlElement, JsonSchema } from '@jsonforms/core'
-import { Card, Flex, Text, Box, IconButton, Button, Tooltip } from '@radix-ui/themes'
+import { Card, DropdownMenu, Flex, Text, Box, IconButton, Button, Tooltip } from '@radix-ui/themes'
 import {
   UploadIcon,
   FileTextIcon,
-  Cross2Icon,
+  DotsHorizontalIcon,
   CheckCircledIcon,
   ExclamationTriangleIcon,
   DownloadIcon,
@@ -17,6 +17,8 @@ import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { UNNAMED_FILE, downloadFromUrl, downloadName } from '../utils/download'
 import { isBrowserViewable, matchesAccept } from '../utils/file'
+import { uploadText } from '../utils/messages'
+import { ConfirmRemoveDialog } from './ConfirmRemoveDialog'
 import * as React from 'react'
 
 interface FileEntry {
@@ -78,6 +80,11 @@ const FileControl = ({
   visible = true,
 }: FileControlProps) => {
   const uploadContext = useUpload()
+  const translate = useJsonForms().i18n?.translate
+  // The file waiting for the remove confirmation, and what the last removal
+  // left for screen readers.
+  const [confirmRemove, setConfirmRemove] = useState<{ key: string; name: string } | null>(null)
+  const [status, setStatus] = useState('')
 
   // `undefined`, not `null` — this control's schema is `type: 'string'`, which
   // `null` does not satisfy, so clearing with null would leave a hidden-then-
@@ -320,6 +327,25 @@ const FileControl = ({
         </Text>
       </Flex>
 
+      <Text as="p" size="2" role="status" mb="2" style={status ? undefined : { display: 'none' }}>
+        {status}
+      </Text>
+
+      <ConfirmRemoveDialog
+        open={confirmRemove !== null}
+        onOpenChange={(isOpen) => !isOpen && setConfirmRemove(null)}
+        title={confirmRemove ? uploadText(translate, 'confirmTitle', { file: confirmRemove.name }) : ''}
+        description={uploadText(translate, 'confirmDescription')}
+        keepLabel={uploadText(translate, 'keepFile')}
+        removeLabel={uploadText(translate, 'removeConfirmed')}
+        onConfirm={() => {
+          if (!confirmRemove) return
+          handleRemove(confirmRemove.key)
+          setStatus(uploadText(translate, 'removed', { file: confirmRemove.name }))
+          setConfirmRemove(null)
+        }}
+      />
+
       {/* ── Uploaded file rows ── */}
       {currentKeys.map((key, position) => {
         const index = position + 1
@@ -390,11 +416,29 @@ const FileControl = ({
                     <DownloadIcon />
                   </IconButton>
                 </Tooltip>
-                <CheckCircledIcon style={{ color: 'var(--green-9)', width: 18, height: 18 }} />
+                <span role="img" aria-label={uploadText(translate, 'uploaded')} style={{ display: 'inline-flex' }}>
+                  <CheckCircledIcon aria-hidden style={{ color: 'var(--green-9)', width: 18, height: 18 }} />
+                </span>
                 {isEnabled && (
-                  <IconButton variant="ghost" color="gray" onClick={() => handleRemove(key)}>
-                    <Cross2Icon />
-                  </IconButton>
+                  // Remove sits behind a menu, apart from View and Download,
+                  // and asks first: a stray click must not drop the file.
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger>
+                      <IconButton
+                        type="button"
+                        variant="ghost"
+                        color="gray"
+                        aria-label={uploadText(translate, 'moreActions', { file: labelText })}
+                      >
+                        <DotsHorizontalIcon />
+                      </IconButton>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Content align="end">
+                      <DropdownMenu.Item color="red" onSelect={() => setConfirmRemove({ key, name: labelText })}>
+                        {uploadText(translate, 'remove')}
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Root>
                 )}
               </Flex>
             </Flex>
