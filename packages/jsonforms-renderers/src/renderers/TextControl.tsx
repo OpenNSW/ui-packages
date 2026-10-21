@@ -35,7 +35,9 @@ export const TextControl = ({
         </Text>
         <TextField.Root
           value={data || ''}
-          onChange={(e) => handleChange(path, e.target.value)}
+          // A cleared field holds no value, as Number, Date and Select do, so a
+          // required one fails JSON Schema's `required` like one never filled.
+          onChange={(e) => handleChange(path, e.target.value === '' ? undefined : e.target.value)}
           disabled={!enabled}
           placeholder={uischema.options?.placeholder}
           color={!isValid ? 'red' : undefined}
