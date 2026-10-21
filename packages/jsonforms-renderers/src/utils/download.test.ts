@@ -167,6 +167,21 @@ describe('downloadName', () => {
     expect(downloadName('Attachment_{index}', { index: 1 }, {})).toBe('Attachment_1')
     expect(downloadName(undefined, { index: 1 }, {})).toBe('Uploaded File')
   })
+
+  it('does not treat a long dotted suffix as an extension', () => {
+    expect(downloadName('DC BAGS DETAILS _{index}.xlsx', { index: 1 }, { extension: '.not-an-extension-suffix' })).toBe(
+      'DC BAGS DETAILS _1.xlsx',
+    )
+    expect(downloadName('DC BAGS DETAILS _{index}', { index: 1 }, { extension: '.not-an-extension-suffix' })).toBe(
+      'DC BAGS DETAILS _1',
+    )
+  })
+
+  it('keeps a real extension from the original name when another suffix is not one', () => {
+    expect(
+      downloadName('Attachment_{index}', { index: 3 }, { name: 'sheet.xls', extension: '.not-an-extension-suffix' }),
+    ).toBe('Attachment_3.xls')
+  })
 })
 
 describe('sanitizeFileName', () => {

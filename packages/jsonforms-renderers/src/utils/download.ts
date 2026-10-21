@@ -56,11 +56,12 @@ export function downloadName(
   return `${base}${ext}`
 }
 
-// An extension is a dot and letters or digits. Anything else, such as one a
-// backend took from an uploaded name (`.pdf/../x`), is dropped rather than
-// appended to a name that was made safe.
+// An extension is a dot and a short run of letters or digits (`.xlsx`). A
+// longer suffix is an auth tag from a file token, not an extension. Anything
+// else, such as one a backend took from an uploaded name (`.pdf/../x`), is
+// dropped rather than appended to a name that was made safe.
 function safeExtension(ext: string | undefined): string | undefined {
-  return ext && /^\.[A-Za-z0-9]+$/.test(ext) ? ext : undefined
+  return ext && /^\.[A-Za-z0-9]{1,5}$/.test(ext) ? ext : undefined
 }
 
 // Path separators, the characters Windows reserves, and control characters:
