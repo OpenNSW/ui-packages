@@ -25,12 +25,21 @@ export const LIST_MESSAGES = {
   addItem: 'Add Item',
   remove: 'Remove',
   removeItem: 'Remove {item}',
+  openItem: 'Open {item}',
   confirmTitle: 'Remove {item}?',
   confirmDescription: "Its answers are removed too. This can't be undone.",
   keepItem: 'Keep item',
   removeConfirmed: 'Remove item',
   removed: '{item} removed.',
+  removedTotals: '{item} removed. Now {totals}.',
   empty: 'No items have been added yet.',
+  countOne: '{count} item',
+  countOther: '{count} items',
+  needsAttention: 'Needs attention',
+  done: 'Done',
+  add: 'Add',
+  cancel: 'Cancel',
+  close: 'Close',
 } as const
 
 /** The upload control's wording, looked up as `upload.<key>`. */

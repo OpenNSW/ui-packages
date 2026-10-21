@@ -50,6 +50,16 @@ const schema: JsonSchema = {
 const control = (options: Record<string, unknown> = {}) =>
   ({ type: 'Control', scope: '#/properties/rows', options }) as UISchemaElement
 
+const cards = {
+  display: 'cards',
+  summary: '{grade} · {bags} bags',
+  summaryDetail: '{kg} kg total',
+  totals: [
+    { field: 'bags', label: '{sum} bags' },
+    { field: 'kg', label: '{sum} kg total' },
+  ],
+}
+
 function renderList(seed: Data, uischema: UISchemaElement, readonly = false) {
   const writes: Data[] = []
   function Harness() {
@@ -102,5 +112,65 @@ describe('removing a list item', () => {
     await waitFor(() => expect(rows()).toHaveLength(2))
     expect(screen.getByRole('status').textContent).toBe('Item 2 removed.')
     await waitFor(() => expect(document.activeElement?.textContent).toContain('Item 2'))
+  })
+})
+
+describe('a list shown as cards', () => {
+  it('shows each item as a one-line summary under a running total', () => {
+    renderList(two, control(cards))
+
+    expect(screen.getByText('2 items · 740 bags · 18,500 kg total')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' })).toBeTruthy()
+    expect(screen.getByText('12,500 kg total')).toBeTruthy()
+    // The fields themselves are not on the page until an item is opened.
+    expect(document.querySelectorAll('input')).toHaveLength(0)
+  })
+
+  it('names the item with its summary when asking, and reports the new total', async () => {
+    const rows = renderList(two, control(cards))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Item 2 (Medium · 240 bags)' }))
+    expect(screen.getByText('Remove Item 2 (Medium · 240 bags)?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove item' }))
+
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(screen.getByRole('status').textContent).toBe(
+      'Item 2 (Medium · 240 bags) removed. Now 1 item · 500 bags · 12,500 kg total.',
+    )
+  })
+
+  it('opens an item in a dialog to edit it', async () => {
+    const rows = renderList(two, control(cards))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Bags'), { target: { value: '520' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+
+    await waitFor(() => expect(rows()[0].bags).toBe(520))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Open Item 1 (Fine · 520 bags)' })).toBeTruthy()
+  })
+
+  it('adds an item through the same dialog, and Cancel discards it', async () => {
+    const rows = renderList(two, control(cards))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Item' }))
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(within(screen.getByRole('dialog')).getByText('Item 3')).toBeTruthy()
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(rows()).toHaveLength(2))
+  })
+
+  it('opens an item read-only, with no way to remove it, in a read-only form', () => {
+    renderList(two, control(cards), true)
+
+    expect(screen.queryByRole('button', { name: /^Remove/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByLabelText<HTMLInputElement>('Bags').disabled).toBe(true)
+    expect(within(dialog).getByRole('button', { name: 'Close' })).toBeTruthy()
+    expect(within(dialog).queryByRole('button', { name: 'Remove' })).toBeNull()
   })
 })
