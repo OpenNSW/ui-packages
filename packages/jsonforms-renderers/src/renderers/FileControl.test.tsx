@@ -219,23 +219,43 @@ describe('FileControl View and Download', () => {
     )
   })
 
-  it('hides View for xlsx and shows it for png, pdf and html saved files', async () => {
-    const getDownloadUrl = savedFiles({
-      [ref('a')]: '.xlsx',
-      [ref('b')]: '.png',
-      [ref('c')]: '.pdf',
-      [ref('d')]: '.html',
-    })
-    renderForm(
-      { files: [ref('a'), ref('b'), ref('c'), ref('d')] },
-      { schema: multiSchema, uischema: multiUi, getDownloadUrl },
-    )
+  it('hides View for an uploaded xlsx and shows it for an uploaded png', async () => {
+    renderForm({}, { schema: multiSchema, uischema: multiUi })
 
-    await waitFor(() => expect(screen.queryAllByRole('button', { name: 'View' })).toHaveLength(3))
-    expect(screen.getByText('Attachment_1.xlsx')).toBeTruthy()
-    expect(screen.getByText('Attachment_2.png')).toBeTruthy()
-    expect(screen.getByText('Attachment_3.pdf')).toBeTruthy()
-    expect(screen.getByText('Attachment_4.html')).toBeTruthy()
+    uploadFile('report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    await waitFor(() => expect(screen.getByText('Attachment_1.xlsx')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: 'View' })).toBeNull()
+
+    uploadFile('photo.png', 'image/png')
+    await waitFor(() => expect(screen.getByText('Attachment_2.png')).toBeTruthy())
+    expect(screen.getAllByRole('button', { name: 'View' })).toHaveLength(1)
+  })
+
+  it('offers View for every saved file and asks getDownloadUrl about none of them until clicked', () => {
+    const getDownloadUrl = savedFiles({ [ref('a')]: '.xlsx', [ref('b')]: '.png' })
+    renderForm({ files: [ref('a'), ref('b')] }, { schema: multiSchema, uischema: multiUi, getDownloadUrl })
+
+    expect(screen.getAllByRole('button', { name: 'View' })).toHaveLength(2)
+    expect(screen.getByText('Attachment_1')).toBeTruthy()
+    expect(screen.getByText('Attachment_2')).toBeTruthy()
+    expect(getDownloadUrl).not.toHaveBeenCalled()
+  })
+
+  it('downloads a saved file View cannot show instead of opening it', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const opened = { location: { href: '' }, close: vi.fn() }
+    vi.spyOn(window, 'open').mockReturnValue(opened as unknown as Window)
+    const getDownloadUrl = savedFiles({ [ref('a')]: '.xlsx' })
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+
+    await waitFor(() => expect(click).toHaveBeenCalled())
+    expect(opened.close).toHaveBeenCalled()
+    expect(opened.location.href).toBe('')
+    expect(getDownloadUrl).toHaveBeenCalledTimes(1)
+    const anchors = click.mock.instances as unknown as HTMLAnchorElement[]
+    expect(anchors.some((a) => a.download === 'Attachment_1.xlsx')).toBe(true)
   })
 
   it('downloads through the local blob under the template name with the real extension', async () => {
@@ -259,8 +279,8 @@ describe('FileControl View and Download', () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     const getDownloadUrl = savedFiles({ [ref('a')]: '.xlsx' })
     renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
-    await waitFor(() => expect(screen.getByText('Attachment_1.xlsx')).toBeTruthy())
 
+    // Clicked straight away: the name waits for getDownloadUrl's answer.
     fireEvent.click(screen.getByRole('button', { name: 'Download' }))
 
     await waitFor(() => {
@@ -299,19 +319,43 @@ describe('FileControl View and Download', () => {
   })
 
   it('reads nothing from the reference when getDownloadUrl does not say what the file is', async () => {
-    const getDownloadUrl = savedFiles({})
-    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl: savedFiles({}) })
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'View' })).toBeTruthy())
-    expect(screen.getByText('Attachment_1')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+
+    await waitFor(() => expect(click).toHaveBeenCalled())
+    const anchors = click.mock.instances as unknown as HTMLAnchorElement[]
+    expect(anchors.some((a) => a.download === 'Attachment_1')).toBe(true)
   })
 
-  it('asks getDownloadUrl about each saved file once', async () => {
-    const getDownloadUrl = savedFiles({ [ref('a')]: '.png' })
+  it('asks getDownloadUrl again on the next click after it fails', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const getDownloadUrl = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ url: 'https://storage.example/a', expiresAt: 0, extension: '.pdf' })
     renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
 
-    await waitFor(() => expect(screen.getByText('Attachment_1.png')).toBeTruthy())
-    expect(getDownloadUrl).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+    await waitFor(() => expect(screen.getByText('Unable to download file.')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+    await waitFor(() => expect(click).toHaveBeenCalled())
+    expect(getDownloadUrl).toHaveBeenCalledTimes(2)
+    const anchors = click.mock.instances as unknown as HTMLAnchorElement[]
+    expect(anchors.some((a) => a.download === 'Attachment_1.pdf')).toBe(true)
+  })
+
+  it('shows a row error when getDownloadUrl throws', async () => {
+    const getDownloadUrl = vi.fn(() => {
+      throw new Error('no token')
+    })
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+
+    await waitFor(() => expect(screen.getByText('Unable to download file.')).toBeTruthy())
   })
 
   it('shows a row error for a failed Download when read-only', async () => {
