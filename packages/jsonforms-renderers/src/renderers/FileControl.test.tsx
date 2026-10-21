@@ -16,6 +16,15 @@ type Data = Record<string, unknown>
 
 // jsdom doesn't implement these — FileControl calls them to preview an
 // upload, incidental to the remove/clear behaviour this file tests.
+// Radix's menu and dialogs measure themselves with ResizeObserver, which jsdom lacks.
+beforeAll(() => {
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+})
+
 beforeAll(() => {
   URL.createObjectURL = () => 'blob:mock'
   URL.revokeObjectURL = () => {}
@@ -141,6 +150,13 @@ function renderForm(
   return { writes }
 }
 
+// Remove sits in the row's "More actions" menu and asks first.
+function removeFile(name: string, confirm = true) {
+  fireEvent.keyDown(screen.getByRole('button', { name: `More actions for ${name}` }), { key: 'Enter' })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
+  fireEvent.click(screen.getByRole('button', { name: confirm ? 'Remove file' : 'Keep file' }))
+}
+
 function uploadFile(name: string, type: string) {
   const input = document.querySelector('input[type=file]')
   if (!input) throw new Error('no file input')
@@ -154,10 +170,7 @@ describe('FileControl removing the last file', () => {
     uploadFile('doc.pdf', 'application/pdf')
     await waitFor(() => expect(writes[writes.length - 1]?.attachment).toBe('doc.pdf'))
 
-    // Single-file mode (default maxFiles: 1) hides the drop zone once
-    // uploaded, so the last control button is the remove icon.
-    const buttons = [...document.querySelectorAll('button')]
-    fireEvent.click(buttons[buttons.length - 1])
+    removeFile('doc.pdf')
 
     await waitFor(() => expect(writes[writes.length - 1]).toEqual({}))
     // The precise regression check: a value of `undefined` still leaves the
@@ -165,6 +178,21 @@ describe('FileControl removing the last file', () => {
     // catch on its own without this — toEqual({}) already proves it, this
     // spells out why.
     expect('attachment' in writes[writes.length - 1]).toBe(false)
+  })
+})
+
+describe('FileControl remove', () => {
+  it('keeps the file when the trader chooses Keep file, and says so after a removal', async () => {
+    const { writes } = renderForm({})
+    uploadFile('doc.pdf', 'application/pdf')
+    await waitFor(() => expect(writes[writes.length - 1]?.attachment).toBe('doc.pdf'))
+
+    removeFile('doc.pdf', false)
+    expect(writes[writes.length - 1]?.attachment).toBe('doc.pdf')
+
+    removeFile('doc.pdf')
+    await waitFor(() => expect(writes[writes.length - 1]).toEqual({}))
+    expect(screen.getByRole('status').textContent).toBe('doc.pdf removed.')
   })
 })
 

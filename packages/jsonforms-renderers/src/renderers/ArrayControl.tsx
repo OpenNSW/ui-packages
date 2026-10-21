@@ -1,10 +1,12 @@
 import { createDefaultValue, type ArrayControlProps, type JsonSchema } from '@jsonforms/core'
 import { withJsonFormsArrayControlProps, JsonFormsDispatch, useJsonForms } from '@jsonforms/react'
-import { useRef, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { stampRowTemplates } from '../utils/sequence'
 import type { SequenceCounters } from '../utils/sequence'
 import { getErrorMessage } from '../utils/error'
 import { useIsRequired } from '../hooks/useIsRequired'
+import { type ListMessage, type MessageValues, listText } from '../utils/messages'
+import { ConfirmRemoveDialog } from './ConfirmRemoveDialog'
 import { Card, Button, Flex, Text, Box } from '@radix-ui/themes'
 import { PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 
@@ -15,10 +17,22 @@ interface AddItemButtonProps {
   rootSchema: JsonSchema
   addItem: ArrayControlProps['addItem']
   sequences: RefObject<SequenceCounters>
+  label: string
+  buttonRef: RefObject<HTMLButtonElement | null>
+  onAdded: () => void
 }
 
-// The only part of the array that reads the whole form, so ArrayControl itself stays memoized.
-const AddItemButton = ({ path, items, itemsSchema, rootSchema, addItem, sequences }: AddItemButtonProps) => {
+const AddItemButton = ({
+  path,
+  items,
+  itemsSchema,
+  rootSchema,
+  addItem,
+  sequences,
+  label,
+  buttonRef,
+  onAdded,
+}: AddItemButtonProps) => {
   // The whole form, for the placeholders a template resolves against — the
   // array control is only ever handed its own slice.
   const ctx = useJsonForms()
@@ -35,13 +49,14 @@ const AddItemButton = ({ path, items, itemsSchema, rootSchema, addItem, sequence
       sequences.current,
     )
     if (addItem) addItem(path, newItem)()
+    onAdded()
   }
 
   return (
     <Box mt="2">
-      <Button type="button" variant="surface" onClick={handleAddItem}>
+      <Button ref={buttonRef} type="button" variant="surface" onClick={handleAddItem}>
         <PlusIcon />
-        Add Item
+        {label}
       </Button>
     </Box>
   )
@@ -71,6 +86,26 @@ export const ArrayControl = ({
   // Above the early returns: hooks must run unconditionally. Also covers
   // arrays that become required through allOf/if/then (#112).
   const conditionallyRequired = useIsRequired(path, required, visible)
+  // For the wording's translation.
+  const translate = useJsonForms().i18n?.translate
+  const t = (key: ListMessage, values?: MessageValues) => listText(translate, key, values)
+
+  // The row waiting for the remove confirmation, and what the last removal
+  // left for screen readers.
+  const [confirmIndex, setConfirmIndex] = useState<number | null>(null)
+  const [status, setStatus] = useState('')
+  // After a removal, focus moves to the row now at that position (or the one
+  // before it, or Add Item), once the row is gone.
+  const focusAfterRemove = useRef<number | null>(null)
+  const rowRefs = useRef<(HTMLElement | null)[]>([])
+  const addRef = useRef<HTMLButtonElement>(null)
+  const length = Array.isArray(data) ? data.length : 0
+  useEffect(() => {
+    if (focusAfterRemove.current === null) return
+    const target = rowRefs.current[Math.min(focusAfterRemove.current, length - 1)] ?? addRef.current
+    focusAfterRemove.current = null
+    target?.focus()
+  }, [length])
 
   // If `arraySchema` is present, `schema` is already our `itemsSchema`, else fall back to `schema.items`
   const itemsSchema = arraySchema ? schema : schema.items
@@ -106,25 +141,34 @@ export const ArrayControl = ({
   // options.errorMessage is for the empty-array case (required / minItems).
   // Other array errors (e.g. maxItems) keep AJV's message.
   const displayError = !isValid ? (items.length === 0 && options.errorMessage) || getErrorMessage(errors, title) : ''
+  const nameOf = (index: number) => `${itemLabel} ${index + 1}`
 
-  const handleRemoveItem = (indexToRemove: number) => {
+  const confirmRemove = () => {
+    if (confirmIndex === null) return
     if (removeItems) {
-      const removeFunc = removeItems(path, [indexToRemove])
+      const removeFunc = removeItems(path, [confirmIndex])
       if (removeFunc) removeFunc()
     }
+    setStatus(t('removed', { item: nameOf(confirmIndex) }))
+    focusAfterRemove.current = confirmIndex
+    setConfirmIndex(null)
   }
 
   return (
-    <Box mb="6">
+    <Box mb="6" id={path} tabIndex={-1} style={{ outline: 'none' }}>
       <Flex direction="column" gap="4">
         <Text as="div" size="4" weight="bold">
           {title} {showRequired && <Text color="red">*</Text>}
         </Text>
 
+        <Text as="p" size="2" role="status" style={status ? undefined : { display: 'none' }}>
+          {status}
+        </Text>
+
         {items.length === 0 && (
           <Box py="4" px="4" style={{ backgroundColor: 'var(--gray-3)', borderRadius: 'var(--radius-3)' }}>
             <Text size="2" color="gray">
-              No items have been added yet.
+              {t('empty')}
             </Text>
           </Box>
         )}
@@ -138,22 +182,31 @@ export const ArrayControl = ({
         {items.map((_item, index) => {
           const childPath = `${path}.${index}`
           return (
-            <Card key={childPath} size="3" variant="surface">
+            <Card
+              key={childPath}
+              size="3"
+              variant="surface"
+              ref={(el) => {
+                rowRefs.current[index] = el
+              }}
+              tabIndex={-1}
+              style={{ outline: 'none' }}
+            >
               <Flex direction="column" gap="4">
                 <Flex justify="between" align="center">
                   <Text size="3" weight="bold">
-                    {itemLabel} {index + 1}
+                    {nameOf(index)}
                   </Text>
                   {canRemove && (
                     <Button
                       type="button"
                       color="red"
                       variant="soft"
-                      onClick={() => handleRemoveItem(index)}
-                      title="Remove item"
+                      onClick={() => setConfirmIndex(index)}
+                      aria-label={t('removeItem', { item: nameOf(index) })}
                     >
                       <TrashIcon />
-                      Remove
+                      {t('remove')}
                     </Button>
                   )}
                 </Flex>
@@ -195,9 +248,22 @@ export const ArrayControl = ({
             rootSchema={rootSchema}
             addItem={addItem}
             sequences={sequences}
+            label={t('addItem')}
+            buttonRef={addRef}
+            onAdded={() => setStatus('')}
           />
         )}
       </Flex>
+
+      <ConfirmRemoveDialog
+        open={confirmIndex !== null}
+        onOpenChange={(isOpen) => !isOpen && setConfirmIndex(null)}
+        title={confirmIndex === null ? '' : t('confirmTitle', { item: nameOf(confirmIndex) })}
+        description={t('confirmDescription')}
+        keepLabel={t('keepItem')}
+        removeLabel={t('removeConfirmed')}
+        onConfirm={confirmRemove}
+      />
     </Box>
   )
 }

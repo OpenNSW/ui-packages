@@ -79,6 +79,7 @@ describe('ArrayControl x-template', () => {
 
     const removes = screen.getAllByRole('button', { name: /remove/i })
     fireEvent.click(removes[removes.length - 1])
+    fireEvent.click(screen.getByRole('button', { name: 'Remove item' }))
     addRow()
     await waitFor(() => {
       expect(rows().map((row) => row.lineRef)).toEqual(['ORD-77-07', 'ORD-77-08', 'ORD-77-10'])

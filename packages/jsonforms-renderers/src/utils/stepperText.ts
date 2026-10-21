@@ -1,4 +1,5 @@
-import { type Translator, defaultTranslator } from '@jsonforms/core'
+import type { Translator } from '@jsonforms/core'
+import { formatMessage } from './messages'
 
 /**
  * The stepper's own wording, in English. Each is looked up through the form's
@@ -35,8 +36,5 @@ export function stepperText(
   key: StepperMessage,
   values?: Record<string, string | number>,
 ): string {
-  const message = (translate ?? defaultTranslator)(`stepper.${key}`, STEPPER_MESSAGES[key], values)
-  return message.replace(/\{(\w+)\}/g, (match, name: string) =>
-    values && name in values ? String(values[name]) : match,
-  )
+  return formatMessage(translate, `stepper.${key}`, STEPPER_MESSAGES[key], values)
 }
