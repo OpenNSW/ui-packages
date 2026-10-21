@@ -11,6 +11,8 @@ import {
 import { JsonFormsDispatch } from '@jsonforms/react'
 import { Box, Flex, Tabs, Heading } from '@radix-ui/themes'
 import { useState } from 'react'
+import { CategorizationStepper } from './CategorizationStepper'
+import { isStepperUiSchema } from '../utils/steps'
 
 // Vertical Layout
 export const VerticalLayoutRenderer = ({
@@ -128,27 +130,39 @@ export const GroupLayoutRenderer = ({
 
 export const GroupLayoutTester: RankedTester = rankWith(1, uiTypeIs('Group'))
 
-// Categorization Layout (Tabs)
+// Categorization Layout: tabs by default, or one step at a time with
+// `options.variant: "stepper"` (see CategorizationStepper).
 export interface CategorizationLayoutProps extends LayoutProps {
   data: any
 }
 
-export const CategorizationLayoutRenderer = ({
-  uischema,
-  schema,
-  path,
-  renderers,
-  cells,
-  enabled,
-  visible = true,
-}: CategorizationLayoutProps) => {
+/** Renders a Categorization as tabs, or as a stepper with `options.variant: "stepper"`. */
+export const CategorizationLayoutRenderer = (props: CategorizationLayoutProps) => {
+  if (props.visible === false) {
+    return null
+  }
+
+  if (isStepperUiSchema(props.uischema)) {
+    return (
+      <CategorizationStepper
+        uischema={props.uischema as CategorizationInterface}
+        schema={props.schema}
+        path={props.path}
+        renderers={props.renderers}
+        cells={props.cells}
+        enabled={props.enabled}
+      />
+    )
+  }
+
+  return <CategorizationTabs {...props} />
+}
+
+/** A Categorization as tabs, one per Category. */
+const CategorizationTabs = ({ uischema, schema, path, renderers, cells, enabled }: CategorizationLayoutProps) => {
   const categorization = uischema as CategorizationInterface
   const categories = categorization.elements.filter((e): e is CategoryInterface => e.type === 'Category')
   const [activeTab, setActiveTab] = useState(categories[0]?.label || '')
-
-  if (visible === false) {
-    return null
-  }
 
   if (!categories.length) return null
 
