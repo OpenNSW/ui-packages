@@ -169,9 +169,16 @@ describe('Categorization stepper', () => {
     expect(screen.getByRole('button', { name: 'Save as draft' })).toBeTruthy()
   })
 
-  it('scrolls to a newly chosen step, but not on mount', () => {
+  // jsdom has no layout: the stepper's top is placed by stubbing
+  // getBoundingClientRect, against a scroll offset of 0.
+  const placeTop = (top: number) => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ top } as DOMRect)
+  }
+
+  it("scrolls back to the stepper's top on a step change once it is above the offset, but not on mount", () => {
     const scroll = vi.fn()
     Element.prototype.scrollIntoView = scroll
+    placeTop(-400)
     render(
       <StrictMode>
         <Form uischema={stepper()} data={{ exporter: 'A' }} />
@@ -182,6 +189,20 @@ describe('Categorization stepper', () => {
     fireEvent.click(continueButton())
 
     expect(scroll).toHaveBeenCalledOnce()
+    vi.restoreAllMocks()
+  })
+
+  it("leaves the page where it is when the stepper's top is on screen", () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    placeTop(120)
+    render(<Form uischema={stepper()} data={{ exporter: 'A' }} />)
+
+    fireEvent.click(continueButton())
+
+    expect(scroll).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Transport' }))
+    vi.restoreAllMocks()
   })
 
   it('moves focus to the new step title on Continue', () => {

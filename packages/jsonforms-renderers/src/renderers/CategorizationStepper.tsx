@@ -111,16 +111,23 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
     notifyHost()
   }, [step, count, lastStep])
 
-  // Bring a newly chosen step into view and move focus to its title, so a
-  // screen reader announces it. Compared with the step last shown rather than
-  // skipping the first run, which StrictMode repeats.
+  // On a step change, move focus to the new step's title, so a screen reader
+  // announces it, and scroll the stepper's top back into view only when it is
+  // above its scroll offset (as after Continue at the bottom of a long step):
+  // choosing a step while the top is on screen leaves the page where it is.
+  // Compared with the step last shown rather than skipping the first run,
+  // which StrictMode repeats.
   const top = useRef<HTMLDivElement>(null)
   const title = useRef<HTMLHeadingElement>(null)
   const shownStep = useRef(step)
   useEffect(() => {
     if (shownStep.current === step) return
     shownStep.current = step
-    top.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    const el = top.current
+    const offset = el ? parseFloat(getComputedStyle(el).scrollMarginTop) || 0 : 0
+    if (el && el.getBoundingClientRect().top < offset) {
+      el.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    }
     title.current?.focus({ preventScroll: true })
   }, [step])
 
