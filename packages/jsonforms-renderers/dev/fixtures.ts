@@ -1509,6 +1509,55 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'array-cards',
+    name: 'Array (cards)',
+    schema: {
+      type: 'object',
+      properties: {
+        grades: {
+          type: 'array',
+          title: 'DC Grades',
+          items: {
+            type: 'object',
+            required: ['grade', 'bags'],
+            properties: {
+              grade: {
+                type: 'string',
+                title: 'DC Grade',
+                oneOf: [
+                  { const: 'FINE', title: 'Fine' },
+                  { const: 'MEDIUM', title: 'Medium' },
+                ],
+              },
+              bags: { type: 'integer', title: 'Number of Bags' },
+              kg: { type: 'number', title: 'Total Weight (kg)' },
+            },
+          },
+        },
+      },
+    },
+    uischema: {
+      type: 'Control',
+      scope: '#/properties/grades',
+      options: {
+        display: 'cards',
+        itemLabel: 'DC Grade',
+        summary: '{grade} · {bags} bags',
+        summaryDetail: '{kg} kg total',
+        totals: [
+          { field: 'bags', label: '{sum} bags' },
+          { field: 'kg', label: '{sum} kg total' },
+        ],
+      },
+    } as UISchemaElement,
+    data: {
+      grades: [
+        { grade: 'FINE', bags: 500, kg: 12500 },
+        { grade: 'MEDIUM', bags: 240, kg: 6000 },
+      ],
+    },
+  },
+  {
     id: 'categorization-stepper',
     name: 'Categorization (stepper)',
     schema: {
