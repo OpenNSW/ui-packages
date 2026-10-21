@@ -21,13 +21,15 @@ export function matchesAccept(file: { name: string; type?: string }, accept: str
 /**
  * Types a browser can usefully open in a tab. Not `image/*`: TIFF/HEIC are not
  * displayable in most browsers. No type and no extension stays viewable so View
- * remains available when we only have an opaque storage key.
+ * remains available when nothing says what the file is. `extension` stands in
+ * for a `name` that is not known.
  */
-export function isBrowserViewable(file: { name: string; type?: string }): boolean {
+export function isBrowserViewable(file: { name?: string; extension?: string; type?: string }): boolean {
+  const name = file.name ?? (file.extension ? `file${file.extension}` : '')
   const hasType = Boolean(file.type)
-  const hasExt = fileExtension(file.name) !== undefined
+  const hasExt = fileExtension(name) !== undefined
   if (!hasType && !hasExt) return true
-  return matchesAccept(file, VIEWABLE_ACCEPT)
+  return matchesAccept({ name, type: file.type }, VIEWABLE_ACCEPT)
 }
 
 /** `.xlsx` from `report.xlsx` or `0f8e….xlsx`; undefined when there is no extension. */

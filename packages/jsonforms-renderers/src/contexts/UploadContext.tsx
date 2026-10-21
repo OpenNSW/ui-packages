@@ -13,6 +13,13 @@ export type UploadHandler = (file: File) => Promise<UploadResponse>
 export interface DownloadUrlResult {
   url: string
   expiresAt: number
+  /**
+   * The file's extension with its dot (`.xlsx`), when known. A saved form's
+   * value is an opaque reference, so this and `mimeType` are how the control
+   * names a saved file's download and decides whether to offer View.
+   */
+  extension?: string
+  mimeType?: string
 }
 
 export type GetDownloadUrl = (key: string) => Promise<DownloadUrlResult>

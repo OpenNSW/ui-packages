@@ -29,24 +29,29 @@ export async function downloadFromUrl(url: string, fileName: string): Promise<vo
   downloadBlob(await response.blob(), fileName)
 }
 
+// What a file is called when nothing better is known: no template and no
+// original name, as for a saved file.
+export const UNNAMED_FILE = 'Uploaded File'
+
 /**
  * Name used for a file row label and Download. With a template, render it
  * (same `{index}` / `{today(…)}` rules as export fileName) then append the
- * file's real extension from `name`, else `key`, unless already present.
- * Without a template, prefer the original `name`, else the storage `key`.
+ * file's real extension, from its original `name` or else `extension`, unless
+ * already present. Without a template, prefer the original `name`, else
+ * `Uploaded File` plus the extension. A field's value is never read for a
+ * name: it is an opaque reference to the file.
  */
 export function downloadName(
   template: string | undefined,
   values: { index: number },
-  file: { name?: string; key: string },
+  file: { name?: string; extension?: string },
 ): string {
-  const fallback = file.name || file.key
-  if (!template) return fallback
-  const rendered = renderFileName(template, values, fallback)
-  const ext = fileExtension(file.name ?? '') ?? fileExtension(file.key)
-  if (!ext) return rendered
-  if (rendered.toLowerCase().endsWith(ext.toLowerCase())) return rendered
-  return `${rendered}${ext}`
+  if (!template && file.name) return file.name
+  const base = template ? renderFileName(template, values, UNNAMED_FILE) : UNNAMED_FILE
+  const ext = fileExtension(file.name ?? '') ?? file.extension
+  if (!ext) return base
+  if (base.toLowerCase().endsWith(ext.toLowerCase())) return base
+  return `${base}${ext}`
 }
 
 // Path separators, the characters Windows reserves, and control characters:

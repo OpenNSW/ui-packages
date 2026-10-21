@@ -6,7 +6,7 @@ import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
 import { radixRenderers } from './index'
-import { UploadProvider } from '../contexts/UploadContext'
+import { UploadProvider, type GetDownloadUrl } from '../contexts/UploadContext'
 
 // Exercises FileControl through a real JsonForms tree, the same way
 // SpreadsheetControl.test.tsx does, because the behaviour under test is what
@@ -78,6 +78,18 @@ const multiSchema = {
   },
 } as unknown as JsonSchema
 
+// A saved form holds opaque file references, not storage keys: a backend that
+// issues them seals the key in a token like this one, dots included. Nothing
+// about the file can be read from it.
+const ref = (id: string) => `eyJhbGciOiJkaXIifQ..${id}.c2VhbGVk.dGFn`
+
+// getDownloadUrl answering for each reference with the extension given.
+function savedFiles(extensions: Record<string, string | undefined>) {
+  return vi.fn((key: string) =>
+    Promise.resolve({ url: `https://storage.example/${key}`, expiresAt: 0, extension: extensions[key] }),
+  )
+}
+
 const multiUi = {
   type: 'VerticalLayout',
   elements: [{ type: 'Control', scope: '#/properties/files' }],
@@ -96,7 +108,7 @@ function Harness({
   schema?: JsonSchema
   uischema?: UISchemaElement
   enabled?: boolean
-  getDownloadUrl?: (key: string) => Promise<{ url: string; expiresAt: number }>
+  getDownloadUrl?: GetDownloadUrl
 }) {
   const [initial] = useState(seed)
   // Theme for the same reason SpreadsheetControl's harness needs it (Radix
@@ -127,7 +139,7 @@ function renderForm(
     schema?: JsonSchema
     uischema?: UISchemaElement
     enabled?: boolean
-    getDownloadUrl?: (key: string) => Promise<{ url: string; expiresAt: number }>
+    getDownloadUrl?: GetDownloadUrl
   } = {},
 ) {
   const writes: Data[] = []
@@ -207,11 +219,19 @@ describe('FileControl View and Download', () => {
     )
   })
 
-  it('hides View for xlsx and shows it for png, pdf and html keys', () => {
-    renderForm({ files: ['a.xlsx', 'b.png', 'c.pdf', 'd.html'] }, { schema: multiSchema, uischema: multiUi })
+  it('hides View for xlsx and shows it for png, pdf and html saved files', async () => {
+    const getDownloadUrl = savedFiles({
+      [ref('a')]: '.xlsx',
+      [ref('b')]: '.png',
+      [ref('c')]: '.pdf',
+      [ref('d')]: '.html',
+    })
+    renderForm(
+      { files: [ref('a'), ref('b'), ref('c'), ref('d')] },
+      { schema: multiSchema, uischema: multiUi, getDownloadUrl },
+    )
 
-    const viewButtons = screen.queryAllByRole('button', { name: 'View' })
-    expect(viewButtons).toHaveLength(3)
+    await waitFor(() => expect(screen.queryAllByRole('button', { name: 'View' })).toHaveLength(3))
     expect(screen.getByText('Attachment_1.xlsx')).toBeTruthy()
     expect(screen.getByText('Attachment_2.png')).toBeTruthy()
     expect(screen.getByText('Attachment_3.pdf')).toBeTruthy()
@@ -237,17 +257,14 @@ describe('FileControl View and Download', () => {
 
   it('downloads through getDownloadUrl for a saved form', async () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    const getDownloadUrl = vi.fn().mockResolvedValue({
-      url: 'https://storage.example/signed',
-      expiresAt: Date.now() + 60_000,
-    })
-    renderForm({ attachment: '0f8e.xlsx' }, { schema: namedSchema, getDownloadUrl })
+    const getDownloadUrl = savedFiles({ [ref('a')]: '.xlsx' })
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
+    await waitFor(() => expect(screen.getByText('Attachment_1.xlsx')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: 'Download' }))
 
     await waitFor(() => {
-      expect(getDownloadUrl).toHaveBeenCalledWith('0f8e.xlsx')
-      expect(fetch).toHaveBeenCalledWith('https://storage.example/signed')
+      expect(fetch).toHaveBeenCalledWith(`https://storage.example/${ref('a')}`)
       expect(click).toHaveBeenCalled()
     })
     const anchors = click.mock.instances as unknown as HTMLAnchorElement[]
@@ -268,13 +285,39 @@ describe('FileControl View and Download', () => {
     expect(anchors.some((a) => a.download === 'report.pdf')).toBe(true)
   })
 
+  it('names a saved file without a template Uploaded File plus its extension', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    renderForm({ attachment: ref('a') }, { getDownloadUrl: savedFiles({ [ref('a')]: '.pdf' }) })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'View' })).toBeTruthy())
+    expect(screen.getByText('Uploaded File')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+
+    await waitFor(() => expect(click).toHaveBeenCalled())
+    const anchors = click.mock.instances as unknown as HTMLAnchorElement[]
+    expect(anchors.some((a) => a.download === 'Uploaded File.pdf')).toBe(true)
+  })
+
+  it('reads nothing from the reference when getDownloadUrl does not say what the file is', async () => {
+    const getDownloadUrl = savedFiles({})
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'View' })).toBeTruthy())
+    expect(screen.getByText('Attachment_1')).toBeTruthy()
+  })
+
+  it('asks getDownloadUrl about each saved file once', async () => {
+    const getDownloadUrl = savedFiles({ [ref('a')]: '.png' })
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
+
+    await waitFor(() => expect(screen.getByText('Attachment_1.png')).toBeTruthy())
+    expect(getDownloadUrl).toHaveBeenCalledTimes(1)
+  })
+
   it('shows a row error for a failed Download when read-only', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 }))
-    const getDownloadUrl = vi.fn().mockResolvedValue({
-      url: 'https://storage.example/signed',
-      expiresAt: Date.now() + 60_000,
-    })
-    renderForm({ attachment: 'doc.pdf' }, { schema: namedSchema, enabled: false, getDownloadUrl })
+    const getDownloadUrl = savedFiles({ [ref('a')]: '.pdf' })
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, enabled: false, getDownloadUrl })
 
     fireEvent.click(screen.getByRole('button', { name: 'Download' }))
 
@@ -310,18 +353,13 @@ describe('FileControl View and Download', () => {
   it('opens View through getDownloadUrl for a saved form', async () => {
     const opened = { location: { href: '' }, close: vi.fn() }
     const open = vi.spyOn(window, 'open').mockReturnValue(opened as unknown as Window)
-    const getDownloadUrl = vi.fn().mockResolvedValue({
-      url: 'https://storage.example/signed',
-      expiresAt: Date.now() + 60_000,
-    })
-    renderForm({ attachment: 'photo.png' }, { schema: namedSchema, getDownloadUrl })
+    const getDownloadUrl = savedFiles({ [ref('a')]: '.png' })
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'View' })).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: 'View' }))
 
-    await waitFor(() => {
-      expect(getDownloadUrl).toHaveBeenCalledWith('photo.png')
-      expect(opened.location.href).toBe('https://storage.example/signed')
-    })
+    await waitFor(() => expect(opened.location.href).toBe(`https://storage.example/${ref('a')}`))
     expect(open).toHaveBeenCalledWith('', '_blank')
   })
 
@@ -329,7 +367,8 @@ describe('FileControl View and Download', () => {
     const opened = { location: { href: '' }, close: vi.fn() }
     vi.spyOn(window, 'open').mockReturnValue(opened as unknown as Window)
     const getDownloadUrl = vi.fn().mockResolvedValue(undefined)
-    renderForm({ attachment: 'photo.png' }, { schema: namedSchema, getDownloadUrl })
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'View' })).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: 'View' }))
 
