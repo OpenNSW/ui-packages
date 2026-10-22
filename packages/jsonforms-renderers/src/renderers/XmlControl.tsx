@@ -5,6 +5,7 @@ import { Box, Button, Flex, IconButton, Spinner, Text, Tooltip } from '@radix-ui
 import { UploadIcon, Cross2Icon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
 import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useDefaultFrom } from '../hooks/useDefaultFrom'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { isEditable } from '../utils/editable'
 import { getErrorMessage } from '../utils/error'
@@ -89,6 +90,7 @@ const XmlControl = ({
   // recover short of uploading again. `undefined` means "no file uploaded",
   // which is exactly the state a never-touched field is already in.
   useClearWhenHidden(visible, path, handleChange)
+  useDefaultFrom(data, path, schema, enabled, visible, handleChange)
   const showRequired = useIsRequired(path, required, visible)
 
   const isValid = !errors || errors.length === 0

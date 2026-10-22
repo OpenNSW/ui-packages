@@ -301,11 +301,11 @@ describe('SearchSelectControl defaultFrom', () => {
       consignee_country: {
         type: 'object',
         title: 'Consignee Country',
+        'x-defaultFrom': 'importing_country',
         'x-search': {
           service: 'countries',
           mode: 'small-list',
           displayTemplate: '{name}',
-          defaultFrom: 'importing_country',
         },
         ...countryShape,
       },
@@ -521,11 +521,11 @@ describe('SearchSelectControl defaultFrom (string mode)', () => {
       consignee_country: {
         type: 'string',
         title: 'Consignee Country',
+        'x-defaultFrom': 'importing_country',
         'x-search': {
           service: 'countries',
           mode: 'small-list',
           displayTemplate: '{name}',
-          defaultFrom: 'importing_country',
         },
       },
     },
@@ -576,14 +576,14 @@ describe('SearchSelectControl defaultFrom (string mode)', () => {
     })
   })
 
-  it('clears this field to null when the sibling is cleared, like dependsOn', async () => {
+  it('clears this field when the sibling is cleared', async () => {
     const { latest } = renderForm({ importing_country: 'GB', consignee_country: 'US' }, options, stringSchema, stringUi)
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Clear selection' })[0])
 
     await waitFor(() => {
-      expect(latest()?.importing_country ?? null).toBeNull()
-      expect(latest()).toHaveProperty('consignee_country', null)
+      expect(latest()?.importing_country).toBeUndefined()
+      expect(latest()?.consignee_country).toBeUndefined()
     })
   })
 })
