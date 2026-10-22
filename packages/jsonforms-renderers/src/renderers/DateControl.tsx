@@ -9,7 +9,7 @@ import {
 } from '@jsonforms/core'
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import dayjs from 'dayjs'
 
 import { useIsRequired } from '../hooks/useIsRequired'
@@ -113,18 +113,24 @@ export const DateControl = ({
   const hasTime = schema.format === 'date-time'
   const [datePart = '', timeRaw = ''] = value.split('T')
   const timeForInput = timeInputValue(timeRaw, showSeconds)
+  // Chrome and Firefox emit a full date for each year digit (0002-…, 0020-…,
+  // 0202-…). Those days are before today, so rejecting them here wipes the
+  // field mid-typing. Keep every change, and drop a past day only when the
+  // field is left. A day already stored when the field was focused stays.
+  const focusedValue = useRef(value)
 
   const commit = (nextDate: string, nextTime: string) => {
     if (!nextDate) {
       handleChange(path, undefined)
       return
     }
-    if (earliestDate && nextDate < earliestDate) {
-      // Re-apply the stored day so a typed past date snaps back.
-      handleChange(path, datePart ? (hasTime ? toISODateTime(datePart, nextTime || '00:00') : datePart) : undefined)
-      return
-    }
     handleChange(path, hasTime ? toISODateTime(nextDate, nextTime || '00:00') : nextDate)
+  }
+
+  const leaveDate = () => {
+    if (!earliestDate || !datePart || datePart >= earliestDate) return
+    if (datePart === focusedValue.current.split('T')[0]) return
+    handleChange(path, focusedValue.current || undefined)
   }
 
   return shell(
@@ -135,6 +141,10 @@ export const DateControl = ({
         min={earliestDate}
         disabled={!enabled}
         color={!isValid ? 'red' : undefined}
+        onFocus={() => {
+          focusedValue.current = value
+        }}
+        onBlur={leaveDate}
         onChange={(e) => commit(e.target.value, timeForInput)}
         id={path}
         style={{ flex: 1 }}
