@@ -85,7 +85,7 @@ export function useDefaultFrom(
   schema: JsonSchema | undefined,
   enabled: boolean | undefined,
   visible: boolean | undefined,
-  handleChange: (path: string, value: unknown) => void,
+  handleChange: (path: string, value: any) => void,
 ): void {
   const ctx = useJsonForms()
   const source = defaultFromSource(schema)
