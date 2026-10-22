@@ -53,6 +53,31 @@ describe('ArrayControl itemLabel', () => {
     expect(html).toContain('Item 2')
     expect(html).not.toContain('Container 1')
   })
+
+  it('spells the row number when itemOrdinal is word', () => {
+    const html = renderArray({ itemLabel: 'Attachment', itemOrdinal: 'word' })
+    expect(html).toContain('Attachment One')
+    expect(html).toContain('Attachment Two')
+    expect(html).not.toContain('Attachment 1')
+  })
+
+  it('uses addLabel and emptyLabel, and hides the schema title when showTitle is false', () => {
+    const html = renderArray(
+      {
+        showTitle: false,
+        addLabel: 'Add Attachment',
+        emptyLabel: 'No attachments have been added yet.',
+      },
+      {
+        data: [],
+        schema: { type: 'array', title: 'Attachments', items: itemsSchema },
+      },
+    )
+    expect(html).toContain('Add Attachment')
+    expect(html).toContain('No attachments have been added yet.')
+    expect(html).not.toContain('Attachments')
+    expect(html).not.toContain('Add Item')
+  })
 })
 
 describe('ArrayControl required and errors', () => {

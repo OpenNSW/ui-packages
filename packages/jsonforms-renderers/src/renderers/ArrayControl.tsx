@@ -21,6 +21,11 @@ interface ListOptions {
   addable?: boolean
   removable?: boolean
   itemLabel?: string
+  /** "word" spells the row number (Attachment One). Defaults to a digit. */
+  itemOrdinal?: 'number' | 'word'
+  addLabel?: string
+  emptyLabel?: string
+  showTitle?: boolean
   errorMessage?: string
   detail?: UISchemaElement
   /** "cards": each item is a one-line card that opens in a dialog. */
@@ -31,6 +36,40 @@ interface ListOptions {
   summaryDetail?: string
   /** Running totals above the list. */
   totals?: ListTotal[]
+}
+
+const ONES = [
+  '',
+  'One',
+  'Two',
+  'Three',
+  'Four',
+  'Five',
+  'Six',
+  'Seven',
+  'Eight',
+  'Nine',
+  'Ten',
+  'Eleven',
+  'Twelve',
+  'Thirteen',
+  'Fourteen',
+  'Fifteen',
+  'Sixteen',
+  'Seventeen',
+  'Eighteen',
+  'Nineteen',
+]
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+
+function wordOrdinal(n: number): string {
+  if (n < 20) return ONES[n] ?? String(n)
+  if (n < 100) {
+    const ten = Math.floor(n / 10)
+    const one = n % 10
+    return one === 0 ? TENS[ten] : `${TENS[ten]}-${ONES[one]}`
+  }
+  return String(n)
 }
 
 interface AddItemButtonProps {
@@ -171,6 +210,9 @@ export const ArrayControl = ({
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
   const itemLabel = options.itemLabel || 'Item'
+  const addLabel = options.addLabel || t('addItem')
+  const emptyLabel = options.emptyLabel || t('empty')
+  const showTitle = options.showTitle !== false
   // minItems >= 1 is separate from schema `required`: an empty array fails
   // with a minItems error, not a required error, so useIsRequired alone
   // would miss it.
@@ -183,7 +225,8 @@ export const ArrayControl = ({
 
   const summaryOf = (row: unknown) =>
     options.summary ? summarizeRow(options.summary, row, validItemsSchema, locale) : ''
-  const nameOf = (index: number) => `${itemLabel} ${index + 1}`
+  const nameOf = (index: number) =>
+    `${itemLabel} ${options.itemOrdinal === 'word' ? wordOrdinal(index + 1) : index + 1}`
   // "Item 2 (MEDIUM · 240 bags)": the row's name, with its summary when it has one.
   const fullNameOf = (index: number) => {
     const summary = summaryOf(items[index])
@@ -248,9 +291,11 @@ export const ArrayControl = ({
   return (
     <Box mb="6" id={path} tabIndex={-1} style={{ outline: 'none' }}>
       <Flex direction="column" gap="4">
-        <Text as="div" size="4" weight="bold">
-          {title} {showRequired && <Text color="red">*</Text>}
-        </Text>
+        {showTitle && (
+          <Text as="div" size="4" weight="bold">
+            {title} {showRequired && <Text color="red">*</Text>}
+          </Text>
+        )}
 
         {showTotals && (
           <Text as="p" size="2" weight="medium">
@@ -265,7 +310,7 @@ export const ArrayControl = ({
         {items.length === 0 && (
           <Box py="4" px="4" style={{ backgroundColor: 'var(--gray-3)', borderRadius: 'var(--radius-3)' }}>
             <Text size="2" color="gray">
-              {t('empty')}
+              {emptyLabel}
             </Text>
           </Box>
         )}
@@ -405,7 +450,7 @@ export const ArrayControl = ({
             rootSchema={rootSchema}
             addItem={addItem}
             sequences={sequences}
-            label={t('addItem')}
+            label={addLabel}
             buttonRef={addRef}
             onAdded={onAdded}
           />
