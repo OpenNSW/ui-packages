@@ -10,6 +10,7 @@ import {
 } from '@jsonforms/core'
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useDefaultFrom } from '../hooks/useDefaultFrom'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
 
@@ -42,6 +43,7 @@ export const SelectControl = ({
   visible = true,
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
+  useDefaultFrom(data, path, schema, enabled, visible, handleChange)
   const showRequired = useIsRequired(path, required, visible)
 
   // `options.autocomplete: true` swaps the plain dropdown for a type-to-filter combobox over the

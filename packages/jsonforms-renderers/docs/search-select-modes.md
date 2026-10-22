@@ -93,55 +93,11 @@ query-param name → sibling property (`dependsOn: { "commodity": "commodity_com
 Fetching waits until every listed sibling has a value; changing any sibling that already
 had a value clears this field.
 
-## Default from a sibling (`defaultFrom`)
+## Default from a sibling
 
-To mirror another field on the same object, set `x-search.defaultFrom` to that sibling's
-property name. The control copies the sibling's current value (a string, or
-`{ value, label }`) into this field:
-
-- while this field is empty (on load, first fill, or after the trader clears it)
-- whenever the sibling **changes** — that overwrite includes a value the trader set by
-  hand. Clearing the sibling clears this field too (`undefined` for object fields, `null`
-  for string fields, the same as `dependsOn`)
-
-Nothing is copied while the form is `readonly` or the field is disabled or hidden.
-
-The field stays editable between sibling changes. Used for NPQS "Country of Consignee"
-following "Name of Importing Country" (GeNS-style): change importing country, consignee
-country follows; the trader can still pick a different consignee country until importing
-country changes again.
-
-```jsonc
-{
-  "importing_country": {
-    "type": "object",
-    "x-search": {
-      "service": "static-data",
-      "mode": "large-searchable-list",
-      "displayTemplate": "{name}",
-      "params": { "id": "countries", "version": "1" },
-    },
-  },
-  "consignee_country": {
-    "type": "object",
-    "x-search": {
-      "service": "static-data",
-      "mode": "large-searchable-list",
-      "displayTemplate": "{name}",
-      "params": { "id": "countries", "version": "1" },
-      "defaultFrom": "importing_country",
-    },
-  },
-}
-```
-
-Give both fields the same shape: both `type: "object"` (copies `{ value, label }`) or both
-`type: "string"` (copies the id). Both are tested. Mixing shapes copies the id only, so an
-object field filled from a string sibling stores `{ value }` with no `label`.
-
-`defaultFrom` is independent of `dependsOn`. Use `dependsOn` when this field's options
-must filter by the sibling; use `defaultFrom` when this field should follow the sibling's
-value.
+To mirror another field, set [`x-defaultFrom`](./default-from.md) on the schema. It is not
+an `x-search` option: the same keyword works on every value control, and the field stays
+editable between sibling changes. `dependsOn` still only filters this field's options.
 
 ## Display template
 

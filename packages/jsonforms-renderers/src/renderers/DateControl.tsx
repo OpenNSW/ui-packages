@@ -12,6 +12,7 @@ import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { useEffect, type ReactNode } from 'react'
 import dayjs from 'dayjs'
 
+import { useDefaultFrom } from '../hooks/useDefaultFrom'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
 import { timeInputValue, toRfc3339Time } from '../utils/time'
@@ -66,6 +67,7 @@ export const DateControl = ({
       handleChange(path, undefined)
     }
   }, [visible, path, handleChange])
+  useDefaultFrom(data, path, schema, enabled, visible, handleChange)
   const showRequired = useIsRequired(path, required, visible)
 
   if (visible === false) {

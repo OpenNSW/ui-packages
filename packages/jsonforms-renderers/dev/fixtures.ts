@@ -444,13 +444,13 @@ export const fixtures: Fixture[] = [
           type: 'object',
           title: 'Country of Consignee',
           description:
-            'x-search.defaultFrom: importing_country. Stays editable — pick a different country and it is kept ' +
+            'x-defaultFrom: importing_country. Stays editable — pick a different country and it is kept ' +
             'until importing country changes again. Clear it while importing country is set and it refills.',
+          'x-defaultFrom': 'importing_country',
           'x-search': {
             service: 'countries',
             mode: 'large-searchable-list',
             displayTemplate: '{name}',
-            defaultFrom: 'importing_country',
           },
           properties: {
             value: { type: 'string', minLength: 1 },

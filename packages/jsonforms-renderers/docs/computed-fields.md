@@ -1,6 +1,8 @@
 # Computed fields (`x-computed`)
 
-`ComputedControl` reads one or more named values from anywhere in the form's data tree, evaluates a formula written in terms of those names, and persists/renders the result as a readonly `type: 'number'` field, configured via the schema's `x-computed` object:
+`ComputedControl` reads one or more named values from anywhere in the form's data tree, evaluates a formula written in terms of those names, and persists/renders the result as a readonly `type: 'number'` field, configured via the schema's `x-computed` object.
+
+A field that should copy a sibling and stay editable uses [`x-defaultFrom`](./default-from.md) instead. `x-computed` always replaces the control with the formula result.
 
 ```json
 "estimated_total": {
