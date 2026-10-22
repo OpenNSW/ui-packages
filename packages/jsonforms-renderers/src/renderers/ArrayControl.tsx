@@ -1,6 +1,7 @@
 import {
   createDefaultValue,
   getControlPath,
+  getI18nKeyPrefix,
   type ArrayControlProps,
   type JsonSchema,
   type UISchemaElement,
@@ -9,6 +10,7 @@ import { withJsonFormsArrayControlProps, JsonFormsDispatch, useJsonForms } from 
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { stampRowTemplates } from '../utils/sequence'
 import type { SequenceCounters } from '../utils/sequence'
+import { spellNumber } from '../utils/numberWords'
 import { getErrorMessage } from '../utils/error'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { type ListMessage, type MessageValues, listText } from '../utils/messages'
@@ -21,6 +23,10 @@ interface ListOptions {
   addable?: boolean
   removable?: boolean
   itemLabel?: string
+  /** "word" spells the row number in English (Attachment One). Defaults to a digit. */
+  itemNumber?: 'number' | 'word'
+  addLabel?: string
+  emptyLabel?: string
   errorMessage?: string
   detail?: UISchemaElement
   /** "cards": each item is a one-line card that opens in a dialog. */
@@ -112,6 +118,8 @@ export const ArrayControl = ({
   removeItems,
   rootSchema,
   arraySchema,
+  label,
+  i18nKeyPrefix,
   required = false,
   errors = '',
 }: ArrayControlProps) => {
@@ -129,7 +137,11 @@ export const ArrayControl = ({
   const ctx = useJsonForms()
   const translate = ctx.i18n?.translate
   const locale = ctx.i18n?.locale
-  const t = (key: ListMessage, values?: MessageValues) => listText(translate, key, values)
+  // The HOC passes the prefix JSON Forms computed for this control. A direct
+  // render does not, so derive the same one: the control's `i18n`, else the
+  // schema's, else the data path.
+  const i18nPrefix = i18nKeyPrefix ?? getI18nKeyPrefix(arraySchema ?? schema, uischema, path)
+  const t = (key: ListMessage, values?: MessageValues) => listText(translate, key, values, i18nPrefix)
 
   // The row waiting for the remove confirmation, the row open in the dialog
   // (cards only; isNew while it is a row just added), and what the last
@@ -165,12 +177,22 @@ export const ArrayControl = ({
   const validItemsSchema = itemsSchema
 
   const items = Array.isArray(data) ? (data as unknown[]) : []
-  const title = actualArraySchema.title || 'Array Items'
+  const schemaTitle = actualArraySchema.title || 'Array Items'
   const options = (uischema.options ?? {}) as ListOptions
   const cards = options.display === 'cards'
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
   const itemLabel = options.itemLabel || 'Item'
+  const addLabel = options.addLabel || t('addItem')
+  const emptyLabel = options.emptyLabel || t('empty')
+  // JSON Forms turns `label: false` into '' and then still translates
+  // `<prefix>.label`, so a translation can put the heading back. Read the
+  // uischema for the hide. A string label replaces the schema title. A direct
+  // render that omits the prop still shows the schema title. The required
+  // mark is part of the heading. The error names the heading, or the schema
+  // title when the heading is hidden, so "Attachments is required" still reads.
+  const heading = uischema.label === false ? '' : label !== undefined ? label : schemaTitle
+  const fieldName = heading || schemaTitle
   // minItems >= 1 is separate from schema `required`: an empty array fails
   // with a minItems error, not a required error, so useIsRequired alone
   // would miss it.
@@ -179,11 +201,13 @@ export const ArrayControl = ({
   const isValid = !errors
   // options.errorMessage is for the empty-array case (required / minItems).
   // Other array errors (e.g. maxItems) keep AJV's message.
-  const displayError = !isValid ? (items.length === 0 && options.errorMessage) || getErrorMessage(errors, title) : ''
+  const displayError = !isValid
+    ? (items.length === 0 && options.errorMessage) || getErrorMessage(errors, fieldName)
+    : ''
 
   const summaryOf = (row: unknown) =>
     options.summary ? summarizeRow(options.summary, row, validItemsSchema, locale) : ''
-  const nameOf = (index: number) => `${itemLabel} ${index + 1}`
+  const nameOf = (index: number) => `${itemLabel} ${options.itemNumber === 'word' ? spellNumber(index + 1) : index + 1}`
   // "Item 2 (MEDIUM · 240 bags)": the row's name, with its summary when it has one.
   const fullNameOf = (index: number) => {
     const summary = summaryOf(items[index])
@@ -248,9 +272,11 @@ export const ArrayControl = ({
   return (
     <Box mb="6" id={path} tabIndex={-1} style={{ outline: 'none' }}>
       <Flex direction="column" gap="4">
-        <Text as="div" size="4" weight="bold">
-          {title} {showRequired && <Text color="red">*</Text>}
-        </Text>
+        {heading && (
+          <Text as="div" size="4" weight="bold">
+            {heading} {showRequired && <Text color="red">*</Text>}
+          </Text>
+        )}
 
         {showTotals && (
           <Text as="p" size="2" weight="medium">
@@ -265,7 +291,7 @@ export const ArrayControl = ({
         {items.length === 0 && (
           <Box py="4" px="4" style={{ backgroundColor: 'var(--gray-3)', borderRadius: 'var(--radius-3)' }}>
             <Text size="2" color="gray">
-              {t('empty')}
+              {emptyLabel}
             </Text>
           </Box>
         )}
@@ -405,7 +431,7 @@ export const ArrayControl = ({
             rootSchema={rootSchema}
             addItem={addItem}
             sequences={sequences}
-            label={t('addItem')}
+            label={addLabel}
             buttonRef={addRef}
             onAdded={onAdded}
           />

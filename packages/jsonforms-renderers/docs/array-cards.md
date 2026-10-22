@@ -37,6 +37,35 @@ A list whose uiSchema sets `options.display: "cards"` shows each item as a one-l
 
 An item's fields are on the page only while its dialog is open. Fields computed from other fields of the same item still update, since those are edited in the dialog too, and [`x-template`](./numbered-array-rows.md) numbers are given when an item is added.
 
+## The heading, the row name, and the buttons
+
+These apply to every list, with or without cards.
+
+| Option       | Meaning                                                                                                                                                                                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `label`      | On the Control, the same property as any other control. A string replaces the schema `title`. `false` hides the heading. The required `*` is part of the heading, so it hides with it. A required list with no heading still fails validation, and that message uses the schema title. |
+| `itemLabel`  | The word in front of the row number. Without it, rows are "Item 1".                                                                                                                                                                                                                    |
+| `itemNumber` | `"word"` spells the number in English: Attachment One, Attachment Twenty-One. 100 and above stay digits. The words are English only.                                                                                                                                                   |
+| `addLabel`   | The add button, shown as written. Without it, the button is translated.                                                                                                                                                                                                                |
+| `emptyLabel` | The empty-state line, shown as written. Without it, that line is translated.                                                                                                                                                                                                           |
+
+```json
+{
+  "type": "Control",
+  "scope": "#/properties/attachments",
+  "label": false,
+  "i18n": "attachments",
+  "options": {
+    "itemLabel": "Attachment",
+    "itemNumber": "word"
+  }
+}
+```
+
+`addLabel` and `emptyLabel` are the untranslated shortcut. Leave them off when the wording has to be translated.
+
 ## Translation
 
 The wording goes through the form's JSON Forms translator, like the [stepper's](./categorization-stepper.md#translation): `list.<key>` and `upload.<key>`, with English defaults exported as `LIST_MESSAGES` and `UPLOAD_MESSAGES`.
+
+A list can give itself a different wording. The key is `<prefix>.list.<key>`, and `<prefix>` is the control's `i18n`, or the schema's `i18n`, or the data path with array indexes removed (`attachments` for a control at `order.attachments`). A key the translator does not have falls back to the global `list.<key>`. The heading is translated by JSON Forms itself, under `<prefix>.label`. `label: false` still hides it when that key has a translation.

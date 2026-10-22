@@ -8,6 +8,12 @@ export type MessageValues = Record<string, string | number>
  * `{name}` placeholders are filled in after translation, so a translation
  * keeps them.
  */
+function applyValues(message: string, values?: MessageValues): string {
+  return message.replace(/\{(\w+)\}/g, (match, name: string) =>
+    values && name in values ? String(values[name]) : match,
+  )
+}
+
 export function formatMessage(
   translate: Translator | undefined,
   id: string,
@@ -15,9 +21,7 @@ export function formatMessage(
   values?: MessageValues,
 ): string {
   const message = (translate ?? defaultTranslator)(id, fallback, values)
-  return message.replace(/\{(\w+)\}/g, (match, name: string) =>
-    values && name in values ? String(values[name]) : match,
-  )
+  return applyValues(message, values)
 }
 
 /** The list control's wording, looked up as `list.<key>`. */
@@ -57,8 +61,25 @@ export const UPLOAD_MESSAGES = {
 export type ListMessage = keyof typeof LIST_MESSAGES
 export type UploadMessage = keyof typeof UPLOAD_MESSAGES
 
-export const listText = (translate: Translator | undefined, key: ListMessage, values?: MessageValues) =>
-  formatMessage(translate, `list.${key}`, LIST_MESSAGES[key], values)
+/**
+ * The list control's wording. A control-specific key (`<prefix>.list.<key>`,
+ * the control's i18n prefix) wins when the translator has one; otherwise the
+ * global `list.<key>` does. A translator returns undefined for a key it does
+ * not have, which is how the specific key falls through.
+ */
+export const listText = (
+  translate: Translator | undefined,
+  key: ListMessage,
+  values?: MessageValues,
+  i18nKeyPrefix?: string,
+) => {
+  if (translate && i18nKeyPrefix) {
+    const id = `${i18nKeyPrefix}.list.${key}`
+    const specific = translate(id, undefined, values)
+    if (specific && specific !== id) return applyValues(specific, values)
+  }
+  return formatMessage(translate, `list.${key}`, LIST_MESSAGES[key], values)
+}
 
 export const uploadText = (translate: Translator | undefined, key: UploadMessage, values?: MessageValues) =>
   formatMessage(translate, `upload.${key}`, UPLOAD_MESSAGES[key], values)
