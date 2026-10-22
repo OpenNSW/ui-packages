@@ -39,14 +39,28 @@ The seconds spinner is **opt-in**. Set `options.showSeconds: true` on the **Cont
 
 A form that omits `showSeconds` keeps the hour-and-minute picker and still submits a valid `HH:MM:SS` string.
 
-## No past days (`options.minDate`)
+## No past days (`formatMinimum`)
 
-`options.minDate: "today"` on a date or date-time control sets the picker's minimum to the current day, so an earlier day cannot be selected. The current day is allowed. A year can be typed one digit at a time; a day before today that was typed in that visit is dropped when the field is left. A day already stored when the field was focused stays. Any date field opts in the same way:
+`formatMinimum` on a `date` or `date-time` property is Ajv's earliest-day keyword. A fixed day works with JsonForms' `createAjv()` alone. `"today"` means the current local calendar day, and the app's Ajv has to be taught that word before any schema is compiled:
+
+```ts
+import { createAjv } from '@jsonforms/core'
+import { withRelativeDates } from '@opennsw/jsonforms-renderers'
+
+export const ajv = withRelativeDates(createAjv({ useDefaults: true }))
+```
+
+Pass that instance to `<JsonForms ajv={ajv} />`. Without the wrap, `"today"` fails every value. A fixed day such as `"2026-01-01"` works either way.
 
 ```json
-{
-  "type": "Control",
-  "scope": "#/properties/estimated_shipment_date",
-  "options": { "minDate": "today" }
+"estimated_shipment_date": {
+  "type": "string",
+  "format": "date",
+  "title": "Estimated Shipment Date",
+  "formatMinimum": "today"
 }
 ```
+
+`DateControl` sets the picker's `min` from that keyword, resolving `"today"` to the current day, so an earlier day cannot be selected. Whatever is typed is stored, including each padded year a browser emits while the year is typed. Ajv then reports a past day through the field's normal error, which blocks submit. The message is "Estimated Shipment Date must be today or later", or "on or after 1 Jan 2026" for a fixed day.
+
+`"today"` is the local calendar day in the browser. A server that validates the same schema has to resolve `"today"` the same way, in the timezone it and the browser agree on.

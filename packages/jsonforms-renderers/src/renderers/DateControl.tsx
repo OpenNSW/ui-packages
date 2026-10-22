@@ -9,14 +9,15 @@ import {
 } from '@jsonforms/core'
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { format, isValid } from 'date-fns'
 
 import { useIsRequired } from '../hooks/useIsRequired'
-import { getErrorMessage } from '../utils/error'
 import { useReadOnlyMark } from '../contexts/formReview'
-import { ReadOnlyLock } from './ReadOnlyLock'
+import { getErrorMessage } from '../utils/error'
+import { localISODate } from '../utils/localDate'
 import { timeInputValue, toRfc3339Time } from '../utils/time'
+import { ReadOnlyLock } from './ReadOnlyLock'
 
 // RFC 3339 (e.g. 2026-06-05T12:30:00+05:30) with seconds and the local offset,
 // which ajv's strict "date-time" format check requires. xxx writes +00:00, not
@@ -30,12 +31,14 @@ const toISODateTime = (dateStr: string, timeStr: string) => {
   return isValid(date) ? format(date, "yyyy-MM-dd'T'HH:mm:ssxxx") : text
 }
 
-/** The current local calendar day, used as the picker's minimum. */
-export function localISODate(now = new Date()): string {
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+export { localISODate } from '../utils/localDate'
+
+/** The picker's minimum from schema `formatMinimum`. `"today"` is the current local day. */
+function earliestDay(schema: { format?: string; formatMinimum?: unknown }): string | undefined {
+  if (schema.format === 'time' || typeof schema.formatMinimum !== 'string') return undefined
+  if (schema.formatMinimum === 'today') return localISODate()
+  const day = schema.formatMinimum.slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : undefined
 }
 
 type ShellProps = Pick<ControlProps, 'path' | 'label' | 'required' | 'errors'> & {
@@ -96,8 +99,7 @@ export const DateControl = ({
   // Stored values always include seconds so AJV format "time" still passes.
   const showSeconds = uischema?.options?.showSeconds === true
   const timeStep = showSeconds ? 1 : 60
-  // minDate "today" means the current day: the picker cannot offer an earlier one.
-  const earliestDate = uischema?.options?.minDate === 'today' && schema.format !== 'time' ? localISODate() : undefined
+  const earliestDate = earliestDay(schema)
 
   const shell = (children: ReactNode) => (
     <FieldShell path={path} label={label} required={showRequired} errors={errors} description={schema.description}>
@@ -126,11 +128,6 @@ export const DateControl = ({
   const hasTime = schema.format === 'date-time'
   const [datePart = '', timeRaw = ''] = value.split('T')
   const timeForInput = timeInputValue(timeRaw, showSeconds)
-  // Chrome and Firefox emit a full date for each year digit (0002-…, 0020-…,
-  // 0202-…). Those days are before today, so rejecting them here wipes the
-  // field mid-typing. Keep every change, and drop a past day only when the
-  // field is left. A day already stored when the field was focused stays.
-  const focusedValue = useRef(value)
 
   const commit = (nextDate: string, nextTime: string) => {
     if (!nextDate) {
@@ -138,12 +135,6 @@ export const DateControl = ({
       return
     }
     handleChange(path, hasTime ? toISODateTime(nextDate, nextTime || '00:00') : nextDate)
-  }
-
-  const leaveDate = () => {
-    if (!earliestDate || !datePart || datePart >= earliestDate) return
-    if (datePart === focusedValue.current.split('T')[0]) return
-    handleChange(path, focusedValue.current || undefined)
   }
 
   return shell(
@@ -154,10 +145,6 @@ export const DateControl = ({
         min={earliestDate}
         disabled={!enabled}
         color={!isValid ? 'red' : undefined}
-        onFocus={() => {
-          focusedValue.current = value
-        }}
-        onBlur={leaveDate}
         onChange={(e) => commit(e.target.value, timeForInput)}
         id={path}
         style={{ flex: 1 }}
