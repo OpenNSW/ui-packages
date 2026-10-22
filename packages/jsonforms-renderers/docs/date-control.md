@@ -38,3 +38,27 @@ The seconds spinner is **opt-in**. Set `options.showSeconds: true` on the **Cont
 | `true`            | Hour, minute, and seconds (`step=1`) | Seconds as picked; still `00` if the user only sets hour and minute |
 
 A form that omits `showSeconds` keeps the hour-and-minute picker and still submits a valid `HH:MM:SS` string.
+
+## Earliest day (`formatMinimum`)
+
+A `date` or `date-time` field refuses earlier days by setting Ajv's `formatMinimum`. `"today"` is the trader's local calendar day. Any such field opts in the same way:
+
+```json
+"estimated_shipment_date": {
+  "type": "string",
+  "format": "date",
+  "title": "Estimated Shipment Date",
+  "formatMinimum": "today"
+}
+```
+
+The picker will not offer an earlier day, and a typed earlier day is not stored. Submit rejects one too. JsonForms' Ajv already has `formatMinimum`; `addDateBounds` makes the bound `"today"` mean the local day:
+
+```ts
+import { createAjv } from '@jsonforms/core'
+import { addDateBounds } from '@opennsw/jsonforms-renderers'
+
+const ajv = addDateBounds(createAjv())
+```
+
+A `YYYY-MM-DD` bound is that fixed day instead. A `time` field ignores `formatMinimum`.
