@@ -82,8 +82,12 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
   )
   const problems: StepProblem[][] = useMemo(
     () =>
-      categories.map((c) =>
-        stepProblems(visibleControls(c, data, ajv, config, path), errors, rootSchema, path, translate),
+      stepProblems(
+        categories.map((c) => visibleControls(c, data, ajv, config, path)),
+        errors,
+        rootSchema,
+        path,
+        translate,
       ),
     // categories is rebuilt every render; its content follows uischema, data and rules.
     // eslint-disable-next-line react-hooks/exhaustive-deps
