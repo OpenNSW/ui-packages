@@ -4,6 +4,7 @@ import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import type { ClipboardEvent, KeyboardEvent } from 'react'
 import { getErrorMessage } from '../utils/error'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useDefaultFrom } from '../hooks/useDefaultFrom'
 import { useIsRequired } from '../hooks/useIsRequired'
 
 const BLOCKED_NUMBER_KEYS = new Set(['-', '+', 'e', 'E'])
@@ -21,6 +22,7 @@ export const NumberControl = ({
   visible = true,
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
+  useDefaultFrom(data, path, schema, enabled, visible, handleChange)
   const showRequired = useIsRequired(path, required, visible)
 
   if (visible === false) {

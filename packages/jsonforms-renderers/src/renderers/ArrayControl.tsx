@@ -1,15 +1,17 @@
 import {
   createDefaultValue,
   getControlPath,
+  update,
   type ArrayControlProps,
   type JsonSchema,
   type UISchemaElement,
 } from '@jsonforms/core'
 import { withJsonFormsArrayControlProps, JsonFormsDispatch, useJsonForms } from '@jsonforms/react'
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { stampRowTemplates } from '../utils/sequence'
 import type { SequenceCounters } from '../utils/sequence'
 import { getErrorMessage } from '../utils/error'
+import { useDefaultFrom } from '../hooks/useDefaultFrom'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { type ListMessage, type MessageValues, listText } from '../utils/messages'
 import { type ListTotal, listTotals, summarizeRow } from '../utils/listSummary'
@@ -127,6 +129,14 @@ export const ArrayControl = ({
   const conditionallyRequired = useIsRequired(path, required, visible)
   // For the wording's translation and locale, and to mark rows with errors.
   const ctx = useJsonForms()
+  const dispatch = ctx.dispatch
+  const writeDefault = useCallback(
+    (target: string, value: unknown) => {
+      dispatch?.(update(target, () => value))
+    },
+    [dispatch],
+  )
+  useDefaultFrom(data, path, arraySchema ?? schema, enabled, visible, writeDefault)
   const translate = ctx.i18n?.translate
   const locale = ctx.i18n?.locale
   const t = (key: ListMessage, values?: MessageValues) => listText(translate, key, values)

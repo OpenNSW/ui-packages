@@ -4,6 +4,7 @@ import { Box, Flex, IconButton, Spinner, Table, Text, Tooltip } from '@radix-ui/
 import { UploadIcon, Cross2Icon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useDefaultFrom } from '../hooks/useDefaultFrom'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { isEditable } from '../utils/editable'
 import { getErrorMessage } from '../utils/error'
@@ -116,6 +117,7 @@ const SpreadsheetControl = ({
   // which is exactly the state a never-touched field is already in: valid when
   // the field is optional, and a plain "is required" error when it isn't.
   useClearWhenHidden(visible, path, handleChange)
+  useDefaultFrom(data, path, schema, enabled, visible, handleChange)
   const showRequired = useIsRequired(path, required, visible)
 
   const isValid = !errors || errors.length === 0

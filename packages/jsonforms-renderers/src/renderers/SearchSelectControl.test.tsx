@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
 import { StrictMode, useState } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
@@ -273,6 +273,318 @@ describe('SearchSelectControl dependsOn', () => {
     fireEvent.focus(screen.getByRole('textbox'))
     expect(await screen.findByText('Select the related field first.')).toBeTruthy()
     expect(searches).toHaveLength(0)
+  })
+})
+
+describe('SearchSelectControl defaultFrom', () => {
+  const countryShape = {
+    properties: {
+      value: { type: 'string' },
+      label: { type: 'string' },
+    },
+    required: ['value'],
+  }
+
+  const defaultFromSchema = {
+    type: 'object',
+    properties: {
+      importing_country: {
+        type: 'object',
+        title: 'Importing Country',
+        'x-search': {
+          service: 'countries',
+          mode: 'small-list',
+          displayTemplate: '{name}',
+        },
+        ...countryShape,
+      },
+      consignee_country: {
+        type: 'object',
+        title: 'Consignee Country',
+        'x-defaultFrom': 'importing_country',
+        'x-search': {
+          service: 'countries',
+          mode: 'small-list',
+          displayTemplate: '{name}',
+        },
+        ...countryShape,
+      },
+    },
+  } as unknown as JsonSchema
+
+  const defaultFromUi = {
+    type: 'VerticalLayout',
+    elements: [
+      { type: 'Control', scope: '#/properties/importing_country' },
+      { type: 'Control', scope: '#/properties/consignee_country' },
+    ],
+  } as UISchemaElement
+
+  it('copies the sibling into this field while it is empty', async () => {
+    const { latest } = renderForm(
+      {},
+      async () => ({ options: [{ id: 'GB', name: 'United Kingdom' }] }),
+      defaultFromSchema,
+      defaultFromUi,
+    )
+
+    fireEvent.focus(screen.getAllByRole('textbox')[0])
+    fireEvent.click(await screen.findByText('United Kingdom'))
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+      expect(latest()?.consignee_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+    })
+  })
+
+  it('overwrites this field when the sibling changes', async () => {
+    const { latest } = renderForm(
+      { consignee_country: { value: 'US', label: 'United States' } },
+      async () => ({
+        options: [
+          { id: 'GB', name: 'United Kingdom' },
+          { id: 'US', name: 'United States' },
+          { id: 'AU', name: 'Australia' },
+        ],
+      }),
+      defaultFromSchema,
+      defaultFromUi,
+    )
+
+    fireEvent.focus(screen.getAllByRole('textbox')[0])
+    fireEvent.click(await screen.findByText('United Kingdom'))
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+      expect(latest()?.consignee_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+    })
+
+    fireEvent.focus(screen.getAllByRole('textbox')[0])
+    fireEvent.click(await screen.findByText('Australia'))
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toEqual({ value: 'AU', label: 'Australia' })
+      expect(latest()?.consignee_country).toEqual({ value: 'AU', label: 'Australia' })
+    })
+  })
+
+  it('keeps a user edit until the sibling changes', async () => {
+    const { latest } = renderForm(
+      {
+        importing_country: { value: 'GB', label: 'United Kingdom' },
+        consignee_country: { value: 'GB', label: 'United Kingdom' },
+      },
+      async () => ({
+        options: [
+          { id: 'GB', name: 'United Kingdom' },
+          { id: 'US', name: 'United States' },
+          { id: 'AU', name: 'Australia' },
+        ],
+      }),
+      defaultFromSchema,
+      defaultFromUi,
+    )
+
+    // Consignee is the second textbox; open it and pick a different country.
+    fireEvent.focus(screen.getAllByRole('textbox')[1])
+    fireEvent.click(await screen.findByText('United States'))
+
+    await waitFor(() => {
+      expect(latest()?.consignee_country).toEqual({ value: 'US', label: 'United States' })
+      expect(latest()?.importing_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+    })
+
+    fireEvent.focus(screen.getAllByRole('textbox')[0])
+    fireEvent.click(await screen.findByText('Australia'))
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toEqual({ value: 'AU', label: 'Australia' })
+      expect(latest()?.consignee_country).toEqual({ value: 'AU', label: 'Australia' })
+    })
+  })
+
+  it('fills again after this field is cleared while the sibling still has a value', async () => {
+    const { latest } = renderForm(
+      {
+        importing_country: { value: 'GB', label: 'United Kingdom' },
+        consignee_country: { value: 'US', label: 'United States' },
+      },
+      async () => ({
+        options: [
+          { id: 'GB', name: 'United Kingdom' },
+          { id: 'US', name: 'United States' },
+        ],
+      }),
+      defaultFromSchema,
+      defaultFromUi,
+    )
+
+    // Consignee is the second field; its clear control is the second "Clear selection".
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear selection' })[1])
+
+    await waitFor(() => {
+      expect(latest()?.consignee_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+    })
+  })
+
+  it('does not copy when the form is readonly', async () => {
+    const writes: Data[] = []
+    const services = {
+      countries: {
+        search: async () => ({ options: [{ id: 'GB', name: 'United Kingdom' }] }),
+      },
+    }
+
+    function Harness() {
+      let live = true
+      finishers.push(() => {
+        live = false
+      })
+      return (
+        <Theme>
+          <SearchServiceProvider services={services}>
+            <JsonForms
+              schema={defaultFromSchema}
+              uischema={defaultFromUi}
+              data={{ importing_country: { value: 'GB', label: 'United Kingdom' } }}
+              renderers={radixRenderers}
+              readonly
+              onChange={({ data }) => {
+                if (!live) return
+                writes.push(data as Data)
+              }}
+            />
+          </SearchServiceProvider>
+        </Theme>
+      )
+    }
+
+    render(<Harness />)
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('textbox')[0]).toBeTruthy()
+    })
+    // JsonForms debounces onChange (10ms). Wait past it so a write from the copy effect
+    // would have landed.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    // onChange must have run (mount emit), otherwise the check below proves nothing.
+    expect(writes.length).toBeGreaterThan(0)
+    expect(writes[writes.length - 1].importing_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+    expect(writes.some((w) => w.consignee_country != null)).toBe(false)
+  })
+
+  it('fills on mount when the sibling already has a value', async () => {
+    const { latest } = renderForm(
+      { importing_country: { value: 'GB', label: 'United Kingdom' } },
+      () => Promise.resolve({ options: [{ id: 'GB', name: 'United Kingdom' }] }),
+      defaultFromSchema,
+      defaultFromUi,
+    )
+
+    await waitFor(() => {
+      expect(latest()?.consignee_country).toEqual({ value: 'GB', label: 'United Kingdom' })
+    })
+  })
+
+  it('clears this field when the sibling is cleared', async () => {
+    const { latest } = renderForm(
+      {
+        importing_country: { value: 'GB', label: 'United Kingdom' },
+        consignee_country: { value: 'US', label: 'United States' },
+      },
+      () => Promise.resolve({ options: [{ id: 'GB', name: 'United Kingdom' }] }),
+      defaultFromSchema,
+      defaultFromUi,
+    )
+
+    // Importing country is the first field; its clear control is the first "Clear selection".
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear selection' })[0])
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toBeUndefined()
+      expect(latest()?.consignee_country).toBeUndefined()
+    })
+  })
+})
+
+describe('SearchSelectControl defaultFrom (string mode)', () => {
+  const stringSchema = {
+    type: 'object',
+    properties: {
+      importing_country: {
+        type: 'string',
+        title: 'Importing Country',
+        'x-search': { service: 'countries', mode: 'small-list', displayTemplate: '{name}' },
+      },
+      consignee_country: {
+        type: 'string',
+        title: 'Consignee Country',
+        'x-defaultFrom': 'importing_country',
+        'x-search': {
+          service: 'countries',
+          mode: 'small-list',
+          displayTemplate: '{name}',
+        },
+      },
+    },
+  } as unknown as JsonSchema
+
+  const stringUi = {
+    type: 'VerticalLayout',
+    elements: [
+      { type: 'Control', scope: '#/properties/importing_country' },
+      { type: 'Control', scope: '#/properties/consignee_country' },
+    ],
+  } as UISchemaElement
+
+  const options = () =>
+    Promise.resolve({
+      options: [
+        { id: 'GB', name: 'United Kingdom' },
+        { id: 'US', name: 'United States' },
+        { id: 'AU', name: 'Australia' },
+      ],
+    })
+
+  it('copies the sibling id while empty and overwrites a user edit when the sibling changes', async () => {
+    const { latest } = renderForm({}, options, stringSchema, stringUi)
+
+    fireEvent.focus(screen.getAllByRole('textbox')[0])
+    fireEvent.click(await screen.findByText('United Kingdom'))
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toBe('GB')
+      expect(latest()?.consignee_country).toBe('GB')
+    })
+
+    fireEvent.focus(screen.getAllByRole('textbox')[1])
+    fireEvent.click(await screen.findByText('United States'))
+
+    await waitFor(() => {
+      expect(latest()?.consignee_country).toBe('US')
+      expect(latest()?.importing_country).toBe('GB')
+    })
+
+    fireEvent.focus(screen.getAllByRole('textbox')[0])
+    fireEvent.click(await screen.findByText('Australia'))
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toBe('AU')
+      expect(latest()?.consignee_country).toBe('AU')
+    })
+  })
+
+  it('clears this field when the sibling is cleared', async () => {
+    const { latest } = renderForm({ importing_country: 'GB', consignee_country: 'US' }, options, stringSchema, stringUi)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear selection' })[0])
+
+    await waitFor(() => {
+      expect(latest()?.importing_country).toBeUndefined()
+      expect(latest()?.consignee_country).toBeUndefined()
+    })
   })
 })
 

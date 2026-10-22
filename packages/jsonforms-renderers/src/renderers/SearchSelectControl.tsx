@@ -5,6 +5,7 @@ import { ChevronDownIcon } from '@radix-ui/react-icons'
 import { useState, useRef, useEffect, useCallback, useMemo, type KeyboardEvent } from 'react'
 import { useSearchService, type SearchOption } from '../contexts/SearchServiceContext'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useDefaultFrom } from '../hooks/useDefaultFrom'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
 import { renderTemplate } from '../utils/template'
@@ -234,6 +235,8 @@ const SearchSelectControl = ({
     const changed = Object.keys(parentValues).some((k) => prev[k] !== undefined && prev[k] !== parentValues[k])
     if (changed) handleChange(path, undefined)
   }, [parentValuesKey, hasSelection, handleChange, path])
+
+  useDefaultFrom(data, path, schema, enabled, visible, handleChange)
 
   useEffect(() => {
     if (isMulti) {
