@@ -90,6 +90,16 @@ describe('ArrayControl itemLabel', () => {
     expect(html).not.toContain('Add Item')
   })
 
+  it('hides the heading when the control label is false, even if a translation was passed in', () => {
+    const html = renderArray(undefined, {
+      label: 'Pièces jointes',
+      schema: { type: 'array', title: 'Attachments', items: itemsSchema },
+      uischema: { type: 'Control', scope: '#/properties/attachments', label: false, i18n: 'attachments' },
+    })
+    expect(html).not.toContain('Pièces jointes')
+    expect(html).not.toContain('Attachments')
+  })
+
   it('uses a string label in place of the schema title', () => {
     const html = renderArray(undefined, {
       label: 'Supporting documents',

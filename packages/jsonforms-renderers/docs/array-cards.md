@@ -68,4 +68,4 @@ These apply to every list, with or without cards.
 
 The wording goes through the form's JSON Forms translator, like the [stepper's](./categorization-stepper.md#translation): `list.<key>` and `upload.<key>`, with English defaults exported as `LIST_MESSAGES` and `UPLOAD_MESSAGES`.
 
-A list can give itself a different wording. The key is `<prefix>.list.<key>`, and `<prefix>` is the control's `i18n`, or the schema's `i18n`, or the data path with array indexes removed (`attachments` for a control at `order.attachments`). A key the translator does not have falls back to the global `list.<key>`. The heading is translated by JSON Forms itself, under `<prefix>.label`.
+A list can give itself a different wording. The key is `<prefix>.list.<key>`, and `<prefix>` is the control's `i18n`, or the schema's `i18n`, or the data path with array indexes removed (`attachments` for a control at `order.attachments`). A key the translator does not have falls back to the global `list.<key>`. The heading is translated by JSON Forms itself, under `<prefix>.label`. `label: false` still hides it when that key has a translation.

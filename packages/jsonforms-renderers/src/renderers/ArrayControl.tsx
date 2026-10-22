@@ -185,12 +185,13 @@ export const ArrayControl = ({
   const itemLabel = options.itemLabel || 'Item'
   const addLabel = options.addLabel || t('addItem')
   const emptyLabel = options.emptyLabel || t('empty')
-  // JSON Forms resolves `uischema.label` into the `label` prop: a string
-  // replaces the schema title, and `false` arrives as ''. The required mark
-  // is part of that heading. A direct render that omits the prop still shows
-  // the schema title. The error names the heading, or the schema title when
-  // the heading is hidden, so "Attachments is required" still reads.
-  const heading = label !== undefined ? label : schemaTitle
+  // JSON Forms turns `label: false` into '' and then still translates
+  // `<prefix>.label`, so a translation can put the heading back. Read the
+  // uischema for the hide. A string label replaces the schema title. A direct
+  // render that omits the prop still shows the schema title. The required
+  // mark is part of the heading. The error names the heading, or the schema
+  // title when the heading is hidden, so "Attachments is required" still reads.
+  const heading = uischema.label === false ? '' : label !== undefined ? label : schemaTitle
   const fieldName = heading || schemaTitle
   // minItems >= 1 is separate from schema `required`: an empty array fails
   // with a minItems error, not a required error, so useIsRequired alone
