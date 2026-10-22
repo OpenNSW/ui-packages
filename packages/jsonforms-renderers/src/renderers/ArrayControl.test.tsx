@@ -1,4 +1,5 @@
-import type { ArrayControlProps, ControlElement, JsonSchema } from '@jsonforms/core'
+import type { ArrayControlProps, ControlElement, JsonSchema, Translator } from '@jsonforms/core'
+import { JsonFormsStateProvider } from '@jsonforms/react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { ArrayControl } from './ArrayControl'
@@ -19,7 +20,11 @@ const itemsSchema: JsonSchema = {
   properties: { name: { type: 'string' } },
 }
 
-function renderArray(options?: ControlElement['options'], overrides: Record<string, unknown> = {}) {
+function renderArray(
+  options?: ControlElement['options'],
+  overrides: Record<string, unknown> = {},
+  translate?: Translator,
+) {
   // Cast once at the boundary: JsonSchema includes draft-04 shapes that are not
   // assignable to ArrayControlProps' JsonSchema7 fields (e.g. exclusiveMaximum).
   const props = {
@@ -36,7 +41,13 @@ function renderArray(options?: ControlElement['options'], overrides: Record<stri
     errors: '',
     ...overrides,
   } as unknown as ArrayControlProps
-  return renderToStaticMarkup(<ArrayControl {...props} />)
+  const control = <ArrayControl {...props} />
+  if (!translate) return renderToStaticMarkup(control)
+  return renderToStaticMarkup(
+    <JsonFormsStateProvider initState={{ core: { data: {}, schema: {}, uischema: {} }, i18n: { translate } }}>
+      {control}
+    </JsonFormsStateProvider>,
+  )
 }
 
 describe('ArrayControl itemLabel', () => {
@@ -54,22 +65,22 @@ describe('ArrayControl itemLabel', () => {
     expect(html).not.toContain('Container 1')
   })
 
-  it('spells the row number when itemOrdinal is word', () => {
-    const html = renderArray({ itemLabel: 'Attachment', itemOrdinal: 'word' })
+  it('spells the row number when itemNumber is word', () => {
+    const html = renderArray({ itemLabel: 'Attachment', itemNumber: 'word' })
     expect(html).toContain('Attachment One')
     expect(html).toContain('Attachment Two')
     expect(html).not.toContain('Attachment 1')
   })
 
-  it('uses addLabel and emptyLabel, and hides the schema title when showTitle is false', () => {
+  it('uses addLabel and emptyLabel, and hides the heading when label is empty', () => {
     const html = renderArray(
       {
-        showTitle: false,
         addLabel: 'Add Attachment',
         emptyLabel: 'No attachments have been added yet.',
       },
       {
         data: [],
+        label: '',
         schema: { type: 'array', title: 'Attachments', items: itemsSchema },
       },
     )
@@ -77,6 +88,89 @@ describe('ArrayControl itemLabel', () => {
     expect(html).toContain('No attachments have been added yet.')
     expect(html).not.toContain('Attachments')
     expect(html).not.toContain('Add Item')
+  })
+
+  it('uses a string label in place of the schema title', () => {
+    const html = renderArray(undefined, {
+      label: 'Supporting documents',
+      schema: { type: 'array', title: 'Attachments', items: itemsSchema },
+    })
+    expect(html).toContain('Supporting documents')
+    expect(html).not.toContain('Attachments')
+  })
+
+  it('keeps the required mark on the heading, and names the schema title in the error when the heading is hidden', () => {
+    const shown = renderArray(undefined, {
+      label: 'Supporting documents',
+      required: true,
+      schema: { type: 'array', title: 'Attachments', items: itemsSchema },
+    })
+    expect(shown).toContain('Supporting documents')
+    expect(shown).toContain('*')
+
+    const hidden = renderArray(undefined, {
+      data: [],
+      label: '',
+      required: true,
+      errors: 'is a required property',
+      schema: { type: 'array', title: 'Attachments', items: itemsSchema },
+    })
+    expect(hidden).toContain('Attachments is required')
+    expect(hidden).not.toContain('*')
+  })
+
+  it('uses a per-control translation before the global list key, and a literal label before either', () => {
+    const translate = ((id: string, defaultMessage?: string) => {
+      if (id === 'attachments.list.addItem') return 'Ajouter une pièce jointe'
+      if (id === 'attachments.list.empty') return 'Aucune pièce jointe.'
+      if (id === 'list.addItem') return 'Ajouter'
+      if (id === 'list.empty') return 'Rien.'
+      return defaultMessage
+    }) as Translator
+    const html = renderArray(
+      undefined,
+      {
+        data: [],
+        uischema: { type: 'Control', scope: '#/properties/attachments', i18n: 'attachments' },
+      },
+      translate,
+    )
+    expect(html).toContain('Ajouter une pièce jointe')
+    expect(html).toContain('Aucune pièce jointe.')
+    expect(html).not.toContain('Add Item')
+    expect(html).not.toContain('Rien.')
+
+    const literal = renderArray(
+      undefined,
+      {
+        data: [],
+        uischema: {
+          type: 'Control',
+          scope: '#/properties/attachments',
+          i18n: 'attachments',
+          options: { addLabel: 'Add Attachment', emptyLabel: 'None yet.' },
+        },
+      },
+      translate,
+    )
+    expect(literal).toContain('Add Attachment')
+    expect(literal).toContain('None yet.')
+    expect(literal).not.toContain('Ajouter une pièce jointe')
+  })
+
+  it('falls back to the global list key when the control has no translation of its own', () => {
+    const translate = ((id: string, defaultMessage?: string) =>
+      id === 'list.empty' ? 'Rien.' : defaultMessage) as Translator
+    const html = renderArray(
+      undefined,
+      {
+        data: [],
+        uischema: { type: 'Control', scope: '#/properties/attachments', i18n: 'attachments' },
+      },
+      translate,
+    )
+    expect(html).toContain('Rien.')
+    expect(html).toContain('Add Item')
   })
 })
 

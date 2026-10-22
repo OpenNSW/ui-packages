@@ -1,6 +1,7 @@
 import {
   createDefaultValue,
   getControlPath,
+  getI18nKeyPrefix,
   type ArrayControlProps,
   type JsonSchema,
   type UISchemaElement,
@@ -9,6 +10,7 @@ import { withJsonFormsArrayControlProps, JsonFormsDispatch, useJsonForms } from 
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { stampRowTemplates } from '../utils/sequence'
 import type { SequenceCounters } from '../utils/sequence'
+import { spellNumber } from '../utils/numberWords'
 import { getErrorMessage } from '../utils/error'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { type ListMessage, type MessageValues, listText } from '../utils/messages'
@@ -21,11 +23,10 @@ interface ListOptions {
   addable?: boolean
   removable?: boolean
   itemLabel?: string
-  /** "word" spells the row number (Attachment One). Defaults to a digit. */
-  itemOrdinal?: 'number' | 'word'
+  /** "word" spells the row number in English (Attachment One). Defaults to a digit. */
+  itemNumber?: 'number' | 'word'
   addLabel?: string
   emptyLabel?: string
-  showTitle?: boolean
   errorMessage?: string
   detail?: UISchemaElement
   /** "cards": each item is a one-line card that opens in a dialog. */
@@ -36,40 +37,6 @@ interface ListOptions {
   summaryDetail?: string
   /** Running totals above the list. */
   totals?: ListTotal[]
-}
-
-const ONES = [
-  '',
-  'One',
-  'Two',
-  'Three',
-  'Four',
-  'Five',
-  'Six',
-  'Seven',
-  'Eight',
-  'Nine',
-  'Ten',
-  'Eleven',
-  'Twelve',
-  'Thirteen',
-  'Fourteen',
-  'Fifteen',
-  'Sixteen',
-  'Seventeen',
-  'Eighteen',
-  'Nineteen',
-]
-const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
-
-function wordOrdinal(n: number): string {
-  if (n < 20) return ONES[n] ?? String(n)
-  if (n < 100) {
-    const ten = Math.floor(n / 10)
-    const one = n % 10
-    return one === 0 ? TENS[ten] : `${TENS[ten]}-${ONES[one]}`
-  }
-  return String(n)
 }
 
 interface AddItemButtonProps {
@@ -151,6 +118,8 @@ export const ArrayControl = ({
   removeItems,
   rootSchema,
   arraySchema,
+  label,
+  i18nKeyPrefix,
   required = false,
   errors = '',
 }: ArrayControlProps) => {
@@ -168,7 +137,11 @@ export const ArrayControl = ({
   const ctx = useJsonForms()
   const translate = ctx.i18n?.translate
   const locale = ctx.i18n?.locale
-  const t = (key: ListMessage, values?: MessageValues) => listText(translate, key, values)
+  // The HOC passes the prefix JSON Forms computed for this control. A direct
+  // render does not, so derive the same one: the control's `i18n`, else the
+  // schema's, else the data path.
+  const i18nPrefix = i18nKeyPrefix ?? getI18nKeyPrefix(arraySchema ?? schema, uischema, path)
+  const t = (key: ListMessage, values?: MessageValues) => listText(translate, key, values, i18nPrefix)
 
   // The row waiting for the remove confirmation, the row open in the dialog
   // (cards only; isNew while it is a row just added), and what the last
@@ -204,7 +177,7 @@ export const ArrayControl = ({
   const validItemsSchema = itemsSchema
 
   const items = Array.isArray(data) ? (data as unknown[]) : []
-  const title = actualArraySchema.title || 'Array Items'
+  const schemaTitle = actualArraySchema.title || 'Array Items'
   const options = (uischema.options ?? {}) as ListOptions
   const cards = options.display === 'cards'
   const canAdd = enabled && options.addable !== false
@@ -212,7 +185,13 @@ export const ArrayControl = ({
   const itemLabel = options.itemLabel || 'Item'
   const addLabel = options.addLabel || t('addItem')
   const emptyLabel = options.emptyLabel || t('empty')
-  const showTitle = options.showTitle !== false
+  // JSON Forms resolves `uischema.label` into the `label` prop: a string
+  // replaces the schema title, and `false` arrives as ''. The required mark
+  // is part of that heading. A direct render that omits the prop still shows
+  // the schema title. The error names the heading, or the schema title when
+  // the heading is hidden, so "Attachments is required" still reads.
+  const heading = label !== undefined ? label : schemaTitle
+  const fieldName = heading || schemaTitle
   // minItems >= 1 is separate from schema `required`: an empty array fails
   // with a minItems error, not a required error, so useIsRequired alone
   // would miss it.
@@ -221,12 +200,13 @@ export const ArrayControl = ({
   const isValid = !errors
   // options.errorMessage is for the empty-array case (required / minItems).
   // Other array errors (e.g. maxItems) keep AJV's message.
-  const displayError = !isValid ? (items.length === 0 && options.errorMessage) || getErrorMessage(errors, title) : ''
+  const displayError = !isValid
+    ? (items.length === 0 && options.errorMessage) || getErrorMessage(errors, fieldName)
+    : ''
 
   const summaryOf = (row: unknown) =>
     options.summary ? summarizeRow(options.summary, row, validItemsSchema, locale) : ''
-  const nameOf = (index: number) =>
-    `${itemLabel} ${options.itemOrdinal === 'word' ? wordOrdinal(index + 1) : index + 1}`
+  const nameOf = (index: number) => `${itemLabel} ${options.itemNumber === 'word' ? spellNumber(index + 1) : index + 1}`
   // "Item 2 (MEDIUM · 240 bags)": the row's name, with its summary when it has one.
   const fullNameOf = (index: number) => {
     const summary = summaryOf(items[index])
@@ -291,9 +271,9 @@ export const ArrayControl = ({
   return (
     <Box mb="6" id={path} tabIndex={-1} style={{ outline: 'none' }}>
       <Flex direction="column" gap="4">
-        {showTitle && (
+        {heading && (
           <Text as="div" size="4" weight="bold">
-            {title} {showRequired && <Text color="red">*</Text>}
+            {heading} {showRequired && <Text color="red">*</Text>}
           </Text>
         )}
 
