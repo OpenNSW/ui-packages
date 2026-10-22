@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from 'react'
 import dayjs from 'dayjs'
 
 import { useIsRequired } from '../hooks/useIsRequired'
+import { earliestCalendarDay } from '../utils/dateBound'
 import { getErrorMessage } from '../utils/error'
 import { useReadOnlyMark } from '../contexts/formReview'
 import { ReadOnlyLock } from './ReadOnlyLock'
@@ -21,14 +22,6 @@ import { timeInputValue, toRfc3339Time } from '../utils/time'
 // dayjs().format() defaults to RFC 3339 (e.g. 2026-06-05T12:30:00+05:30) with
 // seconds + local offset, which ajv's strict "date-time" format check requires.
 const toISODateTime = (dateStr: string, timeStr: string) => dayjs(`${dateStr}T${timeStr}`).format()
-
-// Local calendar day. "today" is the trader's day, not UTC.
-export function localISODate(now = new Date()): string {
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
 
 type ShellProps = Pick<ControlProps, 'path' | 'label' | 'required' | 'errors'> & {
   description?: string
@@ -88,10 +81,9 @@ export const DateControl = ({
   // Stored values always include seconds so AJV format "time" still passes.
   const showSeconds = uischema?.options?.showSeconds === true
   const timeStep = showSeconds ? 1 : 60
-  // options.minDate "today" blocks yesterday in the picker. Submit still
-  // needs the schema keyword (notBefore) because a typed or stored value
-  // can bypass the input's min attribute.
-  const earliestDate = uischema?.options?.minDate === 'today' && schema.format !== 'time' ? localISODate() : undefined
+  // formatMinimum "today" (or a YYYY-MM-DD) is the earliest day. The same
+  // keyword is what Ajv checks, once addDateBounds has been applied.
+  const earliestDate = earliestCalendarDay(schema)
 
   const shell = (children: ReactNode) => (
     <FieldShell path={path} label={label} required={showRequired} errors={errors} description={schema.description}>
