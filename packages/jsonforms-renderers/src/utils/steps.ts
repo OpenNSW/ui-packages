@@ -7,6 +7,7 @@ import {
   type Translator,
   type UISchemaElement,
   composePaths,
+  encode,
   createLabelDescriptionFrom,
   defaultTranslator,
   getControlPath,
@@ -83,70 +84,89 @@ export function controlLabel(
 }
 
 /**
- * The controls of one step that the form's errors point at, one entry per
+ * The controls of each step that the form's errors point at, one entry per
  * control, in the order the step shows them. The stepper adds no checks of its
  * own: it only sorts the errors JSON Forms (and the host) already have into
- * steps. `path` is where the Categorization sits in the data.
+ * steps. `steps` holds each step's controls; `path` is where the
+ * Categorization sits in the data.
  *
  * An object the trader has not started is missing from the data, so AJV reports
- * one `required` error on it instead of errors on its fields. No control sits
- * at that path, so the error goes to the first control in the step that is
- * required all the way down from the object: each step holding a field the
- * trader still has to fill in shows it, and a step with only optional fields
- * under it does not. An object that requires none of its fields goes to its
- * first control.
+ * one `required` error on it instead of errors on its fields. That error counts
+ * for each field the schema requires inside the object, on whichever step shows
+ * it. When no step shows one, it goes to the first control under the object,
+ * so the step that holds the object is still flagged.
  */
 export function stepProblems(
-  controls: ControlElement[],
+  steps: ControlElement[][],
   errors: FormError[],
   rootSchema: JsonSchema,
   path = '',
   translate: Translator = defaultTranslator,
-): StepProblem[] {
-  const entries = controls.map((control) => ({ control, path: controlPath(control, path) }))
-  const flagged = new Set<ControlElement>()
-  for (const failing of new Set(errors.map((error) => getControlPath(error) as string))) {
-    const own = entries.filter(({ path }) => within(failing, path))
-    if (own.length) {
-      own.forEach(({ control }) => flagged.add(control))
-      continue
-    }
-    const below = entries.filter(({ path }) => failing !== '' && path.startsWith(`${failing}.`))
-    if (!below.length) continue
-    const depth = (p: string) => p.slice(failing.length + 1).split('.').length
-    const required = below.find(({ control, path }) => requiredBelow(control, depth(path), rootSchema) === true)
-    const first = below[0]
-    const target =
-      required ?? (requiredBelow(first.control, depth(first.path), rootSchema) === undefined ? first : undefined)
-    if (target) flagged.add(target.control)
+): StepProblem[][] {
+  const entries = steps.map((controls) => controls.map((control) => ({ control, path: controlPath(control, path) })))
+  const flagged = steps.map(() => new Set<ControlElement>())
+  const failing = failingPaths(errors, rootSchema)
+  // Paths some control was flagged for, so a missing object whose fields were
+  // found needs no stand-in.
+  const found: string[] = []
+  for (const { path: failed } of failing) {
+    entries.forEach((step, i) =>
+      step.forEach(({ control, path }) => {
+        if (!within(failed, path)) return
+        flagged[i].add(control)
+        found.push(failed)
+      }),
+    )
   }
-  return entries
-    .filter(({ control }) => flagged.has(control))
-    .map(({ control, path }) => ({ path, label: controlLabel(control, rootSchema, path, translate) }))
+  // Deepest first, so a stand-in inside a nested object also covers the objects around it.
+  const unfound = failing
+    .filter(({ path, missing }) => missing && !found.some((f) => within(f, path)))
+    .sort((a, b) => b.path.split('.').length - a.path.split('.').length)
+  for (const { path: failed } of unfound) {
+    if (found.some((f) => within(f, failed))) continue
+    const under = ({ path }: { path: string }) => path.startsWith(`${failed}.`)
+    const i = entries.findIndex((step) => step.some(under))
+    if (i === -1) continue
+    flagged[i].add(entries[i].find(under)!.control)
+    found.push(failed)
+  }
+  return entries.map((step, i) =>
+    step
+      .filter(({ control }) => flagged[i].has(control))
+      .map(({ control, path }) => ({ path, label: controlLabel(control, rootSchema, path, translate) })),
+  )
 }
 
 /**
- * Whether a control's field is required at each of the last `depth` levels of
- * its scope: true when it is, false when the object at that level requires
- * some fields but not this one, undefined when its schema is not found or
- * requires none of its fields.
+ * The dotted data path of each error, and of each field it leaves missing: a
+ * `required` error on an object counts for every field the object requires, and
+ * so on into the objects among them. `missing` marks a path absent from the data.
  */
-function requiredBelow(control: ControlElement, depth: number, rootSchema: JsonSchema): boolean | undefined {
-  const parts = control.scope.split('/')
-  const names: string[] = []
-  for (let i = 0; i < depth; i++) {
-    const name = parts.pop()
-    if (parts.pop() !== 'properties' || name === undefined) return undefined
-    names.unshift(name)
+function failingPaths(errors: FormError[], rootSchema: JsonSchema): { path: string; missing: boolean }[] {
+  const paths = new Map<string, boolean>()
+  const addMissing = (path: string, depth: number) => {
+    if (paths.get(path) === true) return
+    paths.set(path, true)
+    // A schema can refer to itself: stop well past any form's nesting.
+    if (depth > 16) return
+    const schema = schemaAt(rootSchema, path)
+    for (const name of schema?.required ?? []) addMissing(composePaths(path, name), depth + 1)
   }
-  let scope = parts.join('/')
-  for (const [level, name] of names.entries()) {
-    const required = Resolve.schema(rootSchema, scope, rootSchema)?.required
-    if (!required?.length) return level === 0 ? undefined : false
-    if (!required.includes(name)) return false
-    scope = `${scope}/properties/${name}`
+  for (const error of errors) {
+    const path = getControlPath(error) as string
+    if (error.keyword === 'required' && path !== '') addMissing(path, 0)
+    else if (!paths.has(path)) paths.set(path, false)
   }
-  return true
+  return [...paths].map(([path, missing]) => ({ path, missing }))
+}
+
+/** The schema of the value at a dotted data path, or undefined. */
+function schemaAt(rootSchema: JsonSchema, path: string): JsonSchema | undefined {
+  const scope = path
+    .split('.')
+    .map((key) => (/^\d+$/.test(key) ? 'items' : `properties/${encode(key)}`))
+    .join('/')
+  return Resolve.schema(rootSchema, `#/${scope}`, rootSchema)
 }
 
 /** What a step not yet reached holds, for the note under it in the step list. */

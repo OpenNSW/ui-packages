@@ -29,14 +29,16 @@ describe('stepProblems', () => {
       error('/rows/1/y', 'type'),
       error('', 'required', { missingProperty: 'elsewhere' }),
     ]
-    expect(stepProblems(controls, errors, schema)).toEqual([
-      { path: 'a', label: 'Alpha' },
-      { path: 'rows', label: 'Items' },
+    expect(stepProblems([controls], errors, schema)).toEqual([
+      [
+        { path: 'a', label: 'Alpha' },
+        { path: 'rows', label: 'Items' },
+      ],
     ])
   })
 
   it('finds nothing without errors: it adds no checks of its own', () => {
-    expect(stepProblems(controls, [], schema)).toEqual([])
+    expect(stepProblems([controls], [], schema)).toEqual([[]])
   })
 })
 
@@ -52,42 +54,86 @@ describe('stepProblems for an object not started yet', () => {
       },
       traders: {
         type: 'object',
-        required: ['exporter'],
+        required: ['exporter', 'agent'],
         properties: {
+          notes: {},
           exporter: { type: 'object', required: ['name'], properties: { tin: {}, name: { title: 'Exporter name' } } },
+          agent: { type: 'object', properties: { code: { title: 'Agent code' }, phone: {} } },
         },
       },
       extra: { type: 'object', properties: { a: { title: 'A' }, b: {} } },
+      charges: {
+        type: 'object',
+        required: ['total'],
+        properties: { total: {}, remarks: { title: 'Remarks' }, 'a/b': { title: 'Slashed' } },
+      },
+      app: { type: 'object', required: ['transport'], properties: { transport: { $ref: '#/properties/transport' } } },
     },
   }
   const ctl = (scope: string): ControlElement => ({ type: 'Control', scope })
-  const missing = (name: string) => error('', 'required', { missingProperty: name })
+  const at = (path: string) => ctl(`#/properties/${path.split('.').join('/properties/')}`)
+  const missing = (name: string, parent = '') => error(parent, 'required', { missingProperty: name })
+  const paths = (problems: { path: string }[][]) => problems.map((step) => step.map((p) => p.path))
 
-  it("names the step's first field required under it", () => {
-    const step = [ctl('#/properties/transport/properties/note'), ctl('#/properties/transport/properties/vessel')]
-    expect(stepProblems(step, [missing('transport')], schema)).toEqual([{ path: 'transport.vessel', label: 'Vessel' }])
-  })
-
-  it('flags each step with a required field under it, and not a step with only optional ones', () => {
-    expect(stepProblems([ctl('#/properties/transport/properties/mode')], [missing('transport')], schema)).toEqual([
-      { path: 'transport.mode', label: 'Mode' },
+  it('flags every field the object requires, on whichever step shows it', () => {
+    const steps = [[at('transport.note'), at('transport.vessel')], [at('transport.flag')], [at('transport.mode')]]
+    expect(stepProblems(steps, [missing('transport')], schema)).toEqual([
+      [{ path: 'transport.vessel', label: 'Vessel' }],
+      [],
+      [{ path: 'transport.mode', label: 'Mode' }],
     ])
-    expect(stepProblems([ctl('#/properties/transport/properties/flag')], [missing('transport')], schema)).toEqual([])
   })
 
-  it('follows required through nested objects', () => {
-    const step = [
-      ctl('#/properties/traders/properties/exporter/properties/tin'),
-      ctl('#/properties/traders/properties/exporter/properties/name'),
+  it('follows required into nested objects, and stands in for one that requires none of its fields', () => {
+    const steps = [
+      [at('traders.notes')],
+      [at('traders.exporter.tin'), at('traders.exporter.name')],
+      [at('traders.agent.phone'), at('traders.agent.code')],
     ]
-    expect(stepProblems(step, [missing('traders')], schema)).toEqual([
-      { path: 'traders.exporter.name', label: 'Exporter name' },
+    expect(paths(stepProblems(steps, [missing('traders')], schema))).toEqual([
+      [],
+      ['traders.exporter.name'],
+      ['traders.agent.phone'],
     ])
   })
 
   it('names the first field of an object that requires none', () => {
-    const step = [ctl('#/properties/extra/properties/a'), ctl('#/properties/extra/properties/b')]
-    expect(stepProblems(step, [missing('extra')], schema)).toEqual([{ path: 'extra.a', label: 'A' }])
+    expect(stepProblems([[at('extra.a'), at('extra.b')]], [missing('extra')], schema)).toEqual([
+      [{ path: 'extra.a', label: 'A' }],
+    ])
+  })
+
+  it("names the object's first field on a step when no step shows a field it requires", () => {
+    const steps = [[at('transport.vessel')], [at('charges.remarks'), at('charges.a~1b')]]
+    expect(paths(stepProblems(steps, [missing('charges')], schema))).toEqual([[], ['charges.remarks']])
+  })
+
+  it('reads an escaped property name as the schema spells it', () => {
+    const slashed = {
+      ...schema,
+      properties: {
+        ...schema.properties,
+        charges: { type: 'object', required: ['a/b'], properties: { remarks: {}, 'a/b': { title: 'Slashed' } } },
+      },
+    } as JsonSchema
+    expect(stepProblems([[at('charges.remarks'), at('charges.a~1b')]], [missing('charges')], slashed)).toEqual([
+      [{ path: 'charges.a/b', label: 'Slashed' }],
+    ])
+  })
+
+  it('leaves a started object alone when another of its checks fails', () => {
+    // A failed if/then also reports `if` on the object, with the real error on its field.
+    const errors = [missing('flag', '/transport'), error('/transport', 'if'), error('/transport', 'minProperties')]
+    const steps = [[at('transport.vessel')], [at('transport.flag')]]
+    expect(paths(stepProblems(steps, errors, schema))).toEqual([[], ['transport.flag']])
+  })
+
+  it('reads the schema at the data path when the Categorization sits below the root', () => {
+    const steps = [[at('note'), at('vessel')], [at('mode')]]
+    expect(paths(stepProblems(steps, [missing('transport', '/app')], schema, 'app.transport'))).toEqual([
+      ['app.transport.vessel'],
+      ['app.transport.mode'],
+    ])
   })
 })
 
@@ -113,8 +159,8 @@ describe('a Categorization below the data root', () => {
 
   it('matches root-relative errors to its controls', () => {
     const errors = [error('/rows/1', 'required', { missingProperty: 'qty' })]
-    expect(stepProblems([qty], errors, schema, 'rows.1')).toEqual([{ path: 'rows.1.qty', label: 'Quantity' }])
-    expect(stepProblems([qty], errors, schema, 'rows.0')).toEqual([])
+    expect(stepProblems([[qty]], errors, schema, 'rows.1')).toEqual([[{ path: 'rows.1.qty', label: 'Quantity' }]])
+    expect(stepProblems([[qty]], errors, schema, 'rows.0')).toEqual([[]])
   })
 
   it('reads its answers at its own path', () => {
