@@ -6,7 +6,7 @@ import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
 import { radixRenderers } from './index'
-import { localISODate } from '../utils/dateBound'
+import { localISODate } from './DateControl'
 
 type Data = Record<string, unknown>
 
@@ -87,21 +87,14 @@ const shipmentSchema: JsonSchema = {
   },
 }
 
-const shipmentNotBeforeToday = {
-  type: 'object',
-  properties: {
-    estimated_shipment_date: {
-      type: 'string',
-      format: 'date',
-      title: 'Estimated Shipment Date',
-      formatMinimum: 'today',
-    },
-  },
-} as JsonSchema
-
 const shipmentControl = {
   type: 'VerticalLayout',
   elements: [{ type: 'Control', scope: '#/properties/estimated_shipment_date' }],
+} as UISchemaElement
+
+const shipmentNoPast = {
+  type: 'VerticalLayout',
+  elements: [{ type: 'Control', scope: '#/properties/estimated_shipment_date', options: { minDate: 'today' } }],
 } as UISchemaElement
 
 function daysAgo(n: number): string {
@@ -157,10 +150,10 @@ describe('DateControl time', () => {
   })
 })
 
-describe('DateControl formatMinimum today', () => {
-  it('sets the picker minimum to the local calendar day and keeps today', async () => {
+describe('DateControl no past days', () => {
+  it('sets the picker minimum to the current day and keeps that day', async () => {
     const today = localISODate()
-    const { writes } = renderForm(shipmentNotBeforeToday, shipmentControl, {})
+    const { writes } = renderForm(shipmentSchema, shipmentNoPast, {})
     const input = screen.getByLabelText(/Estimated Shipment Date/)
 
     expect(input.getAttribute('min')).toBe(today)
@@ -171,9 +164,9 @@ describe('DateControl formatMinimum today', () => {
     })
   })
 
-  it('does not store a date before today', async () => {
+  it('does not store a date before the current day', async () => {
     const yesterday = daysAgo(1)
-    const { writes } = renderForm(shipmentNotBeforeToday, shipmentControl, {})
+    const { writes } = renderForm(shipmentSchema, shipmentNoPast, {})
     const input = screen.getByLabelText(/Estimated Shipment Date/)
 
     fireEvent.change(input, { target: { value: yesterday } })
@@ -183,7 +176,7 @@ describe('DateControl formatMinimum today', () => {
     expect((input as HTMLInputElement).value).not.toBe(yesterday)
   })
 
-  it('still stores a past date when formatMinimum is not set', async () => {
+  it('still stores a past date when the control does not set a minimum', async () => {
     const yesterday = daysAgo(1)
     const { writes } = renderForm(shipmentSchema, shipmentControl, {})
     const input = screen.getByLabelText(/Estimated Shipment Date/)
