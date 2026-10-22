@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { JsonForms } from '@jsonforms/react'
@@ -40,16 +40,19 @@ function renderForm(schema: JsonSchema, uischema: UISchemaElement, seed: Data) {
   })
 
   function Harness() {
-    const [initial] = useState(seed)
+    const [data, setData] = useState(seed)
     return (
       <Theme>
         <JsonForms
           schema={schema}
           uischema={uischema}
-          data={initial}
+          data={data}
           renderers={radixRenderers}
-          onChange={({ data }) => {
-            if (live) writes.push(data as Data)
+          onChange={({ data: next }) => {
+            if (!live) return
+            const row = next as Data
+            writes.push(row)
+            setData(row)
           }}
         />
       </Theme>
@@ -151,11 +154,23 @@ describe('DateControl time', () => {
 })
 
 describe('DateControl no past days', () => {
+  beforeEach(() => {
+    // Date is frozen at 22 Oct 2026. shouldAdvanceTime lets JsonForms' debounced
+    // onChange still fire; faking Date alone never lets that 10ms debounce elapse.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date(2026, 9, 22, 12))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('sets the picker minimum to the current day and keeps that day', async () => {
     const today = localISODate()
     const { writes } = renderForm(shipmentSchema, shipmentNoPast, {})
     const input = screen.getByLabelText(/Estimated Shipment Date/)
 
+    expect(today).toBe('2026-10-22')
     expect(input.getAttribute('min')).toBe(today)
 
     fireEvent.change(input, { target: { value: today } })
@@ -164,16 +179,46 @@ describe('DateControl no past days', () => {
     })
   })
 
-  it('does not store a date before the current day', async () => {
-    const yesterday = daysAgo(1)
+  it('keeps each typed year digit, then keeps a finished day on or after today', async () => {
     const { writes } = renderForm(shipmentSchema, shipmentNoPast, {})
     const input = screen.getByLabelText(/Estimated Shipment Date/)
 
-    fireEvent.change(input, { target: { value: yesterday } })
+    for (const value of ['0002-11-01', '0020-11-01', '0202-11-01', '2026-11-01']) {
+      fireEvent.change(input, { target: { value } })
+      await waitFor(() => {
+        expect(writes.at(-1)).toEqual({ estimated_shipment_date: value })
+      })
+      expect((input as HTMLInputElement).value).toBe(value)
+    }
+    fireEvent.blur(input)
+    expect((input as HTMLInputElement).value).toBe('2026-11-01')
+  })
+
+  it('drops a past day typed in this visit when the field is left', async () => {
+    const { writes } = renderForm(shipmentSchema, shipmentNoPast, { estimated_shipment_date: '2026-11-01' })
+    const input = screen.getByLabelText(/Estimated Shipment Date/)
+
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '2020-01-01' } })
     await waitFor(() => {
-      expect(writes.some((row) => row.estimated_shipment_date === yesterday)).toBe(false)
+      expect(writes.at(-1)).toEqual({ estimated_shipment_date: '2020-01-01' })
     })
-    expect((input as HTMLInputElement).value).not.toBe(yesterday)
+    fireEvent.blur(input)
+    await waitFor(() => {
+      expect(writes.at(-1)).toEqual({ estimated_shipment_date: '2026-11-01' })
+    })
+    expect((input as HTMLInputElement).value).toBe('2026-11-01')
+  })
+
+  it('leaves a past day that was already stored', async () => {
+    const { writes } = renderForm(shipmentSchema, shipmentNoPast, { estimated_shipment_date: '2020-01-01' })
+    const input = screen.getByLabelText(/Estimated Shipment Date/)
+
+    fireEvent.focus(input)
+    fireEvent.blur(input)
+
+    expect(writes.some((row) => row.estimated_shipment_date !== '2020-01-01')).toBe(false)
+    expect((input as HTMLInputElement).value).toBe('2020-01-01')
   })
 
   it('still stores a past date when the control does not set a minimum', async () => {
@@ -181,6 +226,7 @@ describe('DateControl no past days', () => {
     const { writes } = renderForm(shipmentSchema, shipmentControl, {})
     const input = screen.getByLabelText(/Estimated Shipment Date/)
 
+    expect(yesterday).toBe('2026-10-21')
     expect(input.getAttribute('min')).toBeNull()
     fireEvent.change(input, { target: { value: yesterday } })
     await waitFor(() => {

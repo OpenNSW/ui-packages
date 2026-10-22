@@ -41,7 +41,7 @@ A form that omits `showSeconds` keeps the hour-and-minute picker and still submi
 
 ## No past days (`options.minDate`)
 
-`options.minDate: "today"` on a date or date-time control sets the picker's minimum to the current day, so an earlier day cannot be selected. The current day is allowed. A typed earlier day is not stored. Any date field opts in the same way:
+`options.minDate: "today"` on a date or date-time control sets the picker's minimum to the current day, so an earlier day cannot be selected. The current day is allowed. A year can be typed one digit at a time; a day before today that was typed in that visit is dropped when the field is left. A day already stored when the field was focused stays. Any date field opts in the same way:
 
 ```json
 {
