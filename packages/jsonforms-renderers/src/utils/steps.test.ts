@@ -40,6 +40,57 @@ describe('stepProblems', () => {
   })
 })
 
+describe('stepProblems for an object not started yet', () => {
+  // AJV reports a missing object once, on the object, not on its fields.
+  const schema: JsonSchema = {
+    type: 'object',
+    properties: {
+      transport: {
+        type: 'object',
+        required: ['vessel', 'mode'],
+        properties: { note: { title: 'Note' }, vessel: { title: 'Vessel' }, mode: { title: 'Mode' }, flag: {} },
+      },
+      traders: {
+        type: 'object',
+        required: ['exporter'],
+        properties: {
+          exporter: { type: 'object', required: ['name'], properties: { tin: {}, name: { title: 'Exporter name' } } },
+        },
+      },
+      extra: { type: 'object', properties: { a: { title: 'A' }, b: {} } },
+    },
+  }
+  const ctl = (scope: string): ControlElement => ({ type: 'Control', scope })
+  const missing = (name: string) => error('', 'required', { missingProperty: name })
+
+  it("names the step's first field required under it", () => {
+    const step = [ctl('#/properties/transport/properties/note'), ctl('#/properties/transport/properties/vessel')]
+    expect(stepProblems(step, [missing('transport')], schema)).toEqual([{ path: 'transport.vessel', label: 'Vessel' }])
+  })
+
+  it('flags each step with a required field under it, and not a step with only optional ones', () => {
+    expect(stepProblems([ctl('#/properties/transport/properties/mode')], [missing('transport')], schema)).toEqual([
+      { path: 'transport.mode', label: 'Mode' },
+    ])
+    expect(stepProblems([ctl('#/properties/transport/properties/flag')], [missing('transport')], schema)).toEqual([])
+  })
+
+  it('follows required through nested objects', () => {
+    const step = [
+      ctl('#/properties/traders/properties/exporter/properties/tin'),
+      ctl('#/properties/traders/properties/exporter/properties/name'),
+    ]
+    expect(stepProblems(step, [missing('traders')], schema)).toEqual([
+      { path: 'traders.exporter.name', label: 'Exporter name' },
+    ])
+  })
+
+  it('names the first field of an object that requires none', () => {
+    const step = [ctl('#/properties/extra/properties/a'), ctl('#/properties/extra/properties/b')]
+    expect(stepProblems(step, [missing('extra')], schema)).toEqual([{ path: 'extra.a', label: 'A' }])
+  })
+})
+
 describe('stepSummary', () => {
   const ctl = (name: string): ControlElement => ({ type: 'Control', scope: `#/properties/${name}` })
 

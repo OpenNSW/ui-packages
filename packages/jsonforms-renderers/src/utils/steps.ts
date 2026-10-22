@@ -87,6 +87,14 @@ export function controlLabel(
  * control, in the order the step shows them. The stepper adds no checks of its
  * own: it only sorts the errors JSON Forms (and the host) already have into
  * steps. `path` is where the Categorization sits in the data.
+ *
+ * An object the trader has not started is missing from the data, so AJV reports
+ * one `required` error on it instead of errors on its fields. No control sits
+ * at that path, so the error goes to the first control in the step that is
+ * required all the way down from the object: each step holding a field the
+ * trader still has to fill in shows it, and a step with only optional fields
+ * under it does not. An object that requires none of its fields goes to its
+ * first control.
  */
 export function stepProblems(
   controls: ControlElement[],
@@ -95,11 +103,50 @@ export function stepProblems(
   path = '',
   translate: Translator = defaultTranslator,
 ): StepProblem[] {
-  const failing = errors.map((error) => getControlPath(error) as string)
-  return controls
-    .map((control) => ({ control, path: controlPath(control, path) }))
-    .filter(({ path }) => failing.some((f) => within(f, path)))
+  const entries = controls.map((control) => ({ control, path: controlPath(control, path) }))
+  const flagged = new Set<ControlElement>()
+  for (const failing of new Set(errors.map((error) => getControlPath(error) as string))) {
+    const own = entries.filter(({ path }) => within(failing, path))
+    if (own.length) {
+      own.forEach(({ control }) => flagged.add(control))
+      continue
+    }
+    const below = entries.filter(({ path }) => failing !== '' && path.startsWith(`${failing}.`))
+    if (!below.length) continue
+    const depth = (p: string) => p.slice(failing.length + 1).split('.').length
+    const required = below.find(({ control, path }) => requiredBelow(control, depth(path), rootSchema) === true)
+    const first = below[0]
+    const target =
+      required ?? (requiredBelow(first.control, depth(first.path), rootSchema) === undefined ? first : undefined)
+    if (target) flagged.add(target.control)
+  }
+  return entries
+    .filter(({ control }) => flagged.has(control))
     .map(({ control, path }) => ({ path, label: controlLabel(control, rootSchema, path, translate) }))
+}
+
+/**
+ * Whether a control's field is required at each of the last `depth` levels of
+ * its scope: true when it is, false when the object at that level requires
+ * some fields but not this one, undefined when its schema is not found or
+ * requires none of its fields.
+ */
+function requiredBelow(control: ControlElement, depth: number, rootSchema: JsonSchema): boolean | undefined {
+  const parts = control.scope.split('/')
+  const names: string[] = []
+  for (let i = 0; i < depth; i++) {
+    const name = parts.pop()
+    if (parts.pop() !== 'properties' || name === undefined) return undefined
+    names.unshift(name)
+  }
+  let scope = parts.join('/')
+  for (const [level, name] of names.entries()) {
+    const required = Resolve.schema(rootSchema, scope, rootSchema)?.required
+    if (!required?.length) return level === 0 ? undefined : false
+    if (!required.includes(name)) return false
+    scope = `${scope}/properties/${name}`
+  }
+  return true
 }
 
 /** What a step not yet reached holds, for the note under it in the step list. */
