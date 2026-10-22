@@ -6,6 +6,7 @@ import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
 import { radixRenderers } from './index'
+import { localISODate } from './DateControl'
 
 type Data = Record<string, unknown>
 
@@ -79,6 +80,29 @@ const appointmentSecondsControl = {
   elements: [{ type: 'Control', scope: '#/properties/appointment', options: { showSeconds: true } }],
 } as UISchemaElement
 
+const shipmentSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    estimated_shipment_date: { type: 'string', format: 'date', title: 'Estimated Shipment Date' },
+  },
+}
+
+const shipmentControl = {
+  type: 'VerticalLayout',
+  elements: [{ type: 'Control', scope: '#/properties/estimated_shipment_date' }],
+} as UISchemaElement
+
+const shipmentNotBeforeToday = {
+  type: 'VerticalLayout',
+  elements: [{ type: 'Control', scope: '#/properties/estimated_shipment_date', options: { minDate: 'today' } }],
+} as UISchemaElement
+
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return localISODate(d)
+}
+
 describe('DateControl time', () => {
   it('stores HH:MM:SS when the picker emits HH:MM', async () => {
     const { writes } = renderForm(openingTimeSchema, timeControl, {})
@@ -122,6 +146,45 @@ describe('DateControl time', () => {
     fireEvent.change(input, { target: { value: '14:30:45' } })
     await waitFor(() => {
       expect(writes.at(-1)).toEqual({ openingTime: '14:30:45' })
+    })
+  })
+})
+
+describe('DateControl minDate today', () => {
+  it('sets the picker minimum to the local calendar day and keeps today', async () => {
+    const today = localISODate()
+    const { writes } = renderForm(shipmentSchema, shipmentNotBeforeToday, {})
+    const input = screen.getByLabelText(/Estimated Shipment Date/)
+
+    expect(input.getAttribute('min')).toBe(today)
+
+    fireEvent.change(input, { target: { value: today } })
+    await waitFor(() => {
+      expect(writes.at(-1)).toEqual({ estimated_shipment_date: today })
+    })
+  })
+
+  it('does not store a date before today', async () => {
+    const yesterday = daysAgo(1)
+    const { writes } = renderForm(shipmentSchema, shipmentNotBeforeToday, {})
+    const input = screen.getByLabelText(/Estimated Shipment Date/)
+
+    fireEvent.change(input, { target: { value: yesterday } })
+    await waitFor(() => {
+      expect(writes.some((row) => row.estimated_shipment_date === yesterday)).toBe(false)
+    })
+    expect((input as HTMLInputElement).value).not.toBe(yesterday)
+  })
+
+  it('still stores a past date when minDate is not set', async () => {
+    const yesterday = daysAgo(1)
+    const { writes } = renderForm(shipmentSchema, shipmentControl, {})
+    const input = screen.getByLabelText(/Estimated Shipment Date/)
+
+    expect(input.getAttribute('min')).toBeNull()
+    fireEvent.change(input, { target: { value: yesterday } })
+    await waitFor(() => {
+      expect(writes.at(-1)).toEqual({ estimated_shipment_date: yesterday })
     })
   })
 })

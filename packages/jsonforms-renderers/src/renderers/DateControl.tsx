@@ -20,6 +20,14 @@ import { timeInputValue, toRfc3339Time } from '../utils/time'
 // seconds + local offset, which ajv's strict "date-time" format check requires.
 const toISODateTime = (dateStr: string, timeStr: string) => dayjs(`${dateStr}T${timeStr}`).format()
 
+// Local calendar day. "today" is the trader's day, not UTC.
+export function localISODate(now = new Date()): string {
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 type ShellProps = Pick<ControlProps, 'path' | 'label' | 'required' | 'errors'> & {
   description?: string
   children: ReactNode
@@ -77,6 +85,10 @@ export const DateControl = ({
   // Stored values always include seconds so AJV format "time" still passes.
   const showSeconds = uischema?.options?.showSeconds === true
   const timeStep = showSeconds ? 1 : 60
+  // options.minDate "today" blocks yesterday in the picker. Submit still
+  // needs the schema keyword (notBefore) because a typed or stored value
+  // can bypass the input's min attribute.
+  const earliestDate = uischema?.options?.minDate === 'today' && schema.format !== 'time' ? localISODate() : undefined
 
   const shell = (children: ReactNode) => (
     <FieldShell path={path} label={label} required={showRequired} errors={errors} description={schema.description}>
@@ -109,6 +121,11 @@ export const DateControl = ({
       handleChange(path, undefined)
       return
     }
+    if (earliestDate && nextDate < earliestDate) {
+      // Re-apply the stored day so a typed past date snaps back.
+      handleChange(path, datePart ? (hasTime ? toISODateTime(datePart, nextTime || '00:00') : datePart) : undefined)
+      return
+    }
     handleChange(path, hasTime ? toISODateTime(nextDate, nextTime || '00:00') : nextDate)
   }
 
@@ -117,6 +134,7 @@ export const DateControl = ({
       <TextField.Root
         type="date"
         value={datePart}
+        min={earliestDate}
         disabled={!enabled}
         color={!isValid ? 'red' : undefined}
         onChange={(e) => commit(e.target.value, timeForInput)}
