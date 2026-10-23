@@ -83,10 +83,19 @@ const multiSchema = {
 // about the file can be read from it.
 const ref = (id: string) => `eyJhbGciOiJkaXIifQ..${id}.c2VhbGVk.dGFn`
 
-// getDownloadUrl answering for each reference with the extension given.
-function savedFiles(extensions: Record<string, string | undefined>) {
+// getDownloadUrl answering for each reference with the extension and the
+// disposition given.
+function savedFiles(
+  extensions: Record<string, string | undefined>,
+  dispositions: Record<string, 'inline' | 'attachment' | undefined> = {},
+) {
   return vi.fn((key: string) =>
-    Promise.resolve({ url: `https://storage.example/${key}`, expiresAt: 0, extension: extensions[key] }),
+    Promise.resolve({
+      url: `https://storage.example/${key}`,
+      expiresAt: 0,
+      extension: extensions[key],
+      disposition: dispositions[key],
+    }),
   )
 }
 
@@ -241,11 +250,33 @@ describe('FileControl View and Download', () => {
     expect(getDownloadUrl).not.toHaveBeenCalled()
   })
 
-  it('downloads a saved file View cannot show instead of opening it', async () => {
+  it('hides View for an uploaded html file', async () => {
+    renderForm({}, { schema: multiSchema, uischema: multiUi })
+
+    uploadFile('page.html', 'text/html')
+    await waitFor(() => expect(screen.getByText('Attachment_1.html')).toBeTruthy())
+
+    expect(screen.queryByRole('button', { name: 'View' })).toBeNull()
+  })
+
+  // The preview is a blob made from the file, which the browser serves with
+  // the type it reported. With none, it sniffs the bytes, and a name that ends
+  // in .png does not make them an image.
+  it('hides View for an uploaded file the browser reports no type for, whatever its name', async () => {
+    renderForm({}, { schema: multiSchema, uischema: multiUi })
+
+    uploadFile('photo.png', '')
+    await waitFor(() => expect(screen.getByText('Attachment_1.png')).toBeTruthy())
+
+    expect(screen.queryByRole('button', { name: 'View' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
+  })
+
+  it('downloads a saved file the server serves as an attachment instead of opening it', async () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     const opened = { location: { href: '' }, close: vi.fn() }
     vi.spyOn(window, 'open').mockReturnValue(opened as unknown as Window)
-    const getDownloadUrl = savedFiles({ [ref('a')]: '.xlsx' })
+    const getDownloadUrl = savedFiles({ [ref('a')]: '.xlsx' }, { [ref('a')]: 'attachment' })
     renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
 
     fireEvent.click(screen.getByRole('button', { name: 'View' }))
@@ -256,6 +287,33 @@ describe('FileControl View and Download', () => {
     expect(getDownloadUrl).toHaveBeenCalledTimes(1)
     const anchors = click.mock.instances as unknown as HTMLAnchorElement[]
     expect(anchors.some((a) => a.download === 'Attachment_1.xlsx')).toBe(true)
+  })
+
+  it('does not trust the extension: an attachment named like an image is still downloaded', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const opened = { location: { href: '' }, close: vi.fn() }
+    vi.spyOn(window, 'open').mockReturnValue(opened as unknown as Window)
+    const getDownloadUrl = savedFiles({ [ref('a')]: '.png' }, { [ref('a')]: 'attachment' })
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+
+    await waitFor(() => expect(click).toHaveBeenCalled())
+    expect(opened.close).toHaveBeenCalled()
+    expect(opened.location.href).toBe('')
+  })
+
+  it('downloads a saved file when the server does not say how it is served', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const opened = { location: { href: '' }, close: vi.fn() }
+    vi.spyOn(window, 'open').mockReturnValue(opened as unknown as Window)
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl: savedFiles({ [ref('a')]: '.pdf' }) })
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+
+    await waitFor(() => expect(click).toHaveBeenCalled())
+    expect(opened.close).toHaveBeenCalled()
+    expect(opened.location.href).toBe('')
   })
 
   it('downloads through the local blob under the template name with the real extension', async () => {
@@ -394,10 +452,14 @@ describe('FileControl View and Download', () => {
     expect(open).toHaveBeenCalledWith('blob:mock', '_blank', 'noopener,noreferrer')
   })
 
-  it('opens View through getDownloadUrl for a saved form', async () => {
-    const opened = { location: { href: '' }, close: vi.fn() }
+  it('opens View through getDownloadUrl for a saved file the server serves inline', async () => {
+    const opened: { location: { href: string }; close: () => void; opener?: unknown } = {
+      location: { href: '' },
+      close: vi.fn(),
+      opener: window,
+    }
     const open = vi.spyOn(window, 'open').mockReturnValue(opened as unknown as Window)
-    const getDownloadUrl = savedFiles({ [ref('a')]: '.png' })
+    const getDownloadUrl = savedFiles({ [ref('a')]: '.png' }, { [ref('a')]: 'inline' })
     renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
     await waitFor(() => expect(screen.getByRole('button', { name: 'View' })).toBeTruthy())
 
@@ -405,6 +467,27 @@ describe('FileControl View and Download', () => {
 
     await waitFor(() => expect(opened.location.href).toBe(`https://storage.example/${ref('a')}`))
     expect(open).toHaveBeenCalledWith('', '_blank')
+  })
+
+  it('cuts the tab off from this page before it loads anything', async () => {
+    let openerWhenLoaded: unknown = 'not loaded'
+    const opened = {
+      opener: window as unknown,
+      close: vi.fn(),
+      location: {
+        set href(_url: string) {
+          openerWhenLoaded = opened.opener
+        },
+      },
+    }
+    vi.spyOn(window, 'open').mockReturnValue(opened as unknown as Window)
+    const getDownloadUrl = savedFiles({ [ref('a')]: '.pdf' }, { [ref('a')]: 'inline' })
+    renderForm({ attachment: ref('a') }, { schema: namedSchema, getDownloadUrl })
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+
+    await waitFor(() => expect(openerWhenLoaded).not.toBe('not loaded'))
+    expect(openerWhenLoaded).toBeNull()
   })
 
   it('shows a row error when View cannot resolve the link', async () => {
