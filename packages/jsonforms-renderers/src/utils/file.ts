@@ -3,7 +3,6 @@
 // saved.
 
 const VIEWABLE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'text/plain'])
-const VIEWABLE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.txt'])
 
 /** True when `file` matches a comma-separated accept list (wildcards, .ext, or MIME). */
 export function matchesAccept(file: { name: string; type?: string }, accept: string): boolean {
@@ -22,15 +21,15 @@ export function matchesAccept(file: { name: string; type?: string }, accept: str
 /**
  * Whether a file the user chose can be previewed in a tab: images a browser
  * shows, PDF and plain text. Not `image/*`: TIFF/HEIC are not displayable in
- * most browsers, and SVG runs script. The type the browser reports for the file
- * decides; the extension is read only when it reports none. A file whose type
- * and extension are both unknown is not viewable. A saved file is not judged
- * here: the server says how it is served.
+ * most browsers, and SVG runs script. Only the type the browser reports for the
+ * file decides, because the preview is a blob URL made from that file, and the
+ * browser serves it with exactly that type. A file with no reported type is
+ * served with none, so the browser sniffs its bytes and may render HTML from
+ * the page's own origin; its name says nothing about that. A saved file is not
+ * judged here: the server says how it is served.
  */
-export function isBrowserViewable(file: { name: string; type?: string }): boolean {
-  if (file.type) return VIEWABLE_TYPES.has(file.type.toLowerCase())
-  const extension = fileExtension(file.name)
-  return extension !== undefined && VIEWABLE_EXTENSIONS.has(extension.toLowerCase())
+export function isBrowserViewable(file: { type?: string }): boolean {
+  return VIEWABLE_TYPES.has((file.type ?? '').toLowerCase())
 }
 
 /** `.xlsx` from `report.xlsx` or `0f8e….xlsx`; undefined when there is no extension. */

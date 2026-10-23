@@ -259,6 +259,19 @@ describe('FileControl View and Download', () => {
     expect(screen.queryByRole('button', { name: 'View' })).toBeNull()
   })
 
+  // The preview is a blob made from the file, which the browser serves with
+  // the type it reported. With none, it sniffs the bytes, and a name that ends
+  // in .png does not make them an image.
+  it('hides View for an uploaded file the browser reports no type for, whatever its name', async () => {
+    renderForm({}, { schema: multiSchema, uischema: multiUi })
+
+    uploadFile('photo.png', '')
+    await waitFor(() => expect(screen.getByText('Attachment_1.png')).toBeTruthy())
+
+    expect(screen.queryByRole('button', { name: 'View' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
+  })
+
   it('downloads a saved file the server serves as an attachment instead of opening it', async () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     const opened = { location: { href: '' }, close: vi.fn() }

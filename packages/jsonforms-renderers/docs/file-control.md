@@ -62,7 +62,7 @@ Without `fileName`, the row label and Download use the original upload name when
 
 Each uploaded row has:
 
-- **View** — for a just-uploaded file, only when the browser can show the file the user chose: the type it reports (or, when it reports none, the extension) is a PNG, JPEG, GIF or WebP image, a PDF or plain text. Other types, such as `.xlsx`, `.html` and `.xml`, do not show View. A saved file always shows View (see below). View opens in a new tab (`window.open`) that is cut off from the page that opened it.
+- **View** — for a just-uploaded file, only when the type the browser reports for the file the user chose is a PNG, JPEG, GIF or WebP image, a PDF or plain text. The preview is a blob made from that file, which the browser serves with that type, so the file's name does not count: a file with no reported type, or with a type such as `.xlsx`, `.html` or `.xml`, does not show View. A saved file always shows View (see below). View opens in a new tab (`window.open`) that is cut off from the page that opened it.
 - **Download** — on every row. Fetches the file and saves it under the name from [File name](#file-name).
 
 For a just-uploaded file, both actions use the local blob URL. For a saved form that only has a reference, they call `UploadProvider.getDownloadUrl`.

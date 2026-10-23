@@ -349,7 +349,7 @@ const FileControl = ({
         const labelText = fileNameTemplate ? nameFor(key, index, {}) : (originalName ?? UNNAMED_FILE)
         const showSecondary = Boolean(fileNameTemplate && originalName)
         const rowError = rowErrors[key]
-        const canView = !entry || isBrowserViewable({ name: originalName, type: entry.type })
+        const canView = !entry || isBrowserViewable({ type: entry.type })
 
         return (
           <Card key={key} size="2" variant="surface" mb="2">
