@@ -18,7 +18,7 @@ A `Categorization` renders as tabs by default. With `options.variant: "stepper"`
 - The last step, **Review and Submit**, shows every step read-only, each with an **Edit** button. It and the read-only form carry `data-form-review`, so the host can style read-only values as plain answers.
 - A Category's `options.description` shows under its title. A Category hidden by its `rule` drops out of the steps.
 - Every step stays mounted while off screen, so controls that write from effects (computed fields, spreadsheet sources, clearing a hidden field) behave as on a single-page form.
-- A read-only form (`<JsonForms readonly>`) shows every step on one page, without the step list or buttons.
+- A read-only form (`<JsonForms readonly>`) shows every step on one page, without buttons. With more than one section, the step list sits at the side as a contents list (a **Jump to section** menu on narrow screens): choosing an entry scrolls to its section, and the entry for the section being read is marked as the page scrolls.
 - A form opened with saved answers (a draft) has its answered, complete steps open in the step list.
 - On a step change, the page scrolls to the stepper and focus moves to the step's title. If the app has a fixed header, set `--form-steps-offset` to its height plus a gap (default `16px`); the step list sticks that far from the top too.
 - The **Complete these fields** links focus a field through its input `id` (its data path). Text, number, date, select and checkbox controls set one; radio, list and file controls don't, so their links do nothing.
@@ -44,6 +44,7 @@ const [onLastStep, setOnLastStep] = useState(() => !isStepperUiSchema(uiSchema))
 - `onStepChange({ step, count, last })` fires on mount and on every step change; `last` is true on the review step. Offer the submit button only then.
 - `onInvalidStep()` fires when Continue is refused. A host that renders with `validationMode="ValidateAndHide"` can switch to `ValidateAndShow` here, so the fields turn red too.
 - `actions` is shown in the stepper's footer, between **Back** and **Continue**, so the form has one row of buttons. Pass **Save as draft** (on every step) and submit (on the last) here.
+- `contentsLinks` (`{ label, targetId }[]`) ends a read-only form's contents list with links to other parts of the host's page, such as a form to fill in below the one being read. Each scrolls to the element with that id and focuses its heading.
 
 ## Translation
 
