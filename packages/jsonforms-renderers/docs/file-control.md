@@ -62,12 +62,14 @@ Without `fileName`, the row label and Download use the original upload name when
 
 Each uploaded row has:
 
-- **View** — for a just-uploaded file, only when it matches the browser-viewable allowlist (common images, PDF, HTML, plain text); types such as `.xlsx` do not show View. Opens in a new tab (`window.open`). A saved file always shows View (see below).
+- **View** — for a just-uploaded file, only when the browser can show the file the user chose: the type it reports (or, when it reports none, the extension) is a PNG, JPEG, GIF or WebP image, a PDF or plain text. Other types, such as `.xlsx`, `.html` and `.xml`, do not show View. A saved file always shows View (see below). View opens in a new tab (`window.open`) that is cut off from the page that opened it.
 - **Download** — on every row. Fetches the file and saves it under the name from [File name](#file-name).
 
 For a just-uploaded file, both actions use the local blob URL. For a saved form that only has a reference, they call `UploadProvider.getDownloadUrl`.
 
-`getDownloadUrl` should also return the file's `extension` (with its dot, e.g. `.xlsx`) and `mimeType` when it knows them. The control asks it only when a saved file is viewed or downloaded, each time, so nothing about a saved file is known before then: its row name has no extension and it is offered View. Download names the file with the reported extension. View opens a type the browser can show and downloads any other type instead. When `getDownloadUrl` reports neither, the file downloads without an extension and View opens it.
+`getDownloadUrl` returns the URL and when it expires, and should also return what the server knows about the file: its `extension` (with its dot, e.g. `.xlsx`), its `mimeType`, and its `disposition`, `inline` when the server serves the file for a browser to open and `attachment` when it only serves it to be saved. The control asks it only when a saved file is viewed or downloaded, each time, so nothing about a saved file is known before then: its row name has no extension and it is offered View. Download names the file with the reported extension.
+
+A saved file's View opens it in a tab only when the `disposition` is `inline`. For `attachment`, or when `getDownloadUrl` reports no `disposition`, View downloads the file instead, so the control never opens a file the server has not said is safe to open. The `extension` and `mimeType` are not used to decide.
 
 ## Behavior notes
 

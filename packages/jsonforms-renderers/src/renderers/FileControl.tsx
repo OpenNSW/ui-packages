@@ -28,11 +28,11 @@ interface FileEntry {
   blobUrl?: string
 }
 
-// Where a file is fetched from, and what it is when getDownloadUrl says so.
+// Where a file is fetched from, and what getDownloadUrl says about it.
 interface ResolvedFile {
   url?: string
   extension?: string
-  type?: string
+  disposition?: 'inline' | 'attachment'
 }
 
 interface XFileOptions {
@@ -119,14 +119,14 @@ const FileControl = ({
 
   // A file uploaded here is its local blob. A saved one is an opaque reference,
   // so getDownloadUrl is asked only when it is viewed or downloaded, and its
-  // answer is the only place its extension and type come from.
+  // answer is the only place its extension and disposition come from.
   const resolveFile = async (key: string): Promise<ResolvedFile> => {
     const blobUrl = fileEntries[key]?.blobUrl
     if (blobUrl) return { url: blobUrl }
     const getDownloadUrl = uploadContext?.getDownloadUrl
     if (!getDownloadUrl) return {}
     const result = await getDownloadUrl(key)
-    return { url: result?.url, extension: result?.extension, type: result?.mimeType }
+    return { url: result?.url, extension: result?.extension, disposition: result?.disposition }
   }
 
   // The name a file downloads as, once its extension is known.
@@ -256,9 +256,12 @@ const FileControl = ({
       window.open(blobUrl, '_blank', 'noopener,noreferrer')?.focus()
       return
     }
-    // Open synchronously so the popup blocker does not block the tab.
+    // Open synchronously so the popup blocker does not block the tab. Passing
+    // noopener here would make window.open return null, so the tab is cut off
+    // from this page straight after it opens, before it loads anything.
     const newWindow = window.open('', '_blank')
     if (!newWindow) return
+    newWindow.opener = null
     try {
       const resolved = await resolveFile(key)
       if (!resolved.url) {
@@ -266,12 +269,13 @@ const FileControl = ({
         setRowError(key, 'Unable to open file.')
         return
       }
-      if (isBrowserViewable(resolved)) {
+      if (resolved.disposition === 'inline') {
         newWindow.location.href = resolved.url
         return
       }
-      // A type the browser cannot show would only download from the tab, and
-      // under the reference's name, so download it here under its own.
+      // The server serves this file as a download, or did not say how: the tab
+      // would only save it under the reference's name, so download it here
+      // under its own.
       newWindow.close()
       await onDownload(key, index, resolved)
     } catch {
@@ -339,11 +343,13 @@ const FileControl = ({
         const entry = fileEntries[key]
         const originalName = entry?.name
         // A saved file's extension is not known until it is fetched, so its
-        // label has none and it is offered View.
+        // label has none. It is offered View, and the server's answer decides
+        // whether View opens it or downloads it. A file uploaded here is
+        // offered View when the browser can show the file the user chose.
         const labelText = fileNameTemplate ? nameFor(key, index, {}) : (originalName ?? UNNAMED_FILE)
         const showSecondary = Boolean(fileNameTemplate && originalName)
         const rowError = rowErrors[key]
-        const canView = isBrowserViewable({ name: originalName, type: entry?.type })
+        const canView = !entry || isBrowserViewable({ name: originalName, type: entry.type })
 
         return (
           <Card key={key} size="2" variant="surface" mb="2">

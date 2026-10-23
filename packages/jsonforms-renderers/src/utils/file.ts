@@ -1,8 +1,9 @@
 // Shared file-name / MIME helpers for upload accept matching and for deciding
-// whether a browser can display a file in a tab (View) vs only save it.
+// whether a file the user just chose can be previewed in a tab (View) vs only
+// saved.
 
-const VIEWABLE_ACCEPT =
-  'image/png,image/jpeg,image/gif,image/webp,application/pdf,text/html,text/plain,.png,.jpg,.jpeg,.gif,.webp,.pdf,.html,.htm,.txt'
+const VIEWABLE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'text/plain'])
+const VIEWABLE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.txt'])
 
 /** True when `file` matches a comma-separated accept list (wildcards, .ext, or MIME). */
 export function matchesAccept(file: { name: string; type?: string }, accept: string): boolean {
@@ -19,17 +20,17 @@ export function matchesAccept(file: { name: string; type?: string }, accept: str
 }
 
 /**
- * Types a browser can usefully open in a tab. Not `image/*`: TIFF/HEIC are not
- * displayable in most browsers. No type and no extension stays viewable so View
- * remains available when nothing says what the file is. `extension` stands in
- * for a `name` that is not known.
+ * Whether a file the user chose can be previewed in a tab: images a browser
+ * shows, PDF and plain text. Not `image/*`: TIFF/HEIC are not displayable in
+ * most browsers, and SVG runs script. The type the browser reports for the file
+ * decides; the extension is read only when it reports none. A file whose type
+ * and extension are both unknown is not viewable. A saved file is not judged
+ * here: the server says how it is served.
  */
-export function isBrowserViewable(file: { name?: string; extension?: string; type?: string }): boolean {
-  const name = file.name ?? (file.extension ? `file${file.extension}` : '')
-  const hasType = Boolean(file.type)
-  const hasExt = fileExtension(name) !== undefined
-  if (!hasType && !hasExt) return true
-  return matchesAccept({ name, type: file.type }, VIEWABLE_ACCEPT)
+export function isBrowserViewable(file: { name: string; type?: string }): boolean {
+  if (file.type) return VIEWABLE_TYPES.has(file.type.toLowerCase())
+  const extension = fileExtension(file.name)
+  return extension !== undefined && VIEWABLE_EXTENSIONS.has(extension.toLowerCase())
 }
 
 /** `.xlsx` from `report.xlsx` or `0f8e….xlsx`; undefined when there is no extension. */
