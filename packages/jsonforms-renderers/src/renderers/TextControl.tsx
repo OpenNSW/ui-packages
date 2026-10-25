@@ -5,7 +5,7 @@ import { useIsRequired } from '../hooks/useIsRequired'
 
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { getErrorMessage } from '../utils/error'
-import { useReadOnlyMark } from '../contexts/formReview'
+import { useAnswerPlaceholder, useReadOnlyMark } from '../contexts/formReview'
 import { ReadOnlyLock } from './ReadOnlyLock'
 
 export const TextControl = ({
@@ -23,6 +23,7 @@ export const TextControl = ({
   useClearWhenHidden(visible, path, handleChange)
   const showRequired = useIsRequired(path, required, visible)
   const locked = useReadOnlyMark(enabled)
+  const placeholderProps = useAnswerPlaceholder(uischema.options?.placeholder as string | undefined)
 
   if (visible === false) {
     return null
@@ -42,7 +43,7 @@ export const TextControl = ({
           // required one fails JSON Schema's `required` like one never filled.
           onChange={(e) => handleChange(path, e.target.value === '' ? undefined : e.target.value)}
           disabled={!enabled}
-          placeholder={uischema.options?.placeholder}
+          {...placeholderProps}
           color={!isValid ? 'red' : undefined}
           id={path}
         >

@@ -11,6 +11,7 @@ import {
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { useIsRequired } from '../hooks/useIsRequired'
+import { useAnswerPlaceholder } from '../contexts/formReview'
 import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
 
 import { Select, Text, Flex, Box, TextField, ScrollArea } from '@radix-ui/themes'
@@ -43,6 +44,9 @@ export const SelectControl = ({
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
   const showRequired = useIsRequired(path, required, visible)
+  const placeholderProps = useAnswerPlaceholder(
+    (uischema.options?.placeholder as string | undefined) || 'Select an option',
+  )
 
   // `options.autocomplete: true` swaps the plain dropdown for a type-to-filter combobox over the
   // same enum/oneOf options — no remote service involved (see SearchSelectControl for that case).
@@ -97,7 +101,6 @@ export const SelectControl = ({
   const value = currentValue !== undefined && currentValue !== null ? String(currentValue) : ''
   // object-shaped fields already carry the label from submission time; otherwise the option's title
   const selectedLabel = currentLabel ?? options.find((o) => o.value === value)?.label ?? ''
-  const placeholder = uischema.options?.placeholder || 'Select an option'
 
   // In object mode the options validate `value`, below this control's path, so a stored value that
   // is no longer an option fails the form without its error reaching `errors`. Say so here instead.
@@ -146,7 +149,7 @@ export const SelectControl = ({
             <TextField.Root
               id={path}
               value={open ? inputValue : selectedLabel}
-              placeholder={placeholder}
+              {...placeholderProps}
               disabled={!enabled}
               style={!isValid ? { outline: '2px solid var(--red-7)', outlineOffset: '-1px' } : undefined}
               onChange={(e) => {
@@ -287,7 +290,7 @@ export const SelectControl = ({
           }}
           disabled={!enabled}
         >
-          <Select.Trigger placeholder={placeholder} color={!isValid ? 'red' : undefined} id={path}>
+          <Select.Trigger {...placeholderProps} color={!isValid ? 'red' : undefined} id={path}>
             {/* shows the stored label even when its value is no longer one of the options */}
             {isObjectMode && currentLabel ? currentLabel : undefined}
           </Select.Trigger>
