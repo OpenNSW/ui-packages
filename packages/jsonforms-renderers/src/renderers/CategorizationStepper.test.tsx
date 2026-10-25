@@ -347,6 +347,24 @@ describe('Categorization stepper', () => {
       expect(current()).toEqual(['2Transport'])
     })
 
+    it('marks the first section of a form that fits on screen', async () => {
+      readOnly(stepper())
+      const formEnd = document.querySelector('[data-form-review]')!.lastElementChild!
+      placeAt(section('Parties'), 100)
+      placeAt(section('Transport'), 300)
+      placeAt(formEnd, 500)
+      await act(async () => {
+        fireEvent.scroll(document)
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      const current = within(contents())
+        .getAllByRole('button')
+        .filter((b) => b.getAttribute('aria-current') === 'location')
+        .map((b) => b.textContent)
+      expect(current).toEqual(['1Parties'])
+    })
+
     it('scrolls to a section and focuses its heading', () => {
       const scrollIntoView = vi.fn()
       Element.prototype.scrollIntoView = scrollIntoView

@@ -671,9 +671,14 @@ function useCurrentSection(
         if (el.getBoundingClientRect().top <= offset + 1) index = i
       })
       const endEl = end.current
+      const first = sections.current[0]
       const last = sections.current[count - 1]
-      if (endEl && last && endEl.getBoundingClientRect().top <= window.innerHeight && index < count - 1) {
-        // The form's end is on screen: the last section can't scroll any higher.
+      const scrolledIn = first
+        ? first.getBoundingClientRect().top <= (parseFloat(getComputedStyle(first).scrollMarginTop) || 0) + 1
+        : false
+      // Once scrolled into the form, its end on screen means the last section
+      // can't scroll any higher. A form that fits on screen stays on its first.
+      if (scrolledIn && endEl && last && endEl.getBoundingClientRect().top <= window.innerHeight && index < count - 1) {
         if (last.getBoundingClientRect().top < window.innerHeight) index = count - 1
       }
       setCurrent(index)
