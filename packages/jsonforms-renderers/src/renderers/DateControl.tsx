@@ -14,6 +14,8 @@ import dayjs from 'dayjs'
 
 import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
+import { useReadOnlyMark } from '../contexts/formReview'
+import { ReadOnlyLock } from './ReadOnlyLock'
 import { timeInputValue, toRfc3339Time } from '../utils/time'
 
 // dayjs().format() defaults to RFC 3339 (e.g. 2026-06-05T12:30:00+05:30) with
@@ -67,6 +69,7 @@ export const DateControl = ({
     }
   }, [visible, path, handleChange])
   const showRequired = useIsRequired(path, required, visible)
+  const locked = useReadOnlyMark(enabled)
 
   if (visible === false) {
     return null
@@ -95,7 +98,9 @@ export const DateControl = ({
         disabled={!enabled}
         color={!isValid ? 'red' : undefined}
         id={path}
-      />,
+      >
+        {locked && <ReadOnlyLock />}
+      </TextField.Root>,
     )
   }
 
@@ -122,7 +127,9 @@ export const DateControl = ({
         onChange={(e) => commit(e.target.value, timeForInput)}
         id={path}
         style={{ flex: 1 }}
-      />
+      >
+        {locked && <ReadOnlyLock />}
+      </TextField.Root>
       {hasTime && (
         <TextField.Root
           type="time"

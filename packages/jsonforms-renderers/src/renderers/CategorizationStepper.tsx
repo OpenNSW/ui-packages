@@ -14,6 +14,7 @@ import { Box, Button, Callout, Flex, Heading, Progress, Text } from '@radix-ui/t
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
 import { type CSSProperties, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useFormSteps } from '../contexts/formSteps'
+import { FormReviewContext } from '../contexts/formReview'
 import {
   type FormError,
   type StepProblem,
@@ -262,61 +263,63 @@ const EditableStepper = ({ uischema, schema, path, renderers, cells, enabled }: 
         </Box>
 
         <Box px={{ initial: '4', sm: '6' }} pb="5" data-form-review={onReview ? '' : undefined}>
-          {onReview &&
-            (incomplete.length ? (
-              <ProblemCallout title={t('incompleteSteps')} items={incomplete} />
-            ) : (
-              <Text as="p" size="2" color="gray" mb="5">
-                {t('reviewHint')}
-              </Text>
-            ))}
+          <FormReviewContext.Provider value={onReview}>
+            {onReview &&
+              (incomplete.length ? (
+                <ProblemCallout title={t('incompleteSteps')} items={incomplete} />
+              ) : (
+                <Text as="p" size="2" color="gray" mb="5">
+                  {t('reviewHint')}
+                </Text>
+              ))}
 
-          {categories.map((category, index) => {
-            const shown = onReview || index === step
-            return (
-              <Box key={`${path}-${index}`} hidden={!shown} mb={onReview ? '6' : undefined}>
-                {onReview && (
-                  <Flex
-                    justify="between"
-                    align="center"
-                    mb="3"
-                    pb="2"
-                    style={{ borderBottom: '1px solid var(--gray-a4)' }}
-                  >
-                    <Heading size="3" as="h3">
-                      {labels[index]}
-                    </Heading>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => goTo(index)}
-                      aria-label={t('editStep', { step: labels[index] })}
+            {categories.map((category, index) => {
+              const shown = onReview || index === step
+              return (
+                <Box key={`${path}-${index}`} hidden={!shown} mb={onReview ? '6' : undefined}>
+                  {onReview && (
+                    <Flex
+                      justify="between"
+                      align="center"
+                      mb="3"
+                      pb="2"
+                      style={{ borderBottom: '1px solid var(--gray-a4)' }}
                     >
-                      {t('edit')}
-                    </Button>
-                  </Flex>
-                )}
-                {!onReview && attempted.has(index) && problems[index].length > 0 && (
-                  <ProblemCallout
-                    title={t('missingFields')}
-                    items={problems[index].map((p) => ({
-                      key: p.path,
-                      label: p.label,
-                      onClick: () => focusField(p.path),
-                    }))}
+                      <Heading size="3" as="h3">
+                        {labels[index]}
+                      </Heading>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => goTo(index)}
+                        aria-label={t('editStep', { step: labels[index] })}
+                      >
+                        {t('edit')}
+                      </Button>
+                    </Flex>
+                  )}
+                  {!onReview && attempted.has(index) && problems[index].length > 0 && (
+                    <ProblemCallout
+                      title={t('missingFields')}
+                      items={problems[index].map((p) => ({
+                        key: p.path,
+                        label: p.label,
+                        onClick: () => focusField(p.path),
+                      }))}
+                    />
+                  )}
+                  <CategoryFields
+                    category={category}
+                    schema={schema}
+                    path={path}
+                    renderers={renderers}
+                    cells={cells}
+                    enabled={enabled && !onReview}
                   />
-                )}
-                <CategoryFields
-                  category={category}
-                  schema={schema}
-                  path={path}
-                  renderers={renderers}
-                  cells={cells}
-                  enabled={enabled && !onReview}
-                />
-              </Box>
-            )
-          })}
+                </Box>
+              )
+            })}
+          </FormReviewContext.Provider>
         </Box>
 
         <Flex
@@ -516,23 +519,25 @@ const CategorizationSections = ({ uischema, schema, path, renderers, cells }: Pr
   }, [count])
 
   return (
-    <Flex direction="column" gap="6" p={{ initial: '4', sm: '6' }} style={panelStyle} data-form-review="">
-      {categories.map((category, index) => (
-        <Box key={`${path}-${index}`}>
-          <Heading size="3" as="h3" mb="3">
-            {categoryLabel(category, translate)}
-          </Heading>
-          <CategoryFields
-            category={category}
-            schema={schema}
-            path={path}
-            renderers={renderers}
-            cells={cells}
-            enabled={false}
-          />
-        </Box>
-      ))}
-    </Flex>
+    <FormReviewContext.Provider value>
+      <Flex direction="column" gap="6" p={{ initial: '4', sm: '6' }} style={panelStyle} data-form-review="">
+        {categories.map((category, index) => (
+          <Box key={`${path}-${index}`}>
+            <Heading size="3" as="h3" mb="3">
+              {categoryLabel(category, translate)}
+            </Heading>
+            <CategoryFields
+              category={category}
+              schema={schema}
+              path={path}
+              renderers={renderers}
+              cells={cells}
+              enabled={false}
+            />
+          </Box>
+        ))}
+      </Flex>
+    </FormReviewContext.Provider>
   )
 }
 

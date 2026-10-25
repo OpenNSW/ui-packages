@@ -5,6 +5,8 @@ import { useIsRequired } from '../hooks/useIsRequired'
 
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { getErrorMessage } from '../utils/error'
+import { useReadOnlyMark } from '../contexts/formReview'
+import { ReadOnlyLock } from './ReadOnlyLock'
 
 export const TextControl = ({
   data,
@@ -20,6 +22,7 @@ export const TextControl = ({
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
   const showRequired = useIsRequired(path, required, visible)
+  const locked = useReadOnlyMark(enabled)
 
   if (visible === false) {
     return null
@@ -42,7 +45,9 @@ export const TextControl = ({
           placeholder={uischema.options?.placeholder}
           color={!isValid ? 'red' : undefined}
           id={path}
-        />
+        >
+          {locked && <ReadOnlyLock />}
+        </TextField.Root>
         {!isValid && (
           <Text color="red" size="1">
             {getErrorMessage(errors, label)}

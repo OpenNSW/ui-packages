@@ -1,12 +1,13 @@
 import { type ControlProps, type JsonSchema, Resolve } from '@jsonforms/core'
 import { useJsonForms, withJsonFormsControlProps } from '@jsonforms/react'
 import { Box, Button, Flex, ScrollArea, Spinner, Text, TextField } from '@radix-ui/themes'
-import { ChevronDownIcon } from '@radix-ui/react-icons'
+import { ChevronDownIcon, LockClosedIcon } from '@radix-ui/react-icons'
 import { useState, useRef, useEffect, useCallback, useMemo, type KeyboardEvent } from 'react'
 import { useSearchService, type SearchOption } from '../contexts/SearchServiceContext'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
+import { useReadOnlyMark } from '../contexts/formReview'
 import { renderTemplate } from '../utils/template'
 import { searchSelectTargetSchema } from './SearchSelectControlTester'
 import * as React from 'react'
@@ -434,6 +435,7 @@ const SearchSelectControl = ({
   // undefined restores the pristine "nothing selected" state in either mode.
   useClearWhenHidden(visible, path, handleChange)
   const showRequired = useIsRequired(path, required, visible)
+  const locked = useReadOnlyMark(enabled)
 
   if (visible === false) {
     return null
@@ -571,9 +573,13 @@ const SearchSelectControl = ({
                     ×
                   </span>
                 )}
-                <ChevronDownIcon
-                  style={{ transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }}
-                />
+                {locked ? (
+                  <LockClosedIcon aria-hidden data-testid="read-only-lock" style={{ color: 'var(--gray-10)' }} />
+                ) : (
+                  <ChevronDownIcon
+                    style={{ transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }}
+                  />
+                )}
               </Flex>
             </TextField.Slot>
           </TextField.Root>

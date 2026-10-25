@@ -3,6 +3,8 @@ import { withJsonFormsControlProps } from '@jsonforms/react'
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import type { ClipboardEvent, KeyboardEvent } from 'react'
 import { getErrorMessage } from '../utils/error'
+import { useReadOnlyMark } from '../contexts/formReview'
+import { ReadOnlyLock } from './ReadOnlyLock'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { useIsRequired } from '../hooks/useIsRequired'
 
@@ -22,6 +24,7 @@ export const NumberControl = ({
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
   const showRequired = useIsRequired(path, required, visible)
+  const locked = useReadOnlyMark(enabled)
 
   if (visible === false) {
     return null
@@ -78,7 +81,9 @@ export const NumberControl = ({
           placeholder={uischema.options?.placeholder}
           color={!isValid ? 'red' : undefined}
           id={path}
-        />
+        >
+          {locked && <ReadOnlyLock />}
+        </TextField.Root>
         {!isValid && (
           <Text color="red" size="1">
             {getErrorMessage(errors, label)}
