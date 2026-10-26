@@ -311,8 +311,13 @@ describe('Categorization stepper', () => {
     const contents = () => screen.getByRole('navigation', { name: 'Sections' })
 
     // jsdom lays nothing out: place each section's top (and the form's end) by hand.
-    const placeAt = (el: Element, top: number) =>
-      vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({ top, bottom: top + 400 } as DOMRect)
+    const placeAt = (el: Element, top: number, bottom = top + 400) =>
+      vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({ top, bottom } as DOMRect)
+    const currentEntries = () =>
+      within(contents())
+        .getAllByRole('button')
+        .filter((b) => b.getAttribute('aria-current') === 'location')
+        .map((b) => b.textContent)
     const section = (name: string) => screen.getByRole('heading', { name }).closest('section')!
 
     it('lists the sections and marks the one being read as the page scrolls', async () => {
@@ -382,6 +387,51 @@ describe('Categorization stepper', () => {
       fireEvent.click(within(contents()).getByRole('button', { name: /Officer Review/ }))
 
       expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Officer Review' }))
+    })
+
+    it("focuses a host target's heading at any level", () => {
+      readOnly(stepper(), [{ label: 'Notes', targetId: 'notes' }])
+      const notes = document.createElement('div')
+      notes.id = 'notes'
+      notes.innerHTML = '<h6>Notes</h6>'
+      document.body.appendChild(notes)
+
+      fireEvent.click(within(contents()).getByRole('button', { name: /Notes/ }))
+
+      expect(document.activeElement).toBe(notes.querySelector('h6'))
+      notes.remove()
+    })
+
+    it('keeps a form at the top of the page on its first section until the page is scrolled', async () => {
+      readOnly(stepper())
+      const formEnd = document.querySelector('[data-form-review]')!.lastElementChild!
+      placeAt(section('Parties'), 0)
+      placeAt(section('Transport'), 300)
+      placeAt(formEnd, 500)
+      await act(async () => {
+        fireEvent(window, new Event('resize'))
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      expect(currentEntries()).toEqual(['1Parties'])
+    })
+
+    it("measures the form's end against the container that scrolls", async () => {
+      const { container } = readOnly(stepper())
+      const scroller = container.querySelector<HTMLElement>('.radix-themes')!
+      scroller.style.overflowY = 'auto'
+      placeAt(scroller, 0, 400)
+      const formEnd = document.querySelector('[data-form-review]')!.lastElementChild!
+      placeAt(section('Parties'), -50)
+      placeAt(section('Transport'), 500)
+      placeAt(formEnd, 600)
+      await act(async () => {
+        fireEvent.scroll(document)
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      // Both are below the container's visible part, though above the window's bottom.
+      expect(currentEntries()).toEqual(['1Parties'])
     })
 
     it('has no contents list for a single section', () => {

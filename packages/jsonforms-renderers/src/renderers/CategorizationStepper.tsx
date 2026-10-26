@@ -540,10 +540,14 @@ const CategorizationSections = ({ uischema, schema, path, renderers, cells }: Pr
   const sectionId = (index: number) => `${idPrefix}-section-${index}`
   const goTo = (target: HTMLElement | null) => {
     target?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
-    const heading = target?.matches('h1, h2, h3, h4') ? target : target?.querySelector<HTMLElement>('h1, h2, h3, h4')
+    const headings = 'h1, h2, h3, h4, h5, h6'
+    const heading = target?.matches(headings) ? target : target?.querySelector<HTMLElement>(headings)
     if (heading && !heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1')
     heading?.focus({ preventScroll: true })
   }
+  // The narrow-screen menu jumps once it has closed: closing moves focus back
+  // to its trigger, which would undo the jump's focus on the section heading.
+  const pendingJump = useRef<(() => void) | null>(null)
   const labels = categories.map((c) => categoryLabel(c, translate))
   const entries = [
     ...labels.map((label, index) => ({ label, go: () => goTo(sections.current[index]) })),
@@ -629,9 +633,23 @@ const CategorizationSections = ({ uischema, schema, path, renderers, cells }: Pr
 
       <Box style={{ flex: 1, minWidth: 0 }}>
         <Box display={{ initial: 'block', sm: 'none' }} mb="3">
-          <Select.Root value="" onValueChange={(value) => entries[Number(value)]?.go()}>
+          <Select.Root
+            value=""
+            onValueChange={(value) => {
+              pendingJump.current = entries[Number(value)]?.go ?? null
+            }}
+          >
             <Select.Trigger placeholder={t('jumpTo')} aria-label={t('jumpTo')} style={{ width: '100%' }} />
-            <Select.Content position="popper">
+            <Select.Content
+              position="popper"
+              onCloseAutoFocus={(event) => {
+                const jump = pendingJump.current
+                if (!jump) return
+                pendingJump.current = null
+                event.preventDefault()
+                jump()
+              }}
+            >
               {entries.map((entry, index) => (
                 <Select.Item key={`${path}-jump-${index}`} value={String(index)}>
                   {entry.label}
@@ -648,9 +666,10 @@ const CategorizationSections = ({ uischema, schema, path, renderers, cells }: Pr
 
 /**
  * The index of the section being read: the last one whose top has scrolled to
- * the sticky offset, or the last section once the end of the form is on
- * screen. Listens to scrolling anywhere on the page, since the host may scroll
- * a container rather than the window.
+ * the sticky offset, or the last section once the reader has scrolled into
+ * the form and its end is in view. Listens to scrolling anywhere on the page,
+ * and measures against the scrolling container, since the host may scroll one
+ * rather than the window.
  */
 function useCurrentSection(
   sections: { current: (HTMLElement | null)[] },
@@ -662,6 +681,9 @@ function useCurrentSection(
   useEffect(() => {
     if (!enabled) return
     let frame = 0
+    // Set by the first scroll: where the form sits when the page opens is not
+    // the reader having scrolled into it.
+    let scrolled = false
     const update = () => {
       frame = 0
       let index = 0
@@ -673,29 +695,49 @@ function useCurrentSection(
       const endEl = end.current
       const first = sections.current[0]
       const last = sections.current[count - 1]
-      const scrolledIn = first
-        ? first.getBoundingClientRect().top <= (parseFloat(getComputedStyle(first).scrollMarginTop) || 0) + 1
-        : false
-      // Once scrolled into the form, its end on screen means the last section
-      // can't scroll any higher. A form that fits on screen stays on its first.
-      if (scrolledIn && endEl && last && endEl.getBoundingClientRect().top <= window.innerHeight && index < count - 1) {
-        if (last.getBoundingClientRect().top < window.innerHeight) index = count - 1
+      const scrolledIn =
+        scrolled && first
+          ? first.getBoundingClientRect().top <= (parseFloat(getComputedStyle(first).scrollMarginTop) || 0) + 1
+          : false
+      // Once the page has scrolled into the form, its end on screen means the
+      // last section can't scroll any higher. A form that fits on screen, or
+      // sits at the top of the page, stays on its first.
+      if (scrolledIn && endEl && last && index < count - 1) {
+        const bottom = visibleBottom(endEl)
+        if (endEl.getBoundingClientRect().top <= bottom && last.getBoundingClientRect().top < bottom) index = count - 1
       }
       setCurrent(index)
     }
-    const onScroll = () => {
+    const schedule = () => {
       if (!frame) frame = requestAnimationFrame(update)
+    }
+    const onScroll = () => {
+      scrolled = true
+      schedule()
     }
     update()
     document.addEventListener('scroll', onScroll, { capture: true, passive: true })
-    window.addEventListener('resize', onScroll)
+    window.addEventListener('resize', schedule)
     return () => {
       if (frame) cancelAnimationFrame(frame)
       document.removeEventListener('scroll', onScroll, { capture: true })
-      window.removeEventListener('resize', onScroll)
+      window.removeEventListener('resize', schedule)
     }
   }, [sections, end, count, enabled])
   return current
+}
+
+/**
+ * The bottom of the part of the page `el` can be seen in: the window's, or a
+ * scrolling container's above it when that is shorter.
+ */
+function visibleBottom(el: HTMLElement): number {
+  let bottom = window.innerHeight
+  for (let parent = el.parentElement; parent; parent = parent.parentElement) {
+    const overflow = getComputedStyle(parent).overflowY
+    if (overflow === 'auto' || overflow === 'scroll') bottom = Math.min(bottom, parent.getBoundingClientRect().bottom)
+  }
+  return bottom
 }
 
 /** The Categories whose rules currently show them. */
