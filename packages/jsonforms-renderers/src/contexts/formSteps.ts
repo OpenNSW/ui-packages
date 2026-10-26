@@ -26,6 +26,18 @@ export interface FormStepsContextValue {
   actions?: ReactNode
   /** Continue was pressed on a step that still has errors. */
   onInvalidStep?: () => void
+  /**
+   * Entries a read-only stepper's contents list ends with, for other parts of
+   * the host's page (such as a form to fill in below the one being read). Each
+   * scrolls to the element with that id.
+   */
+  contentsLinks?: ContentsLink[]
+}
+
+export interface ContentsLink {
+  label: string
+  /** The id of the element on the page to scroll to. */
+  targetId: string
 }
 
 export const FormStepsContext = createContext<FormStepsContextValue | null>(null)

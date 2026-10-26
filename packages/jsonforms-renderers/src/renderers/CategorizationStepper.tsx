@@ -10,9 +10,9 @@ import {
 } from '@jsonforms/core'
 import { JsonFormsDispatch, useJsonForms } from '@jsonforms/react'
 import type { JsonFormsCellRendererRegistryEntry, JsonFormsRendererRegistryEntry } from '@jsonforms/core'
-import { Box, Button, Callout, Flex, Heading, Progress, Text } from '@radix-ui/themes'
+import { Box, Button, Callout, Flex, Heading, Progress, Select, Text } from '@radix-ui/themes'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons'
-import { type CSSProperties, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react'
 import { useFormSteps } from '../contexts/formSteps'
 import { FormReviewContext } from '../contexts/formReview'
 import {
@@ -54,7 +54,8 @@ interface Props {
  * through FormStepsProvider and offers them on the last step only.
  *
  * A read-only stepper has nothing to step through, so it shows every step on
- * one page under its heading instead (see CategorizationSections).
+ * one page under its heading instead, with the step list as a contents list
+ * that jumps to each (see CategorizationSections).
  */
 export const CategorizationStepper = (props: Props) =>
   props.enabled ? <EditableStepper {...props} /> : <CategorizationSections {...props} />
@@ -374,15 +375,18 @@ function StepLink({
   note,
   errorCount,
   status,
-  disabled,
+  disabled = false,
+  current = 'step',
   onSelect,
 }: {
   index: number
   label: string
-  note: string
-  errorCount: number
+  note?: string
+  errorCount?: number
   status: StepStatus
-  disabled: boolean
+  disabled?: boolean
+  /** What the current entry is to a screen reader: the step, or the place on the page. */
+  current?: 'step' | 'location'
   onSelect: () => void
 }) {
   const circle: Record<StepStatus, CSSProperties> = {
@@ -404,7 +408,7 @@ function StepLink({
       type="button"
       onClick={onSelect}
       disabled={disabled}
-      aria-current={status === 'current' ? 'step' : undefined}
+      aria-current={status === 'current' ? current : undefined}
       className="w-full rounded-md disabled:cursor-default enabled:hover:bg-[var(--gray-a2)]"
       style={{ border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', padding: '8px 8px 12px' }}
     >
@@ -434,7 +438,7 @@ function StepLink({
             >
               {label}
             </Text>
-            {errorCount > 0 && (
+            {errorCount != null && errorCount > 0 && (
               <Flex
                 align="center"
                 justify="center"
@@ -458,9 +462,11 @@ function StepLink({
               </Flex>
             )}
           </Flex>
-          <Text as="p" size="1" color={errorCount > 0 ? 'red' : 'gray'}>
-            {note}
-          </Text>
+          {note && (
+            <Text as="p" size="1" color={errorCount ? 'red' : 'gray'}>
+              {note}
+            </Text>
+          )}
         </Box>
       </Flex>
     </button>
@@ -506,25 +512,62 @@ function ProblemCallout({
  * read-only stepper. Like the review step, it carries `data-form-review`, so
  * a host can show its read-only values as plain answers rather than as
  * disabled inputs.
+ *
+ * With more than one section, the step list sits at the side as a contents
+ * list ("Jump to section" on narrow screens): choosing an entry scrolls to it,
+ * and the entry for the section being read is marked as the page scrolls. The
+ * host can end the list with links of its own (`contentsLinks`).
  */
 const CategorizationSections = ({ uischema, schema, path, renderers, cells }: Props) => {
   const translate = useJsonForms().i18n?.translate
+  const t = (key: StepperMessage, values?: Record<string, string | number>) => stepperText(translate, key, values)
   const host = useFormSteps()
   const categories = useVisibleCategories(uischema, path)
   const count = categories.length
+  const links = host?.contentsLinks ?? []
+  const withContents = count + links.length > 1
 
   const notifyHost = useEffectEvent(() => host?.onStepChange?.({ step: count, count, last: true }))
   useEffect(() => {
     notifyHost()
   }, [count])
 
-  return (
+  const sections = useRef<(HTMLElement | null)[]>([])
+  const end = useRef<HTMLDivElement>(null)
+  const current = useCurrentSection(sections, end, count, withContents)
+
+  const idPrefix = useId()
+  const sectionId = (index: number) => `${idPrefix}-section-${index}`
+  const goTo = (target: HTMLElement | null) => {
+    target?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    const headings = 'h1, h2, h3, h4, h5, h6'
+    const heading = target?.matches(headings) ? target : target?.querySelector<HTMLElement>(headings)
+    if (heading && !heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1')
+    heading?.focus({ preventScroll: true })
+  }
+  // The narrow-screen menu jumps once it has closed: closing moves focus back
+  // to its trigger, which would undo the jump's focus on the section heading.
+  const pendingJump = useRef<(() => void) | null>(null)
+  const labels = categories.map((c) => categoryLabel(c, translate))
+  const entries = [
+    ...labels.map((label, index) => ({ label, go: () => goTo(sections.current[index]) })),
+    ...links.map((link) => ({ label: link.label, go: () => goTo(document.getElementById(link.targetId)) })),
+  ]
+
+  const body = (
     <FormReviewContext.Provider value>
       <Flex direction="column" gap="6" p={{ initial: '4', sm: '6' }} style={panelStyle} data-form-review="">
         {categories.map((category, index) => (
-          <Box key={`${path}-${index}`}>
-            <Heading size="3" as="h3" mb="3">
-              {categoryLabel(category, translate)}
+          <section
+            key={`${path}-${index}`}
+            ref={(el) => {
+              sections.current[index] = el
+            }}
+            aria-labelledby={sectionId(index)}
+            style={{ scrollMarginTop: OFFSET }}
+          >
+            <Heading id={sectionId(index)} tabIndex={-1} size="3" as="h3" mb="3" style={{ outline: 'none' }}>
+              {labels[index]}
             </Heading>
             <CategoryFields
               category={category}
@@ -534,11 +577,167 @@ const CategorizationSections = ({ uischema, schema, path, renderers, cells }: Pr
               cells={cells}
               enabled={false}
             />
-          </Box>
+          </section>
         ))}
+        <div ref={end} />
       </Flex>
     </FormReviewContext.Provider>
   )
+  if (!withContents) return body
+
+  return (
+    <Flex gap="5" align="start">
+      <Box
+        asChild
+        display={{ initial: 'none', sm: 'block' }}
+        p="4"
+        style={{
+          ...panelStyle,
+          flex: '0 0 248px',
+          position: 'sticky',
+          top: OFFSET,
+          maxHeight: `calc(100vh - 2 * ${OFFSET})`,
+          overflowY: 'auto',
+        }}
+      >
+        <nav aria-label={t('contentsLabel')}>
+          <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {entries.map((entry, index) => (
+              <li key={`${path}-contents-${index}`} style={{ position: 'relative' }}>
+                {index < entries.length - 1 && (
+                  <span
+                    aria-hidden
+                    style={{
+                      position: 'absolute',
+                      left: 21,
+                      top: 40,
+                      bottom: -4,
+                      width: 2,
+                      borderRadius: 1,
+                      background: 'var(--gray-a5)',
+                    }}
+                  />
+                )}
+                <StepLink
+                  index={index}
+                  label={entry.label}
+                  status={index === current ? 'current' : 'todo'}
+                  current="location"
+                  onSelect={entry.go}
+                />
+              </li>
+            ))}
+          </ol>
+        </nav>
+      </Box>
+
+      <Box style={{ flex: 1, minWidth: 0 }}>
+        <Box display={{ initial: 'block', sm: 'none' }} mb="3">
+          <Select.Root
+            value=""
+            onValueChange={(value) => {
+              pendingJump.current = entries[Number(value)]?.go ?? null
+            }}
+          >
+            <Select.Trigger placeholder={t('jumpTo')} aria-label={t('jumpTo')} style={{ width: '100%' }} />
+            <Select.Content
+              position="popper"
+              onCloseAutoFocus={(event) => {
+                const jump = pendingJump.current
+                if (!jump) return
+                pendingJump.current = null
+                event.preventDefault()
+                jump()
+              }}
+            >
+              {entries.map((entry, index) => (
+                <Select.Item key={`${path}-jump-${index}`} value={String(index)}>
+                  {entry.label}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+        </Box>
+        {body}
+      </Box>
+    </Flex>
+  )
+}
+
+/**
+ * The index of the section being read: the last one whose top has scrolled to
+ * the sticky offset, or the last section once the reader has scrolled into
+ * the form and its end is in view. Listens to scrolling anywhere on the page,
+ * and measures against the scrolling container, since the host may scroll one
+ * rather than the window.
+ */
+function useCurrentSection(
+  sections: { current: (HTMLElement | null)[] },
+  end: { current: HTMLElement | null },
+  count: number,
+  enabled: boolean,
+): number {
+  const [current, setCurrent] = useState(0)
+  useEffect(() => {
+    if (!enabled) return
+    let frame = 0
+    // Set by the first scroll: where the form sits when the page opens is not
+    // the reader having scrolled into it.
+    let scrolled = false
+    const update = () => {
+      frame = 0
+      let index = 0
+      sections.current.slice(0, count).forEach((el, i) => {
+        if (!el) return
+        const offset = parseFloat(getComputedStyle(el).scrollMarginTop) || 0
+        if (el.getBoundingClientRect().top <= offset + 1) index = i
+      })
+      const endEl = end.current
+      const first = sections.current[0]
+      const last = sections.current[count - 1]
+      const scrolledIn =
+        scrolled && first
+          ? first.getBoundingClientRect().top <= (parseFloat(getComputedStyle(first).scrollMarginTop) || 0) + 1
+          : false
+      // Once the page has scrolled into the form, its end on screen means the
+      // last section can't scroll any higher. A form that fits on screen, or
+      // sits at the top of the page, stays on its first.
+      if (scrolledIn && endEl && last && index < count - 1) {
+        const bottom = visibleBottom(endEl)
+        if (endEl.getBoundingClientRect().top <= bottom && last.getBoundingClientRect().top < bottom) index = count - 1
+      }
+      setCurrent(index)
+    }
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update)
+    }
+    const onScroll = () => {
+      scrolled = true
+      schedule()
+    }
+    update()
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    window.addEventListener('resize', schedule)
+    return () => {
+      if (frame) cancelAnimationFrame(frame)
+      document.removeEventListener('scroll', onScroll, { capture: true })
+      window.removeEventListener('resize', schedule)
+    }
+  }, [sections, end, count, enabled])
+  return current
+}
+
+/**
+ * The bottom of the part of the page `el` can be seen in: the window's, or a
+ * scrolling container's above it when that is shorter.
+ */
+function visibleBottom(el: HTMLElement): number {
+  let bottom = window.innerHeight
+  for (let parent = el.parentElement; parent; parent = parent.parentElement) {
+    const overflow = getComputedStyle(parent).overflowY
+    if (overflow === 'auto' || overflow === 'scroll') bottom = Math.min(bottom, parent.getBoundingClientRect().bottom)
+  }
+  return bottom
 }
 
 /** The Categories whose rules currently show them. */

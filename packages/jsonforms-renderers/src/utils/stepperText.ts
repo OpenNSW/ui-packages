@@ -26,6 +26,8 @@ export const STEPPER_MESSAGES = {
   reviewHint: 'Check your answers below, then submit.',
   edit: 'Edit',
   editStep: 'Edit {step}',
+  contentsLabel: 'Sections',
+  jumpTo: 'Jump to section',
 } as const
 
 export type StepperMessage = keyof typeof STEPPER_MESSAGES

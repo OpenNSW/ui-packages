@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StrictMode } from 'react'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
@@ -11,6 +11,16 @@ import type { FormStepState } from '../contexts/formSteps'
 import type { ReactNode } from 'react'
 
 afterEach(cleanup)
+
+// jsdom has no ResizeObserver; the read-only contents list's "Jump to section"
+// Select mounts one through Radix's internal ScrollArea.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+}
 
 const schema: JsonSchema = {
   type: 'object',
@@ -277,8 +287,158 @@ describe('Categorization stepper', () => {
     expect(screen.getByRole('heading', { name: 'Transport' })).toBeTruthy()
     expect(shownInput('Vessel name')).toBe(true)
     expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
-    expect(screen.queryByRole('navigation')).toBeNull()
     expect(steps.at(-1)).toEqual({ step: 2, count: 2, last: true })
+  })
+
+  describe('read-only contents list', () => {
+    const readOnly = (uischema: unknown, contentsLinks?: { label: string; targetId: string }[]) =>
+      render(
+        <Theme>
+          <FormStepsProvider contentsLinks={contentsLinks}>
+            <JsonForms
+              schema={schema}
+              uischema={uischema as UISchemaElement}
+              data={{ exporter: 'A' }}
+              renderers={radixRenderers}
+              readonly
+            />
+          </FormStepsProvider>
+          <section id="review">
+            <h2>Officer Review</h2>
+          </section>
+        </Theme>,
+      )
+    const contents = () => screen.getByRole('navigation', { name: 'Sections' })
+
+    // jsdom lays nothing out: place each section's top (and the form's end) by hand.
+    const placeAt = (el: Element, top: number, bottom = top + 400) =>
+      vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({ top, bottom } as DOMRect)
+    const currentEntries = () =>
+      within(contents())
+        .getAllByRole('button')
+        .filter((b) => b.getAttribute('aria-current') === 'location')
+        .map((b) => b.textContent)
+    const section = (name: string) => screen.getByRole('heading', { name }).closest('section')!
+
+    it('lists the sections and marks the one being read as the page scrolls', async () => {
+      readOnly(stepper())
+      const formEnd = document.querySelector('[data-form-review]')!.lastElementChild!
+      placeAt(section('Parties'), 100)
+      placeAt(section('Transport'), 900)
+      placeAt(formEnd, 2000)
+      const current = () =>
+        within(contents())
+          .getAllByRole('button')
+          .filter((b) => b.getAttribute('aria-current') === 'location')
+          .map((b) => b.textContent)
+
+      expect(
+        within(contents())
+          .getAllByRole('button')
+          .map((b) => b.textContent),
+      ).toEqual(['1Parties', '2Transport'])
+      await act(async () => {
+        fireEvent.scroll(document)
+        await new Promise((r) => setTimeout(r, 50))
+      })
+      expect(current()).toEqual(['1Parties'])
+
+      placeAt(section('Parties'), -700)
+      placeAt(section('Transport'), 0)
+      await act(async () => {
+        fireEvent.scroll(document)
+        await new Promise((r) => setTimeout(r, 50))
+      })
+      expect(current()).toEqual(['2Transport'])
+    })
+
+    it('marks the first section of a form that fits on screen', async () => {
+      readOnly(stepper())
+      const formEnd = document.querySelector('[data-form-review]')!.lastElementChild!
+      placeAt(section('Parties'), 100)
+      placeAt(section('Transport'), 300)
+      placeAt(formEnd, 500)
+      await act(async () => {
+        fireEvent.scroll(document)
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      const current = within(contents())
+        .getAllByRole('button')
+        .filter((b) => b.getAttribute('aria-current') === 'location')
+        .map((b) => b.textContent)
+      expect(current).toEqual(['1Parties'])
+    })
+
+    it('scrolls to a section and focuses its heading', () => {
+      const scrollIntoView = vi.fn()
+      Element.prototype.scrollIntoView = scrollIntoView
+      readOnly(stepper())
+
+      fireEvent.click(within(contents()).getByRole('button', { name: /Transport/ }))
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' })
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Transport' }))
+    })
+
+    it("ends with the host's links, which go to elements on its page", () => {
+      readOnly(stepper(), [{ label: 'Officer Review', targetId: 'review' }])
+
+      fireEvent.click(within(contents()).getByRole('button', { name: /Officer Review/ }))
+
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Officer Review' }))
+    })
+
+    it("focuses a host target's heading at any level", () => {
+      readOnly(stepper(), [{ label: 'Notes', targetId: 'notes' }])
+      const notes = document.createElement('div')
+      notes.id = 'notes'
+      notes.innerHTML = '<h6>Notes</h6>'
+      document.body.appendChild(notes)
+
+      fireEvent.click(within(contents()).getByRole('button', { name: /Notes/ }))
+
+      expect(document.activeElement).toBe(notes.querySelector('h6'))
+      notes.remove()
+    })
+
+    it('keeps a form at the top of the page on its first section until the page is scrolled', async () => {
+      readOnly(stepper())
+      const formEnd = document.querySelector('[data-form-review]')!.lastElementChild!
+      placeAt(section('Parties'), 0)
+      placeAt(section('Transport'), 300)
+      placeAt(formEnd, 500)
+      await act(async () => {
+        fireEvent(window, new Event('resize'))
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      expect(currentEntries()).toEqual(['1Parties'])
+    })
+
+    it("measures the form's end against the container that scrolls", async () => {
+      const { container } = readOnly(stepper())
+      const scroller = container.querySelector<HTMLElement>('.radix-themes')!
+      scroller.style.overflowY = 'auto'
+      placeAt(scroller, 0, 400)
+      const formEnd = document.querySelector('[data-form-review]')!.lastElementChild!
+      placeAt(section('Parties'), -50)
+      placeAt(section('Transport'), 500)
+      placeAt(formEnd, 600)
+      await act(async () => {
+        fireEvent.scroll(document)
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      // Both are below the container's visible part, though above the window's bottom.
+      expect(currentEntries()).toEqual(['1Parties'])
+    })
+
+    it('has no contents list for a single section', () => {
+      readOnly({ ...stepper(), elements: [stepper().elements[0]] })
+
+      expect(screen.queryByRole('navigation')).toBeNull()
+    })
   })
 
   it('still renders tabs without the stepper variant', () => {
