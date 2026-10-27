@@ -38,3 +38,29 @@ The seconds spinner is **opt-in**. Set `options.showSeconds: true` on the **Cont
 | `true`            | Hour, minute, and seconds (`step=1`) | Seconds as picked; still `00` if the user only sets hour and minute |
 
 A form that omits `showSeconds` keeps the hour-and-minute picker and still submits a valid `HH:MM:SS` string.
+
+## No past days (`formatMinimum`)
+
+`formatMinimum` on a `date` or `date-time` property is Ajv's earliest-day keyword. A fixed day works with JsonForms' `createAjv()` alone. `"today"` means the current local calendar day, and the app's Ajv has to be taught that word before any schema is compiled:
+
+```ts
+import { createAjv } from '@jsonforms/core'
+import { withRelativeDates } from '@opennsw/jsonforms-renderers'
+
+export const ajv = withRelativeDates(createAjv({ useDefaults: true }))
+```
+
+Pass that instance to `<JsonForms ajv={ajv} />`. Without the wrap, `"today"` fails every value. A fixed day such as `"2026-01-01"` works either way.
+
+```json
+"estimated_shipment_date": {
+  "type": "string",
+  "format": "date",
+  "title": "Estimated Shipment Date",
+  "formatMinimum": "today"
+}
+```
+
+`DateControl` sets the picker's `min` from that keyword, resolving `"today"` to the current day, so an earlier day cannot be selected. Whatever is typed is stored, including each padded year a browser emits while the year is typed. Ajv then reports a past day through the field's normal error, which blocks submit. The message is "Estimated Shipment Date must be today or later", or "on or after 1 Jan 2026" for a fixed day.
+
+`"today"` is the local calendar day in the browser. A server that validates the same schema has to resolve `"today"` the same way, in the timezone it and the browser agree on.

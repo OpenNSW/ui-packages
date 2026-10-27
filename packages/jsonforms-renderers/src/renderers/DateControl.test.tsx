@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
-import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
+import { createAjv, type JsonSchema, type UISchemaElement } from '@jsonforms/core'
 import { radixRenderers } from './index'
+import { localISODate } from './DateControl'
+import { withRelativeDates } from '../utils/ajvDates'
 
 type Data = Record<string, unknown>
 
@@ -31,7 +33,7 @@ const appointmentSchema: JsonSchema = {
   },
 }
 
-function renderForm(schema: JsonSchema, uischema: UISchemaElement, seed: Data) {
+function renderForm(schema: JsonSchema, uischema: UISchemaElement, seed: Data, ajv?: ReturnType<typeof createAjv>) {
   const writes: Data[] = []
   let live = true
   finishers.push(() => {
@@ -39,16 +41,20 @@ function renderForm(schema: JsonSchema, uischema: UISchemaElement, seed: Data) {
   })
 
   function Harness() {
-    const [initial] = useState(seed)
+    const [data, setData] = useState(seed)
     return (
       <Theme>
         <JsonForms
           schema={schema}
           uischema={uischema}
-          data={initial}
+          data={data}
           renderers={radixRenderers}
-          onChange={({ data }) => {
-            if (live) writes.push(data as Data)
+          ajv={ajv}
+          onChange={({ data: next }) => {
+            if (!live) return
+            const row = next as Data
+            writes.push(row)
+            setData(row)
           }}
         />
       </Theme>
@@ -78,6 +84,61 @@ const appointmentSecondsControl = {
   type: 'VerticalLayout',
   elements: [{ type: 'Control', scope: '#/properties/appointment', options: { showSeconds: true } }],
 } as UISchemaElement
+
+const shipmentSchema = {
+  type: 'object',
+  properties: {
+    estimated_shipment_date: {
+      type: 'string',
+      format: 'date',
+      title: 'Estimated Shipment Date',
+      formatMinimum: 'today',
+    },
+  },
+} as JsonSchema
+
+const openShipmentSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    estimated_shipment_date: { type: 'string', format: 'date', title: 'Estimated Shipment Date' },
+  },
+}
+
+const shipmentControl = {
+  type: 'VerticalLayout',
+  elements: [{ type: 'Control', scope: '#/properties/estimated_shipment_date' }],
+} as UISchemaElement
+
+const showDateSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    showDate: { type: 'boolean', title: 'Show date' },
+    estimated_shipment_date: { type: 'string', format: 'date', title: 'Estimated Shipment Date' },
+  },
+}
+
+const showDateControl = {
+  type: 'VerticalLayout',
+  elements: [
+    {
+      type: 'Control',
+      scope: '#/properties/estimated_shipment_date',
+      rule: {
+        effect: 'SHOW',
+        condition: {
+          scope: '#/properties/showDate',
+          schema: { const: true },
+        },
+      },
+    },
+  ],
+} as UISchemaElement
+
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return localISODate(d)
+}
 
 describe('DateControl time', () => {
   it('stores HH:MM:SS when the picker emits HH:MM', async () => {
@@ -123,6 +184,94 @@ describe('DateControl time', () => {
     await waitFor(() => {
       expect(writes.at(-1)).toEqual({ openingTime: '14:30:45' })
     })
+  })
+})
+
+describe('DateControl no past days', () => {
+  const ajv = withRelativeDates(createAjv())
+
+  beforeEach(() => {
+    // Date is frozen at 22 Oct 2026. shouldAdvanceTime lets JsonForms' debounced
+    // onChange still fire; faking Date alone never lets that 10ms debounce elapse.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date(2026, 9, 22, 12))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('sets the picker minimum to the current day and keeps that day', async () => {
+    const today = localISODate()
+    const { writes } = renderForm(shipmentSchema, shipmentControl, {}, ajv)
+    const input = screen.getByLabelText(/Estimated Shipment Date/)
+
+    expect(today).toBe('2026-10-22')
+    expect(input.getAttribute('min')).toBe(today)
+
+    fireEvent.change(input, { target: { value: today } })
+    await waitFor(() => {
+      expect(writes.at(-1)).toEqual({ estimated_shipment_date: today })
+    })
+    expect(screen.queryByText(/must be today or later/)).toBeNull()
+  })
+
+  it('keeps each typed year digit', async () => {
+    const { writes } = renderForm(shipmentSchema, shipmentControl, {}, ajv)
+    const input = screen.getByLabelText(/Estimated Shipment Date/)
+
+    for (const value of ['0002-11-01', '0020-11-01', '0202-11-01', '2026-11-01']) {
+      fireEvent.change(input, { target: { value } })
+      await waitFor(() => {
+        expect(writes.at(-1)).toEqual({ estimated_shipment_date: value })
+      })
+      expect((input as HTMLInputElement).value).toBe(value)
+    }
+  })
+
+  it('stores a past day and reports it as an error', async () => {
+    renderForm(shipmentSchema, shipmentControl, { estimated_shipment_date: '2020-01-01' }, ajv)
+    const input = screen.getByLabelText(/Estimated Shipment Date/) as HTMLInputElement
+
+    expect(input.value).toBe('2020-01-01')
+    expect(screen.getByText('Estimated Shipment Date must be today or later')).toBeTruthy()
+  })
+
+  it('still stores a past date when the schema sets no minimum', async () => {
+    const yesterday = daysAgo(1)
+    const { writes } = renderForm(openShipmentSchema, shipmentControl, {}, ajv)
+    const input = screen.getByLabelText(/Estimated Shipment Date/)
+
+    expect(yesterday).toBe('2026-10-21')
+    expect(input.getAttribute('min')).toBeNull()
+    fireEvent.change(input, { target: { value: yesterday } })
+    await waitFor(() => {
+      expect(writes.at(-1)).toEqual({ estimated_shipment_date: yesterday })
+    })
+    expect(screen.queryByText(/must be today or later/)).toBeNull()
+  })
+})
+
+describe('DateControl visibility', () => {
+  it('shows a date field that a rule hid', () => {
+    function Harness() {
+      const [data, setData] = useState<Data>({ showDate: false })
+      return (
+        <Theme>
+          <button type="button" onClick={() => setData((current) => ({ ...current, showDate: true }))}>
+            Show date
+          </button>
+          <JsonForms schema={showDateSchema} uischema={showDateControl} data={data} renderers={radixRenderers} />
+        </Theme>
+      )
+    }
+
+    render(<Harness />)
+    expect(screen.queryByLabelText(/Estimated Shipment Date/)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show date' }))
+
+    expect(screen.getByLabelText(/Estimated Shipment Date/)).toBeTruthy()
   })
 })
 
