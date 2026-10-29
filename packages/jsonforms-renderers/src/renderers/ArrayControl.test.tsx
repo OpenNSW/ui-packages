@@ -65,6 +65,79 @@ describe('ArrayControl itemLabel', () => {
     expect(html).not.toContain('Container 1')
   })
 
+  it('hides the row name when itemLabel is false', () => {
+    const html = renderArray({ itemLabel: false })
+    expect(html).not.toContain('Item 1')
+    expect(html).not.toContain('Item 2')
+    expect(html).not.toContain('Container 1')
+  })
+
+  it('shows the N items count on cards, and hides it when itemLabel is false', () => {
+    const shown = renderArray({ display: 'cards', summary: '{name}' })
+    expect(shown).toContain('>2 items<')
+    expect(shown).toContain('aria-label="Open Item 1 (a)"')
+    expect(shown).toContain('aria-label="Open Item 2 (b)"')
+
+    const hidden = renderArray({ display: 'cards', summary: '{name}', itemLabel: false })
+    expect(hidden).not.toContain('2 items')
+    expect(hidden).not.toContain('1 item')
+    expect(hidden).not.toContain('Item 1')
+    expect(hidden).not.toContain('Item 2')
+    // Cards and accessible names still use the summary.
+    expect(hidden).toContain('aria-label="Open a"')
+    expect(hidden).toContain('aria-label="Open b"')
+    expect(hidden).toContain('aria-label="Remove a"')
+    expect(hidden).toContain('aria-label="Remove b"')
+  })
+
+  it('keeps custom totals without the N items count when itemLabel is false', () => {
+    const bagsSchema: JsonSchema = {
+      type: 'object',
+      properties: { name: { type: 'string' }, bags: { type: 'number' } },
+    }
+    const options = {
+      display: 'cards' as const,
+      summary: '{name}',
+      itemLabel: false as const,
+      totals: [{ field: 'bags', label: '{sum} bags' }],
+    }
+    const html = renderArray(options, {
+      data: [
+        { name: 'Mail', bags: 10 },
+        { name: 'Ship', bags: 20 },
+      ],
+      schema: { type: 'array', title: 'Transport Details', items: bagsSchema },
+    })
+    expect(html).toContain('>30 bags<')
+    expect(html).not.toContain('2 items')
+    expect(html).not.toContain('items ·')
+    expect(html).toContain('aria-label="Open Mail"')
+    expect(html).toContain('Transport Details')
+  })
+
+  it('omits the N items count from non-card totals when itemLabel is false', () => {
+    const bagsSchema: JsonSchema = {
+      type: 'object',
+      properties: { name: { type: 'string' }, bags: { type: 'number' } },
+    }
+    const html = renderArray(
+      {
+        itemLabel: false,
+        totals: [{ field: 'bags', label: '{sum} bags' }],
+      },
+      {
+        data: [
+          { name: 'Mail', bags: 10 },
+          { name: 'Ship', bags: 20 },
+        ],
+        schema: { type: 'array', items: bagsSchema },
+      },
+    )
+    expect(html).toContain('>30 bags<')
+    expect(html).not.toContain('2 items')
+    expect(html).not.toContain('Item 1')
+  })
+
   it('spells the row number when itemNumber is word', () => {
     const html = renderArray({ itemLabel: 'Attachment', itemNumber: 'word' })
     expect(html).toContain('Attachment One')
