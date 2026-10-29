@@ -22,7 +22,8 @@ import { ChevronRightIcon, Cross2Icon, FileTextIcon, PlusIcon, TrashIcon } from 
 interface ListOptions {
   addable?: boolean
   removable?: boolean
-  itemLabel?: string
+  /** The word in front of the row number. `false` hides the row name. Defaults to "Item". */
+  itemLabel?: string | false
   /** "word" spells the row number in English (Attachment One). Defaults to a digit. */
   itemNumber?: 'number' | 'word'
   addLabel?: string
@@ -182,7 +183,8 @@ export const ArrayControl = ({
   const cards = options.display === 'cards'
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
-  const itemLabel = options.itemLabel || 'Item'
+  const hideItemName = options.itemLabel === false
+  const itemLabel = typeof options.itemLabel === 'string' && options.itemLabel ? options.itemLabel : 'Item'
   const addLabel = options.addLabel || t('addItem')
   const emptyLabel = options.emptyLabel || t('empty')
   // JSON Forms turns `label: false` into '' and then still translates
@@ -207,9 +209,17 @@ export const ArrayControl = ({
 
   const summaryOf = (row: unknown) =>
     options.summary ? summarizeRow(options.summary, row, validItemsSchema, locale) : ''
-  const nameOf = (index: number) => `${itemLabel} ${options.itemNumber === 'word' ? spellNumber(index + 1) : index + 1}`
+  // When the row name is hidden, aria-labels and dialog titles still need a
+  // short name: the summary if there is one, otherwise the list's heading.
+  const nameOf = (index: number) => {
+    if (hideItemName) {
+      return summaryOf(items[index]) || fieldName
+    }
+    return `${itemLabel} ${options.itemNumber === 'word' ? spellNumber(index + 1) : index + 1}`
+  }
   // "Item 2 (MEDIUM · 240 bags)": the row's name, with its summary when it has one.
   const fullNameOf = (index: number) => {
+    if (hideItemName) return nameOf(index)
     const summary = summaryOf(items[index])
     return summary ? `${nameOf(index)} (${summary})` : nameOf(index)
   }
@@ -400,23 +410,28 @@ export const ArrayControl = ({
               style={{ outline: 'none' }}
             >
               <Flex direction="column" gap="4">
-                <Flex justify="between" align="center">
-                  <Text size="3" weight="bold">
-                    {nameOf(index)}
-                  </Text>
-                  {canRemove && (
-                    <Button
-                      type="button"
-                      color="red"
-                      variant="soft"
-                      onClick={() => setConfirmIndex(index)}
-                      aria-label={t('removeItem', { item: fullNameOf(index) })}
-                    >
-                      <TrashIcon />
-                      {t('remove')}
-                    </Button>
-                  )}
-                </Flex>
+                {(!hideItemName || canRemove) && (
+                  <Flex justify="between" align="center">
+                    {!hideItemName && (
+                      <Text size="3" weight="bold">
+                        {nameOf(index)}
+                      </Text>
+                    )}
+                    {canRemove && (
+                      <Button
+                        type="button"
+                        color="red"
+                        variant="soft"
+                        onClick={() => setConfirmIndex(index)}
+                        aria-label={t('removeItem', { item: fullNameOf(index) })}
+                        style={hideItemName ? { marginLeft: 'auto' } : undefined}
+                      >
+                        <TrashIcon />
+                        {t('remove')}
+                      </Button>
+                    )}
+                  </Flex>
+                )}
                 <Box>{fields(index, enabled)}</Box>
               </Flex>
             </Card>
@@ -442,9 +457,11 @@ export const ArrayControl = ({
         <Dialog.Root open onOpenChange={(isOpen) => !isOpen && setOpen(null)}>
           <Dialog.Content maxWidth="640px">
             <Dialog.Title>{nameOf(open.index)}</Dialog.Title>
-            <Dialog.Description size="2" color="gray" mb="4">
-              {summaryOf(items[open.index])}
-            </Dialog.Description>
+            {!hideItemName && (
+              <Dialog.Description size="2" color="gray" mb="4">
+                {summaryOf(items[open.index])}
+              </Dialog.Description>
+            )}
             {fields(open.index, enabled)}
             <Flex gap="3" mt="4" justify="between">
               {!open.isNew && canRemove ? (
