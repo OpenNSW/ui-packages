@@ -65,6 +65,13 @@ describe('ArrayControl itemLabel', () => {
     expect(html).not.toContain('Container 1')
   })
 
+  it('hides the row name when itemLabel is false', () => {
+    const html = renderArray({ itemLabel: false })
+    expect(html).not.toContain('Item 1')
+    expect(html).not.toContain('Item 2')
+    expect(html).not.toContain('Container 1')
+  })
+
   it('spells the row number when itemNumber is word', () => {
     const html = renderArray({ itemLabel: 'Attachment', itemNumber: 'word' })
     expect(html).toContain('Attachment One')
