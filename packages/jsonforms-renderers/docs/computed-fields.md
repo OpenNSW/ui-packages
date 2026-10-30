@@ -34,6 +34,29 @@ An input can point at:
 
 When a path resolves to `null`/`undefined` (an upload that hasn't happened yet, a field left blank) and no `default` is configured, the **whole** computed field goes to `unavailable` — it does not attempt a partial computation with some inputs missing. Configuring `default` lets the computation proceed anyway, which is the right choice for a genuinely optional input (e.g. a spreadsheet upload labeled "if applicable").
 
+### `aggregate`: one value from every array item
+
+A `*` path segment matches every item of the array at that point, and `aggregate` reduces the matched values to one number before the formula sees it:
+
+```json
+"levy_amount": {
+  "type": "number",
+  "x-computed": {
+    "inputs": {
+      "total_levy": { "path": "blendsheet_data.*.assessed_levy", "aggregate": "sum" }
+    },
+    "formula": "total_levy"
+  }
+}
+```
+
+- `aggregate` is one of `sum`, `min`, `max`, `average` or `count`. The formula engine only takes single values, so the reduction happens while resolving the input; the formula can still combine the result with other inputs (`total_levy + fee`).
+- A path can have more than one `*` (`containers.*.items.*.weight`); every match across every level is aggregated together.
+- Each matched value must be a number. An item without one takes the input's `default`; with no `default`, the **whole** field goes to `unavailable`, the same as a missing plain input — never a total over only some items.
+- An empty array gives `0` for `sum` and `count`, and `unavailable` for `min`, `max` and `average`. A missing array (nothing at the path before the `*`) is `unavailable`.
+- A `*` without `aggregate`, an `aggregate` without a `*`, or an unknown `aggregate` is a schema mistake: the field shows it as an error.
+- The matched values can themselves be computed fields — e.g. a per-row `assessed_levy` computed from that row's own inputs. The total settles on the render after the rows do, as any other chain does.
+
 ## `formula`
 
 Written in terms of the aliases above (not Excel-style cell references), evaluated by the same `fast-formula-parser`/`@formulajs/formulajs` engine `x-evaluate` uses (see [spreadsheet-formulas.md](./spreadsheet-formulas.md)) via the library's own named-variable ("defined name") mechanism — so the full function/operator set documented there (`ROUND`, `IF`, etc.) is available here too, not just `+ - * /`.

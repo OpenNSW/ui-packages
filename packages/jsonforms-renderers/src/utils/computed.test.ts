@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from './computed'
+import { computedInputsError, evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from './computed'
 
 describe('resolveComputedInputs', () => {
   const rootData = {
@@ -79,6 +79,105 @@ describe('resolveComputedInputs', () => {
 
   it('works with an empty parentPath (a root-level control)', () => {
     expect(resolveComputedInputs({ a: 5 }, '', { a: 'a' })).toEqual({ a: 5 })
+  })
+})
+
+describe('resolveComputedInputs with an aggregate', () => {
+  const rootData = {
+    blendsheet_data: [{ assessed_levy: 300 }, { assessed_levy: 100 }, { assessed_levy: 200 }],
+    partial: [{ assessed_levy: 300 }, {}],
+    empty: [],
+    containers: [{ items: [{ weight: 1 }, { weight: 2 }] }, { items: [{ weight: 3 }] }],
+  }
+  const levy = (aggregate: 'sum' | 'min' | 'max' | 'average' | 'count') => ({
+    total: { path: 'blendsheet_data.*.assessed_levy', aggregate },
+  })
+
+  it('sums one field across every array item', () => {
+    expect(resolveComputedInputs(rootData, '', levy('sum'))).toEqual({ total: 600 })
+  })
+
+  it('takes the min, max, average and count', () => {
+    expect(resolveComputedInputs(rootData, '', levy('min'))).toEqual({ total: 100 })
+    expect(resolveComputedInputs(rootData, '', levy('max'))).toEqual({ total: 300 })
+    expect(resolveComputedInputs(rootData, '', levy('average'))).toEqual({ total: 200 })
+    expect(resolveComputedInputs(rootData, '', levy('count'))).toEqual({ total: 3 })
+  })
+
+  it('is unavailable when an item has no value and there is no default', () => {
+    expect(
+      resolveComputedInputs(rootData, '', { total: { path: 'partial.*.assessed_levy', aggregate: 'sum' } }),
+    ).toBeUndefined()
+  })
+
+  it('uses the default for an item without a value', () => {
+    expect(
+      resolveComputedInputs(rootData, '', { total: { path: 'partial.*.assessed_levy', aggregate: 'sum', default: 0 } }),
+    ).toEqual({ total: 300 })
+  })
+
+  it('is 0 for sum and count over an empty array, and unavailable for min, max and average', () => {
+    const over = (aggregate: 'sum' | 'min' | 'max' | 'average' | 'count') =>
+      resolveComputedInputs(rootData, '', { total: { path: 'empty.*.assessed_levy', aggregate } })
+    expect(over('sum')).toEqual({ total: 0 })
+    expect(over('count')).toEqual({ total: 0 })
+    expect(over('min')).toBeUndefined()
+    expect(over('max')).toBeUndefined()
+    expect(over('average')).toBeUndefined()
+  })
+
+  it('is unavailable when the array itself is missing', () => {
+    expect(
+      resolveComputedInputs(rootData, '', { total: { path: 'missing.*.assessed_levy', aggregate: 'sum' } }),
+    ).toBeUndefined()
+  })
+
+  it('expands more than one * across nested arrays', () => {
+    expect(
+      resolveComputedInputs(rootData, '', { total: { path: 'containers.*.items.*.weight', aggregate: 'sum' } }),
+    ).toEqual({ total: 6 })
+  })
+
+  it('resolves the path relative to the parent, like any other input', () => {
+    expect(resolveComputedInputs({ form: rootData }, 'form', levy('sum'))).toEqual({ total: 600 })
+  })
+
+  it('treats a * without an aggregate, or the reverse, as missing', () => {
+    expect(resolveComputedInputs(rootData, '', { total: 'blendsheet_data.*.assessed_levy' })).toBeUndefined()
+    expect(
+      resolveComputedInputs(rootData, '', { total: { path: 'blendsheet_data.0.assessed_levy', aggregate: 'sum' } }),
+    ).toBeUndefined()
+  })
+})
+
+describe('computedInputsError', () => {
+  it('accepts plain inputs and a * with an aggregate', () => {
+    expect(
+      computedInputsError({
+        price: 'unit_price',
+        discount: { path: 'discount', default: 0 },
+        total: { path: 'rows.*.amount', aggregate: 'sum' },
+      }),
+    ).toBeUndefined()
+  })
+
+  it('reports a * without an aggregate', () => {
+    expect(computedInputsError({ total: 'rows.*.amount' })).toBe('Input "total" has a * in its path but no aggregate.')
+    expect(computedInputsError({ total: { path: 'rows.*.amount' } })).toBe(
+      'Input "total" has a * in its path but no aggregate.',
+    )
+  })
+
+  it('reports an aggregate without a *', () => {
+    expect(computedInputsError({ total: { path: 'rows.0.amount', aggregate: 'sum' } })).toBe(
+      'Input "total" has an aggregate but no * in its path.',
+    )
+  })
+
+  it('reports an unknown aggregate', () => {
+    expect(computedInputsError({ total: { path: 'rows.*.amount', aggregate: 'median' as unknown as 'sum' } })).toBe(
+      'Input "total" has an unknown aggregate "median"; use one of sum, min, max, average, count.',
+    )
   })
 })
 

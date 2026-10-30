@@ -842,6 +842,139 @@ export const fixtures: Fixture[] = [
     } as UISchemaElement,
   },
   {
+    id: 'computed-control-aggregate',
+    name: 'Computed Control (aggregate over an array)',
+    schema: {
+      type: 'object',
+      properties: {
+        blendsheet_data: {
+          type: 'array',
+          title: 'Blend Sheet Levy',
+          description:
+            'Each row\'s Assessed Levy is quantity * multiplier, via x-computed on the row. Add a row and leave its quantity blank: every total below goes to "Not yet available" until it\'s filled, never a total over only some rows.',
+          items: {
+            type: 'object',
+            properties: {
+              blend_no: { type: 'string', title: 'Blend No.' },
+              quantity_to_be_exported: { type: 'number', title: 'Quantity to be Exported (KGs)' },
+              levy_multiplier: { type: 'number', title: 'Levy Multiplier', default: 3 },
+              assessed_levy: {
+                type: 'number',
+                title: 'Assessed Levy (LKR)',
+                'x-computed': {
+                  inputs: {
+                    quantity_to_be_exported: 'quantity_to_be_exported',
+                    levy_multiplier: 'levy_multiplier',
+                  },
+                  formula: 'quantity_to_be_exported * levy_multiplier',
+                  decimals: 2,
+                },
+              },
+            },
+          },
+        },
+        levy_amount: {
+          type: 'number',
+          title: 'Assessed Levy — sum',
+          description: '{ path: "blendsheet_data.*.assessed_levy", aggregate: "sum" }',
+          'x-computed': {
+            inputs: { total_levy: { path: 'blendsheet_data.*.assessed_levy', aggregate: 'sum' } },
+            formula: 'total_levy',
+            decimals: 2,
+          },
+        },
+        blend_sheet_count: {
+          type: 'number',
+          title: 'Blend Sheets — count',
+          description: 'aggregate: "count" over the same path.',
+          'x-computed': {
+            inputs: { blend_sheets: { path: 'blendsheet_data.*.assessed_levy', aggregate: 'count' } },
+            formula: 'blend_sheets',
+            decimals: 0,
+          },
+        },
+        average_levy: {
+          type: 'number',
+          title: 'Assessed Levy — average',
+          description: 'aggregate: "average". An empty array has no average, so it is unavailable rather than 0.',
+          'x-computed': {
+            inputs: { average_levy: { path: 'blendsheet_data.*.assessed_levy', aggregate: 'average' } },
+            formula: 'average_levy',
+            decimals: 2,
+          },
+        },
+        largest_quantity: {
+          type: 'number',
+          title: 'Quantity to be Exported — max',
+          description:
+            'aggregate: "max" over a plain row field, with default 0 so a blank quantity counts as 0 instead of making the field unavailable.',
+          'x-computed': {
+            inputs: {
+              largest_quantity: { path: 'blendsheet_data.*.quantity_to_be_exported', aggregate: 'max', default: 0 },
+            },
+            formula: 'largest_quantity',
+            decimals: 0,
+          },
+        },
+        misconfigured_total: {
+          type: 'number',
+          title: 'Misconfigured — * without aggregate',
+          description: 'A schema mistake shows as an error on the field, not as a silent "Not yet available".',
+          'x-computed': {
+            inputs: { total_levy: 'blendsheet_data.*.assessed_levy' },
+            formula: 'total_levy',
+          },
+        },
+      },
+    } as unknown as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        {
+          type: 'Control',
+          scope: '#/properties/blendsheet_data',
+          options: {
+            detail: {
+              type: 'VerticalLayout',
+              elements: [
+                {
+                  type: 'HorizontalLayout',
+                  elements: [
+                    { type: 'Control', scope: '#/properties/blend_no' },
+                    { type: 'Control', scope: '#/properties/quantity_to_be_exported' },
+                  ],
+                },
+                {
+                  type: 'HorizontalLayout',
+                  elements: [
+                    { type: 'Control', scope: '#/properties/levy_multiplier' },
+                    { type: 'Control', scope: '#/properties/assessed_levy' },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        { type: 'Control', scope: '#/properties/levy_amount' },
+        {
+          type: 'HorizontalLayout',
+          elements: [
+            { type: 'Control', scope: '#/properties/blend_sheet_count' },
+            { type: 'Control', scope: '#/properties/average_levy' },
+            { type: 'Control', scope: '#/properties/largest_quantity' },
+          ],
+        },
+        { type: 'Control', scope: '#/properties/misconfigured_total' },
+      ],
+    } as UISchemaElement,
+    data: {
+      blendsheet_data: [
+        { blend_no: '26/1386', quantity_to_be_exported: 16128, levy_multiplier: 3 },
+        { blend_no: '26/1387', quantity_to_be_exported: 8000, levy_multiplier: 3 },
+      ],
+    },
+  },
+  {
     id: 'spreadsheet-row-header',
     name: 'Spreadsheet (rowHeader records)',
     schema: {

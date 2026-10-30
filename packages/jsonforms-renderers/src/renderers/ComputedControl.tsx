@@ -3,13 +3,21 @@ import type { ControlProps, JsonSchema } from '@jsonforms/core'
 import { Box, Flex, Spinner, Text } from '@radix-ui/themes'
 import { useEffect, useState } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
-import { evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from '../utils/computed'
+import {
+  computedInputsError,
+  evaluateComputedFormula,
+  formatComputedValue,
+  resolveComputedInputs,
+} from '../utils/computed'
 import type { ComputedInput } from '../utils/computed'
 import type { CellValue } from '../utils/spreadsheet'
 import { renderTemplate } from '../utils/template'
 
 interface XComputedOptions {
-  /** alias -> path (shorthand) or { path, default }, relative to this control's own parent object. */
+  /**
+   * alias -> path (shorthand) or { path, default, aggregate }, relative to this control's own parent
+   * object. A `*` path segment with an `aggregate` reduces every array item's value to one number.
+   */
   inputs: Record<string, ComputedInput>
   /** Formula written in terms of the aliases above, e.g. "total_sales + total_imported + total_blend_balance". */
   formula: string
@@ -50,6 +58,9 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
   const ctx = useJsonForms()
   const parentPath = path.split('.').slice(0, -1).join('.')
   const resolvedInputs = resolveComputedInputs(ctx.core?.data, parentPath, inputs)
+  // A schema-authoring mistake (a * without an aggregate, or the reverse) is
+  // shown as an error rather than left as a silent "Not yet available".
+  const configError = computedInputsError(inputs)
   // Cheap, stable dependency key for the effect below — resolvedInputs is a
   // fresh object every render even when its contents are unchanged.
   const inputsKey = resolvedInputs ? JSON.stringify(resolvedInputs) : null
@@ -114,6 +125,14 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
       if (next !== data) handleChange(path, next)
     }
 
+    if (configError) {
+      setStatus('error')
+      setError(configError)
+      setValue(null)
+      persist(undefined)
+      return
+    }
+
     if (resolvedInputs === undefined) {
       setStatus('unavailable')
       setError(null)
@@ -162,11 +181,11 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
     return () => {
       cancelled = true
     }
-    // Deliberately keyed on the resolved inputs, formula, visible, and
-    // formReadonly only — not on `data`/`path`/`handleChange`, which this
+    // Deliberately keyed on the resolved inputs, config error, formula,
+    // visible, and formReadonly only — not on `data`/`path`/`handleChange`, which this
     // effect itself writes to.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputsKey, formula, visible, formReadonly])
+  }, [inputsKey, configError, formula, visible, formReadonly])
 
   if (visible === false) {
     return null

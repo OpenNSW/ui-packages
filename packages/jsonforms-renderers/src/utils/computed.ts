@@ -8,7 +8,17 @@ import type { CellValue } from './spreadsheet'
 // field going "unavailable". `path` follows the same dot-joined convention
 // every ControlProps.path already uses (see Resolve.data / Paths.compose in
 // @jsonforms/core) — not a syntax invented for this feature.
-export type ComputedInput = string | { path: string; default?: CellValue }
+//
+// A `*` segment in `path` matches every item of the array at that point, and
+// `aggregate` reduces the matched values to one number, e.g.
+// { path: "blendsheet_data.*.assessed_levy", aggregate: "sum" }. The two go
+// together: see computedInputsError.
+export type ComputedInput = string | { path: string; default?: CellValue; aggregate?: ComputedAggregate }
+
+export type ComputedAggregate = 'sum' | 'min' | 'max' | 'average' | 'count'
+
+const AGGREGATES: readonly ComputedAggregate[] = ['sum', 'min', 'max', 'average', 'count']
+const WILDCARD = '*'
 
 export interface ComputedResolution {
   status: 'ok' | 'error'
@@ -22,10 +32,104 @@ export function resolveComputedInput(
   parentPath: string,
   input: ComputedInput,
 ): CellValue | undefined {
-  const { path, default: fallback } = typeof input === 'string' ? { path: input, default: undefined } : input
-  const resolved = Resolve.data(rootData, parentPath ? `${parentPath}.${path}` : path) as CellValue | undefined
+  const { path, default: fallback, aggregate } = typeof input === 'string' ? { path: input } : input
+  const fullPath = parentPath ? `${parentPath}.${path}` : path
+  if (aggregate !== undefined || hasWildcard(path)) {
+    return isAggregate(aggregate) && hasWildcard(path)
+      ? resolveAggregate(rootData, fullPath, aggregate, fallback)
+      : undefined
+  }
+  const resolved = Resolve.data(rootData, fullPath) as CellValue | undefined
   return resolved === null || resolved === undefined ? fallback : resolved
 }
+
+// A misconfigured aggregate input, described for the field to show, or
+// undefined when every input is fine. resolveComputedInput treats the same
+// input as missing, so a caller that doesn't check still never computes from it.
+export function computedInputsError(inputs: Record<string, ComputedInput>): string | undefined {
+  for (const [alias, input] of Object.entries(inputs)) {
+    if (typeof input === 'string') {
+      if (hasWildcard(input)) return `Input "${alias}" has a * in its path but no aggregate.`
+      continue
+    }
+    if (input.aggregate !== undefined && !isAggregate(input.aggregate)) {
+      return `Input "${alias}" has an unknown aggregate "${String(input.aggregate)}"; use one of ${AGGREGATES.join(', ')}.`
+    }
+    if (input.aggregate !== undefined && !hasWildcard(input.path)) {
+      return `Input "${alias}" has an aggregate but no * in its path.`
+    }
+    if (input.aggregate === undefined && hasWildcard(input.path)) {
+      return `Input "${alias}" has a * in its path but no aggregate.`
+    }
+  }
+  return undefined
+}
+
+const hasWildcard = (path: string): boolean => path.split('.').includes(WILDCARD)
+
+const isAggregate = (value: unknown): value is ComputedAggregate => AGGREGATES.includes(value as ComputedAggregate)
+
+// Every value the wildcard path matches, each `*` expanding to the items of
+// the array at that point. undefined when an array a `*` stands for is
+// missing or isn't an array — there's nothing to aggregate over, which is
+// different from an empty array. A matched item without a value comes back
+// as undefined, in its place.
+function collectWildcard(data: unknown, segments: string[]): unknown[] | undefined {
+  const index = segments.indexOf(WILDCARD)
+  const head = segments.slice(0, index)
+  const array: unknown = head.length ? Resolve.data(data, head.join('.')) : data
+  if (!Array.isArray(array)) return undefined
+
+  const rest = segments.slice(index + 1)
+  const values: unknown[] = []
+  for (const item of array) {
+    if (rest.includes(WILDCARD)) {
+      const nested = collectWildcard(item, rest)
+      if (nested === undefined) return undefined
+      values.push(...nested)
+    } else {
+      values.push(rest.length ? Resolve.data(item, rest.join('.')) : item)
+    }
+  }
+  return values
+}
+
+// Reduces the matched values to one number. Each matched value must be a
+// finite number, or else `fallback` stands in for it; with no usable
+// fallback, the whole input is missing, as a single missing input is, rather
+// than a total over only some items. No matches at all: sum and count are 0,
+// and min, max and average are missing, since they have no value over nothing.
+function resolveAggregate(
+  rootData: unknown,
+  fullPath: string,
+  aggregate: ComputedAggregate,
+  fallback: CellValue | undefined,
+): number | undefined {
+  const matched = collectWildcard(rootData, fullPath.split('.'))
+  if (matched === undefined) return undefined
+
+  const numbers: number[] = []
+  for (const value of matched) {
+    const number = isFiniteNumber(value) ? value : fallback
+    if (!isFiniteNumber(number)) return undefined
+    numbers.push(number)
+  }
+
+  switch (aggregate) {
+    case 'sum':
+      return numbers.reduce((total, number) => total + number, 0)
+    case 'count':
+      return numbers.length
+    case 'min':
+      return numbers.length ? Math.min(...numbers) : undefined
+    case 'max':
+      return numbers.length ? Math.max(...numbers) : undefined
+    case 'average':
+      return numbers.length ? numbers.reduce((total, number) => total + number, 0) / numbers.length : undefined
+  }
+}
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
 
 // Pure, synchronous. Resolves each alias in `inputs` against `rootData`,
 // relative to `parentPath` — the computed control's own containing object
