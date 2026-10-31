@@ -7,8 +7,10 @@ import type { CellValue } from './spreadsheet'
 // hasn't happened yet — so the computation can proceed instead of the whole
 // field going "unavailable". `path` follows the same dot-joined convention
 // every ControlProps.path already uses (see Resolve.data / Paths.compose in
-// @jsonforms/core) — not a syntax invented for this feature.
-export type ComputedInput = string | { path: string; default?: CellValue }
+// @jsonforms/core) — not a syntax invented for this feature. `aggregate?: never`
+// keeps ComputedFieldInput a discriminated union, so an aggregate input can't
+// fall back to this shape for a non-number `default`.
+export type ComputedInput = string | { path: string; default?: CellValue; aggregate?: never }
 
 // An x-computed input that reduces one field across every item of an array:
 // a `*` segment in `path` matches every item of the array at that point, and
@@ -16,7 +18,8 @@ export type ComputedInput = string | { path: string; default?: CellValue }
 // { path: "blendsheet_data.*.assessed_levy", aggregate: "sum" }. The two go
 // together: see aggregateProblem. Only x-computed takes one
 // (resolveComputedInputs); a row-number template's inputs stay single values.
-export type ComputedAggregateInput = { path: string; default?: CellValue; aggregate: ComputedAggregate }
+// `default` is a number, since it stands in for a matched value that must be one.
+export type ComputedAggregateInput = { path: string; default?: number; aggregate: ComputedAggregate }
 
 export type ComputedFieldInput = ComputedInput | ComputedAggregateInput
 
@@ -124,7 +127,7 @@ function resolveAggregate(
   rootData: unknown,
   fullPath: string,
   aggregate: ComputedAggregate,
-  fallback: CellValue | undefined,
+  fallback: number | undefined,
 ): number | undefined {
   const matched = collectWildcard(rootData, fullPath.split('.'))
   if (matched === undefined) return undefined
@@ -141,9 +144,10 @@ function resolveAggregate(
     case 'sum':
       return numbers.reduce((total, number) => total + number, 0)
     case 'min':
-      return numbers.length ? Math.min(...numbers) : undefined
+      // reduce, not Math.min(...numbers): spreading a long array as arguments overflows the stack.
+      return numbers.length ? numbers.reduce((least, number) => Math.min(least, number)) : undefined
     case 'max':
-      return numbers.length ? Math.max(...numbers) : undefined
+      return numbers.length ? numbers.reduce((most, number) => Math.max(most, number)) : undefined
     case 'average':
       return numbers.length ? numbers.reduce((total, number) => total + number, 0) / numbers.length : undefined
   }
@@ -176,7 +180,7 @@ export function resolveComputedInputs(
   for (const [alias, input] of Object.entries(inputs)) {
     const value = isAggregateInput(input)
       ? resolveAggregateInput(rootData, parentPath, input)
-      : resolveComputedInput(rootData, parentPath, input)
+      : resolveComputedInput(rootData, parentPath, input as ComputedInput)
     if (value === undefined) return undefined
     values[alias] = value
   }
