@@ -125,10 +125,9 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
       if (next !== data) handleChange(path, next)
     }
 
+    // The error itself is shown straight from configError (see shownStatus
+    // below); all that's left here is clearing the saved value.
     if (configError) {
-      setStatus('error')
-      setError(configError)
-      setValue(null)
       persist(undefined)
       return
     }
@@ -191,26 +190,32 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
     return null
   }
 
+  // A config error depends only on the schema, so it's derived here rather
+  // than mirrored into state by the effect — which also means a saved number
+  // never shows for a frame before the error does.
+  const shownStatus: Status = configError ? 'error' : status
+  const shownError = configError ?? error
+
   return (
     <Box mb="4">
       <Flex direction="column" gap="1">
         <Text as="label" size="2" weight="bold">
           {label}
         </Text>
-        {status === 'unavailable' ? (
+        {shownStatus === 'unavailable' ? (
           <Text size="2" color="gray">
             Not yet available.
           </Text>
-        ) : status === 'loading' ? (
+        ) : shownStatus === 'loading' ? (
           <Flex align="center" gap="2">
             <Spinner size="1" />
             <Text size="2" color="gray">
               Computing…
             </Text>
           </Flex>
-        ) : status === 'error' ? (
+        ) : shownStatus === 'error' ? (
           <Text size="2" color="red">
-            {error}
+            {shownError}
           </Text>
         ) : (
           <Text size="2">{renderTemplate(format, { value: formatComputedValue(value, decimals) })}</Text>
