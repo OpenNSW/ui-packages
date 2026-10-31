@@ -104,6 +104,14 @@ describe('resolveComputedInputs with an aggregate', () => {
     expect(resolveComputedInputs(rootData, '', levy('count'))).toEqual({ total: 3 })
   })
 
+  it('counts the matched items whatever their values', () => {
+    const rows = [{ id: 'a', amount: 5 }, { id: 'b' }, {}]
+    const count = (path: string) => resolveComputedInputs({ rows }, '', { total: { path, aggregate: 'count' } })
+    expect(count('rows.*')).toEqual({ total: 3 })
+    expect(count('rows.*.id')).toEqual({ total: 3 })
+    expect(count('rows.*.amount')).toEqual({ total: 3 })
+  })
+
   it('is unavailable when an item has no value and there is no default', () => {
     expect(
       resolveComputedInputs(rootData, '', { total: { path: 'partial.*.assessed_levy', aggregate: 'sum' } }),

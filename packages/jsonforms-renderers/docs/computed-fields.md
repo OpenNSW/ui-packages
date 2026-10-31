@@ -52,7 +52,8 @@ A `*` path segment matches every item of the array at that point, and `aggregate
 
 - `aggregate` is one of `sum`, `min`, `max`, `average` or `count`. The formula engine only takes single values, so the reduction happens while resolving the input; the formula can still combine the result with other inputs (`total_levy + fee`).
 - A path can have more than one `*` (`containers.*.items.*.weight`); every match across every level is aggregated together.
-- Each matched value must be a number. An item without one takes the input's `default`; with no `default`, the **whole** field goes to `unavailable`, the same as a missing plain input — never a total over only some items.
+- `count` is how many items the path matches, whatever their values — a blank or non-number field still counts — so `{ "path": "rows.*", "aggregate": "count" }` counts rows.
+- For the others, each matched value must be a number. An item without one takes the input's `default`; with no `default`, the **whole** field goes to `unavailable`, the same as a missing plain input — never a total over only some items.
 - An empty array gives `0` for `sum` and `count`, and `unavailable` for `min`, `max` and `average`. A missing array (nothing at the path before the `*` — an array never touched, or an item whose inner array hasn't been added yet) counts as no items, the same as an empty one; JSON Forms leaves an untouched array `undefined` but an emptied one `[]`, and the two look the same to the user. A value there that isn't an array is `unavailable`.
 - A `*` without `aggregate`, an `aggregate` without a `*`, or an unknown `aggregate` is a schema mistake: the field shows it as an error.
 - Only `x-computed` takes an `aggregate`. A [numbered row](./numbered-array-rows.md)'s template inputs are single values: a template is filled in once, when its row is added, so a total over sibling rows would be a stale snapshot.

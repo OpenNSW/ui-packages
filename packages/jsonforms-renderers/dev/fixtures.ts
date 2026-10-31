@@ -886,9 +886,9 @@ export const fixtures: Fixture[] = [
         blend_sheet_count: {
           type: 'number',
           title: 'Blend Sheets — count',
-          description: 'aggregate: "count" over the same path.',
+          description: '{ path: "blendsheet_data.*", aggregate: "count" } counts rows, filled in or not.',
           'x-computed': {
-            inputs: { blend_sheets: { path: 'blendsheet_data.*.assessed_levy', aggregate: 'count' } },
+            inputs: { blend_sheets: { path: 'blendsheet_data.*', aggregate: 'count' } },
             formula: 'blend_sheets',
             decimals: 0,
           },
