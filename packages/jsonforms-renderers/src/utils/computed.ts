@@ -87,14 +87,16 @@ function resolveAggregateInput(rootData: unknown, parentPath: string, input: Com
 }
 
 // Every value the wildcard path matches, each `*` expanding to the items of
-// the array at that point. undefined when an array a `*` stands for is
-// missing or isn't an array — there's nothing to aggregate over, which is
-// different from an empty array. A matched item without a value comes back
-// as undefined, in its place.
+// the array at that point. Nothing at an array a `*` stands for — an array
+// never touched, or an item's inner array not added yet — counts as no items,
+// the same as an empty array. undefined when a value there isn't an array,
+// which is a real mistake. A matched item without a value comes back as
+// undefined, in its place.
 function collectWildcard(data: unknown, segments: string[]): unknown[] | undefined {
   const index = segments.indexOf(WILDCARD)
   const head = segments.slice(0, index)
   const array: unknown = head.length ? Resolve.data(data, head.join('.')) : data
+  if (array === null || array === undefined) return []
   if (!Array.isArray(array)) return undefined
 
   const rest = segments.slice(index + 1)

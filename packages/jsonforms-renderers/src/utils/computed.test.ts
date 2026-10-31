@@ -126,9 +126,17 @@ describe('resolveComputedInputs with an aggregate', () => {
     expect(over('average')).toBeUndefined()
   })
 
-  it('is unavailable when the array itself is missing', () => {
+  it('counts a missing array as no items, the same as an empty one', () => {
+    const over = (aggregate: 'sum' | 'min', extra: { default?: number } = {}) =>
+      resolveComputedInputs(rootData, '', { total: { path: 'missing.*.assessed_levy', aggregate, ...extra } })
+    expect(over('sum')).toEqual({ total: 0 })
+    expect(over('sum', { default: 0 })).toEqual({ total: 0 })
+    expect(over('min')).toBeUndefined()
+  })
+
+  it('is unavailable when the value at a * is not an array', () => {
     expect(
-      resolveComputedInputs(rootData, '', { total: { path: 'missing.*.assessed_levy', aggregate: 'sum' } }),
+      resolveComputedInputs({ rows: 'not rows' }, '', { total: { path: 'rows.*.amount', aggregate: 'sum' } }),
     ).toBeUndefined()
   })
 
@@ -136,6 +144,13 @@ describe('resolveComputedInputs with an aggregate', () => {
     expect(
       resolveComputedInputs(rootData, '', { total: { path: 'containers.*.items.*.weight', aggregate: 'sum' } }),
     ).toEqual({ total: 6 })
+  })
+
+  it('counts an item without its inner array as no items, rather than blocking the total', () => {
+    const containers = [{ items: [{ weight: 1 }, { weight: 2 }] }, {}]
+    expect(
+      resolveComputedInputs({ containers }, '', { total: { path: 'containers.*.items.*.weight', aggregate: 'sum' } }),
+    ).toEqual({ total: 3 })
   })
 
   it('resolves the path relative to the parent, like any other input', () => {
