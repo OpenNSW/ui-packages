@@ -3,14 +3,22 @@ import type { ControlProps, JsonSchema } from '@jsonforms/core'
 import { Box, Flex, Spinner, Text } from '@radix-ui/themes'
 import { useEffect, useState } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
-import { evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from '../utils/computed'
-import type { ComputedInput } from '../utils/computed'
+import {
+  computedInputsError,
+  evaluateComputedFormula,
+  formatComputedValue,
+  resolveComputedInputs,
+} from '../utils/computed'
+import type { ComputedFieldInput } from '../utils/computed'
 import type { CellValue } from '../utils/spreadsheet'
 import { renderTemplate } from '../utils/template'
 
 interface XComputedOptions {
-  /** alias -> path (shorthand) or { path, default }, relative to this control's own parent object. */
-  inputs: Record<string, ComputedInput>
+  /**
+   * alias -> path (shorthand) or { path, default, aggregate }, relative to this control's own parent
+   * object. A `*` path segment with an `aggregate` reduces every array item's value to one number.
+   */
+  inputs: Record<string, ComputedFieldInput>
   /** Formula written in terms of the aliases above, e.g. "total_sales + total_imported + total_blend_balance". */
   formula: string
   /** Display template (see utils/template.ts); "{value}" is the formatted number. Default "{value}". */
@@ -27,7 +35,7 @@ type Status = 'unavailable' | 'loading' | 'ok' | 'error'
 
 const DEFAULT_FORMAT = '{value}'
 const DEFAULT_DECIMALS = 2
-const EMPTY_INPUTS: Record<string, ComputedInput> = {}
+const EMPTY_INPUTS: Record<string, ComputedFieldInput> = {}
 
 const ComputedControl = ({ data, handleChange, path, label, schema, visible = true }: ComputedControlProps) => {
   // `undefined`, not `null` — this control only ever matches `type: 'number'`
@@ -50,6 +58,9 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
   const ctx = useJsonForms()
   const parentPath = path.split('.').slice(0, -1).join('.')
   const resolvedInputs = resolveComputedInputs(ctx.core?.data, parentPath, inputs)
+  // A schema-authoring mistake (a * without an aggregate, or the reverse) is
+  // shown as an error rather than left as a silent "Not yet available".
+  const configError = computedInputsError(inputs)
   // Cheap, stable dependency key for the effect below — resolvedInputs is a
   // fresh object every render even when its contents are unchanged.
   const inputsKey = resolvedInputs ? JSON.stringify(resolvedInputs) : null
@@ -114,6 +125,13 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
       if (next !== data) handleChange(path, next)
     }
 
+    // The error itself is shown straight from configError (see shownStatus
+    // below); all that's left here is clearing the saved value.
+    if (configError) {
+      persist(undefined)
+      return
+    }
+
     if (resolvedInputs === undefined) {
       setStatus('unavailable')
       setError(null)
@@ -162,15 +180,21 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
     return () => {
       cancelled = true
     }
-    // Deliberately keyed on the resolved inputs, formula, visible, and
-    // formReadonly only — not on `data`/`path`/`handleChange`, which this
+    // Deliberately keyed on the resolved inputs, config error, formula,
+    // visible, and formReadonly only — not on `data`/`path`/`handleChange`, which this
     // effect itself writes to.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputsKey, formula, visible, formReadonly])
+  }, [inputsKey, configError, formula, visible, formReadonly])
 
   if (visible === false) {
     return null
   }
+
+  // A config error depends only on the schema, so it's derived here rather
+  // than mirrored into state by the effect — which also means a saved number
+  // never shows for a frame before the error does.
+  const shownStatus: Status = configError ? 'error' : status
+  const shownError = configError ?? error
 
   return (
     <Box mb="4">
@@ -178,20 +202,20 @@ const ComputedControl = ({ data, handleChange, path, label, schema, visible = tr
         <Text as="label" size="2" weight="bold">
           {label}
         </Text>
-        {status === 'unavailable' ? (
+        {shownStatus === 'unavailable' ? (
           <Text size="2" color="gray">
             Not yet available.
           </Text>
-        ) : status === 'loading' ? (
+        ) : shownStatus === 'loading' ? (
           <Flex align="center" gap="2">
             <Spinner size="1" />
             <Text size="2" color="gray">
               Computing…
             </Text>
           </Flex>
-        ) : status === 'error' ? (
+        ) : shownStatus === 'error' ? (
           <Text size="2" color="red">
-            {error}
+            {shownError}
           </Text>
         ) : (
           <Text size="2">{renderTemplate(format, { value: formatComputedValue(value, decimals) })}</Text>
