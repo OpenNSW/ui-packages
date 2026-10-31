@@ -8,12 +8,17 @@ import type { CellValue } from './spreadsheet'
 // field going "unavailable". `path` follows the same dot-joined convention
 // every ControlProps.path already uses (see Resolve.data / Paths.compose in
 // @jsonforms/core) — not a syntax invented for this feature.
-//
-// A `*` segment in `path` matches every item of the array at that point, and
+export type ComputedInput = string | { path: string; default?: CellValue }
+
+// An x-computed input that reduces one field across every item of an array:
+// a `*` segment in `path` matches every item of the array at that point, and
 // `aggregate` reduces the matched values to one number, e.g.
 // { path: "blendsheet_data.*.assessed_levy", aggregate: "sum" }. The two go
-// together: see computedInputsError.
-export type ComputedInput = string | { path: string; default?: CellValue; aggregate?: ComputedAggregate }
+// together: see aggregateProblem. Only x-computed takes one
+// (resolveComputedInputs); a row-number template's inputs stay single values.
+export type ComputedAggregateInput = { path: string; default?: CellValue; aggregate: ComputedAggregate }
+
+export type ComputedFieldInput = ComputedInput | ComputedAggregateInput
 
 export type ComputedAggregate = 'sum' | 'min' | 'max' | 'average' | 'count'
 
@@ -32,42 +37,54 @@ export function resolveComputedInput(
   parentPath: string,
   input: ComputedInput,
 ): CellValue | undefined {
-  const { path, default: fallback, aggregate } = typeof input === 'string' ? { path: input } : input
-  const fullPath = parentPath ? `${parentPath}.${path}` : path
-  if (aggregate !== undefined || hasWildcard(path)) {
-    return isAggregate(aggregate) && hasWildcard(path)
-      ? resolveAggregate(rootData, fullPath, aggregate, fallback)
-      : undefined
-  }
-  const resolved = Resolve.data(rootData, fullPath) as CellValue | undefined
+  const { path, default: fallback } = typeof input === 'string' ? { path: input, default: undefined } : input
+  const resolved = Resolve.data(rootData, parentPath ? `${parentPath}.${path}` : path) as CellValue | undefined
   return resolved === null || resolved === undefined ? fallback : resolved
 }
 
 // A misconfigured aggregate input, described for the field to show, or
-// undefined when every input is fine. resolveComputedInput treats the same
-// input as missing, so a caller that doesn't check still never computes from it.
-export function computedInputsError(inputs: Record<string, ComputedInput>): string | undefined {
+// undefined when every input is fine.
+export function computedInputsError(inputs: Record<string, ComputedFieldInput>): string | undefined {
   for (const [alias, input] of Object.entries(inputs)) {
-    if (typeof input === 'string') {
-      if (hasWildcard(input)) return `Input "${alias}" has a * in its path but no aggregate.`
-      continue
-    }
-    if (input.aggregate !== undefined && !isAggregate(input.aggregate)) {
-      return `Input "${alias}" has an unknown aggregate "${String(input.aggregate)}"; use one of ${AGGREGATES.join(', ')}.`
-    }
-    if (input.aggregate !== undefined && !hasWildcard(input.path)) {
-      return `Input "${alias}" has an aggregate but no * in its path.`
-    }
-    if (input.aggregate === undefined && hasWildcard(input.path)) {
-      return `Input "${alias}" has a * in its path but no aggregate.`
-    }
+    const problem = aggregateProblem(input)
+    if (problem !== undefined) return `Input "${alias}" ${problem}`
   }
   return undefined
 }
 
+// What's wrong with an input's `*`/`aggregate` pairing, or undefined when
+// nothing is. The one place that rule lives: computedInputsError words it for
+// the field to show, and resolveAggregateInput won't aggregate what it rejects.
+function aggregateProblem(input: ComputedFieldInput): string | undefined {
+  const path = typeof input === 'string' ? input : input.path
+  const aggregate = aggregateOf(input)
+  if (aggregate === undefined) return hasWildcard(path) ? 'has a * in its path but no aggregate.' : undefined
+  if (!isAggregate(aggregate)) {
+    return `has an unknown aggregate ${JSON.stringify(aggregate)}; use one of ${AGGREGATES.join(', ')}.`
+  }
+  if (!hasWildcard(path)) return 'has an aggregate but no * in its path.'
+  return undefined
+}
+
+const aggregateOf = (input: ComputedFieldInput): unknown =>
+  typeof input === 'string' || !('aggregate' in input) ? undefined : input.aggregate
+
+// Has either half of an aggregate, so it's resolved (or rejected) as one.
+const isAggregateInput = (input: ComputedFieldInput): boolean =>
+  aggregateOf(input) !== undefined || hasWildcard(typeof input === 'string' ? input : input.path)
+
 const hasWildcard = (path: string): boolean => path.split('.').includes(WILDCARD)
 
 const isAggregate = (value: unknown): value is ComputedAggregate => AGGREGATES.includes(value as ComputedAggregate)
+
+// One aggregate input, relative to `parentPath`. undefined means missing,
+// including an input aggregateProblem rejects — which ComputedControl shows
+// as an error instead, through computedInputsError.
+function resolveAggregateInput(rootData: unknown, parentPath: string, input: ComputedFieldInput): number | undefined {
+  if (typeof input === 'string' || aggregateProblem(input) !== undefined) return undefined
+  const { path, default: fallback, aggregate } = input as ComputedAggregateInput
+  return resolveAggregate(rootData, parentPath ? `${parentPath}.${path}` : path, aggregate, fallback)
+}
 
 // Every value the wildcard path matches, each `*` expanding to the items of
 // the array at that point. undefined when an array a `*` stands for is
@@ -149,12 +166,14 @@ const isFiniteNumber = (value: unknown): value is number => typeof value === 'nu
 export function resolveComputedInputs(
   rootData: unknown,
   parentPath: string,
-  inputs: Record<string, ComputedInput>,
+  inputs: Record<string, ComputedFieldInput>,
 ): Record<string, CellValue> | undefined {
   const values: Record<string, CellValue> = {}
 
   for (const [alias, input] of Object.entries(inputs)) {
-    const value = resolveComputedInput(rootData, parentPath, input)
+    const value = isAggregateInput(input)
+      ? resolveAggregateInput(rootData, parentPath, input)
+      : resolveComputedInput(rootData, parentPath, input)
     if (value === undefined) return undefined
     values[alias] = value
   }

@@ -20,7 +20,7 @@
 
 ## `inputs`: alias → path
 
-Each entry maps an alias (the name used in `formula`) to a path — either a bare string, or `{ path, default }` when the value is legitimately optional.
+Each entry maps an alias (the name used in `formula`) to a path — either a bare string, `{ path, default }` when the value is legitimately optional, or `{ path, aggregate, default }` to reduce one field across every item of an array (see [`aggregate`](#aggregate-one-value-from-every-array-item)).
 
 **Paths are not a syntax invented for this feature.** They're the same dot-joined data-path representation every JSONForms `ControlProps.path` already uses at runtime (`@jsonforms/core`'s own `Resolve.data`/`Paths.compose` — see the source, both just `.split('.')`/join with `.`). A path is resolved **relative to the computed field's own containing object** — e.g. a computed field that's an item inside an array (`items.0.estimated_total`) resolves `"sales_data.derivations.total_quantity.value"` against `items.0`, reaching `items.0.sales_data.derivations.total_quantity.value` — the same array item, never a different one. There's currently no way to address an absolute/root path; every input is relative to the field's own parent.
 
@@ -55,6 +55,7 @@ A `*` path segment matches every item of the array at that point, and `aggregate
 - Each matched value must be a number. An item without one takes the input's `default`; with no `default`, the **whole** field goes to `unavailable`, the same as a missing plain input — never a total over only some items.
 - An empty array gives `0` for `sum` and `count`, and `unavailable` for `min`, `max` and `average`. A missing array (nothing at the path before the `*`) is `unavailable`.
 - A `*` without `aggregate`, an `aggregate` without a `*`, or an unknown `aggregate` is a schema mistake: the field shows it as an error.
+- Only `x-computed` takes an `aggregate`. A [numbered row](./numbered-array-rows.md)'s template inputs are single values: a template is filled in once, when its row is added, so a total over sibling rows would be a stale snapshot.
 - The matched values can themselves be computed fields — e.g. a per-row `assessed_levy` computed from that row's own inputs. The total settles on the render after the rows do, as any other chain does.
 
 ## `formula`

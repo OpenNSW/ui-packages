@@ -9,7 +9,7 @@ import {
   formatComputedValue,
   resolveComputedInputs,
 } from '../utils/computed'
-import type { ComputedInput } from '../utils/computed'
+import type { ComputedFieldInput } from '../utils/computed'
 import type { CellValue } from '../utils/spreadsheet'
 import { renderTemplate } from '../utils/template'
 
@@ -18,7 +18,7 @@ interface XComputedOptions {
    * alias -> path (shorthand) or { path, default, aggregate }, relative to this control's own parent
    * object. A `*` path segment with an `aggregate` reduces every array item's value to one number.
    */
-  inputs: Record<string, ComputedInput>
+  inputs: Record<string, ComputedFieldInput>
   /** Formula written in terms of the aliases above, e.g. "total_sales + total_imported + total_blend_balance". */
   formula: string
   /** Display template (see utils/template.ts); "{value}" is the formatted number. Default "{value}". */
@@ -35,7 +35,7 @@ type Status = 'unavailable' | 'loading' | 'ok' | 'error'
 
 const DEFAULT_FORMAT = '{value}'
 const DEFAULT_DECIMALS = 2
-const EMPTY_INPUTS: Record<string, ComputedInput> = {}
+const EMPTY_INPUTS: Record<string, ComputedFieldInput> = {}
 
 const ComputedControl = ({ data, handleChange, path, label, schema, visible = true }: ComputedControlProps) => {
   // `undefined`, not `null` — this control only ever matches `type: 'number'`
