@@ -922,7 +922,7 @@ export const fixtures: Fixture[] = [
           type: 'number',
           title: 'Quantity to be Exported — max',
           description:
-            'aggregate: "max" over a plain row field, with default 0 so a blank quantity counts as 0 instead of making the field unavailable.',
+            'aggregate: "max" over a plain row field, with default 0 so a blank quantity counts as 0 instead of making the field unavailable. With no rows it is still unavailable: the default stands in for a row\'s value, and there are no rows to take the largest of.',
           'x-computed': {
             inputs: {
               largest_quantity: { path: 'blendsheet_data.*.quantity_to_be_exported', aggregate: 'max', default: 0 },
