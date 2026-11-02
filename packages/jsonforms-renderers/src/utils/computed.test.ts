@@ -122,6 +122,20 @@ describe('resolveComputedInputs with an aggregate', () => {
     expect(
       resolveComputedInputs(rootData, '', { total: { path: 'partial.*.assessed_levy', aggregate: 'sum', default: 0 } }),
     ).toEqual({ total: 300 })
+    expect(
+      resolveComputedInputs({ rows: [{ a: 5 }, { a: null }] }, '', {
+        total: { path: 'rows.*.a', aggregate: 'sum', default: 0 },
+      }),
+    ).toEqual({ total: 5 })
+  })
+
+  it("is unavailable when an item's value is there but isn't a number, default or not", () => {
+    const sum = (extra: { default?: number } = {}) =>
+      resolveComputedInputs({ rows: [{ a: 5 }, { a: '5' }] }, '', {
+        total: { path: 'rows.*.a', aggregate: 'sum', ...extra },
+      })
+    expect(sum()).toBeUndefined()
+    expect(sum({ default: 0 })).toBeUndefined()
   })
 
   it('is 0 for sum and count over an empty array, and unavailable for min, max and average', () => {

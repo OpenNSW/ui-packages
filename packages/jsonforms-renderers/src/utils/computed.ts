@@ -125,10 +125,12 @@ function collectWildcard(data: unknown, segments: string[]): unknown[] | undefin
 
 // Reduces the matched values to one number. `count` is how many items
 // matched, whatever their values, so `rows.*` counts rows. For the rest, each
-// matched value must be a finite number, or else `fallback` stands in for it;
-// with no usable fallback, the whole input is missing, as a single missing
-// input is, rather than a total over only some items. No matches at all: sum
-// and count are 0, and min, max and average are missing, since they have no
+// matched value must be a finite number. `fallback` stands in for a blank one
+// (null or undefined), as a plain input's `default` does; with no fallback,
+// or a value that's there but isn't a number, the whole input is missing, as
+// a single missing input is, rather than a total over only some items or one
+// that quietly swapped a value for the stand-in. No matches at all: sum and
+// count are 0, and min, max and average are missing, since they have no
 // value over nothing.
 function resolveAggregate(
   rootData: unknown,
@@ -142,7 +144,7 @@ function resolveAggregate(
 
   const numbers: number[] = []
   for (const value of matched) {
-    const number = isFiniteNumber(value) ? value : fallback
+    const number = value === null || value === undefined ? fallback : value
     if (!isFiniteNumber(number)) return undefined
     numbers.push(number)
   }
