@@ -70,7 +70,7 @@ function aggregateProblem(input: ComputedFieldInput): string | undefined {
   }
   if (!hasWildcard(path)) return 'has an aggregate but no * in its path.'
   const fallback: unknown = typeof input === 'string' ? undefined : input.default
-  if (fallback !== undefined && fallback !== null && !isFiniteNumber(fallback)) {
+  if (fallback !== undefined && !isFiniteNumber(fallback)) {
     return `has a default ${JSON.stringify(fallback)} that isn't a number; an aggregate's default must be one.`
   }
   return undefined

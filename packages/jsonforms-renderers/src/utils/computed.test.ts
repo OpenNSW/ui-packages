@@ -231,8 +231,11 @@ describe('computedInputsError', () => {
     expect(withDefault(true)).toBe(
       `Input "total" has a default true that isn't a number; an aggregate's default must be one.`,
     )
+    expect(withDefault(null)).toBe(
+      `Input "total" has a default null that isn't a number; an aggregate's default must be one.`,
+    )
     expect(withDefault(0)).toBeUndefined()
-    expect(withDefault(null)).toBeUndefined()
+    expect(withDefault(undefined)).toBeUndefined()
   })
 })
 
