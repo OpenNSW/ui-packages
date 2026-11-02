@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computedInputsError, evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from './computed'
+import type { ComputedFieldInput } from './computed'
 
 describe('resolveComputedInputs', () => {
   const rootData = {
@@ -250,6 +251,19 @@ describe('computedInputsError', () => {
     )
     expect(withDefault(0)).toBeUndefined()
     expect(withDefault(undefined)).toBeUndefined()
+  })
+
+  it('reports an input without a string path instead of throwing, plain or aggregate', () => {
+    const message = `Input "total" has no path, or one that isn't a string.`
+    const withoutPath = [
+      { default: 0 },
+      { aggregate: 'sum' },
+      { path: 5, aggregate: 'sum' },
+    ] as unknown as ComputedFieldInput[]
+    for (const total of withoutPath) {
+      expect(computedInputsError({ total })).toBe(message)
+      expect(resolveComputedInputs({ rows: [{ amount: 1 }] }, '', { total })).toBeUndefined()
+    }
   })
 })
 

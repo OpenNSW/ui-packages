@@ -16,7 +16,7 @@ export type ComputedInput = string | { path: string; default?: CellValue; aggreg
 // a `*` segment in `path` matches every item of the array at that point, and
 // `aggregate` reduces the matched values to one number, e.g.
 // { path: "blendsheet_data.*.assessed_levy", aggregate: "sum" }. The two go
-// together: see aggregateProblem. Only x-computed takes one
+// together: see inputProblem. Only x-computed takes one
 // (resolveComputedInputs); a row-number template's inputs stay single values.
 // `default` is a number, since it stands in for a matched value that must be one.
 export type ComputedAggregateInput = { path: string; default?: number; aggregate: ComputedAggregate }
@@ -45,24 +45,25 @@ export function resolveComputedInput(
   return resolved === null || resolved === undefined ? fallback : resolved
 }
 
-// A misconfigured aggregate input, described for the field to show, or
-// undefined when every input is fine.
+// A misconfigured input, described for the field to show, or undefined when
+// every input is fine.
 export function computedInputsError(inputs: Record<string, ComputedFieldInput>): string | undefined {
   for (const [alias, input] of Object.entries(inputs)) {
-    const problem = aggregateProblem(input)
+    const problem = inputProblem(input)
     if (problem !== undefined) return `Input "${alias}" ${problem}`
   }
   return undefined
 }
 
-// What's wrong with an aggregate input — its `*`/`aggregate` pairing, or a
-// `default` that isn't a number — or undefined when nothing is. The one place
-// those rules live: computedInputsError words them for the field to show, and
-// resolveAggregateInput won't aggregate what they reject. The type already
-// says `default` is a number, but a schema read from JSON is never checked
-// against it.
-function aggregateProblem(input: ComputedFieldInput): string | undefined {
-  const path = typeof input === 'string' ? input : input.path
+// What's wrong with an input — no path that's a string, or for an aggregate,
+// its `*`/`aggregate` pairing or a `default` that isn't a number — or
+// undefined when nothing is. The one place those rules live:
+// computedInputsError words them for the field to show, and
+// resolveAggregateInput won't aggregate what they reject. The types already
+// say all this, but a schema read from JSON is never checked against them.
+function inputProblem(input: ComputedFieldInput): string | undefined {
+  const path = pathOf(input)
+  if (typeof path !== 'string') return "has no path, or one that isn't a string."
   const aggregate = aggregateOf(input)
   if (aggregate === undefined) return hasWildcard(path) ? 'has a * in its path but no aggregate.' : undefined
   if (!isAggregate(aggregate)) {
@@ -76,23 +77,31 @@ function aggregateProblem(input: ComputedFieldInput): string | undefined {
   return undefined
 }
 
+// unknown, not string: a schema read from JSON can leave `path` out or give
+// it another type, and hasWildcard must not be handed one of those.
+const pathOf = (input: ComputedFieldInput): unknown =>
+  typeof input === 'string' ? input : (input as { path?: unknown }).path
+
 const aggregateOf = (input: ComputedFieldInput): unknown =>
   typeof input === 'string' || !('aggregate' in input) ? undefined : input.aggregate
 
-// Has neither half of an aggregate, so it's a single value. An input with
-// either half is resolved (or rejected) as an aggregate instead.
-const isPlainInput = (input: ComputedFieldInput): input is ComputedInput =>
-  aggregateOf(input) === undefined && !hasWildcard(typeof input === 'string' ? input : input.path)
+// Has a string path and neither half of an aggregate, so it's a single value.
+// Any other input is resolved as an aggregate instead, or, when inputProblem
+// rejects it (an aggregate gone wrong, or no usable path), refused.
+const isPlainInput = (input: ComputedFieldInput): input is ComputedInput => {
+  const path = pathOf(input)
+  return typeof path === 'string' && aggregateOf(input) === undefined && !hasWildcard(path)
+}
 
 const hasWildcard = (path: string): boolean => path.split('.').includes(WILDCARD)
 
 const isAggregate = (value: unknown): value is ComputedAggregate => AGGREGATES.includes(value as ComputedAggregate)
 
 // One aggregate input, relative to `parentPath`. undefined means missing,
-// including an input aggregateProblem rejects — which ComputedControl shows
+// including an input inputProblem rejects — which ComputedControl shows
 // as an error instead, through computedInputsError.
 function resolveAggregateInput(rootData: unknown, parentPath: string, input: ComputedFieldInput): number | undefined {
-  if (typeof input === 'string' || aggregateProblem(input) !== undefined) return undefined
+  if (typeof input === 'string' || inputProblem(input) !== undefined) return undefined
   const { path, default: fallback, aggregate } = input as ComputedAggregateInput
   return resolveAggregate(rootData, parentPath ? `${parentPath}.${path}` : path, aggregate, fallback)
 }
@@ -182,10 +191,10 @@ const isFiniteNumber = (value: unknown): value is number => typeof value === 'nu
 // maximally-specific one.
 //
 // That's a plain input, read by resolveComputedInput. An input with a `*` in
-// its path or an `aggregate` goes to resolveAggregateInput instead, which
-// reduces every array item's value to one number (or, for an input
-// aggregateProblem rejects, to missing), and takes the same
-// default-or-unavailable rule per item.
+// its path or an `aggregate`, or without a string path, goes to
+// resolveAggregateInput instead, which reduces every array item's value to
+// one number (or, for an input inputProblem rejects, to missing), and takes
+// the same default-or-unavailable rule per item.
 export function resolveComputedInputs(
   rootData: unknown,
   parentPath: string,
