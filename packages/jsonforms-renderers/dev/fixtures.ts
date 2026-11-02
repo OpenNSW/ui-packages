@@ -883,6 +883,21 @@ export const fixtures: Fixture[] = [
             decimals: 2,
           },
         },
+        service_fee: { type: 'number', title: 'Service Fee (LKR)' },
+        levy_with_fee: {
+          type: 'number',
+          title: 'Assessed Levy + Service Fee',
+          description:
+            'An aggregate and a plain input in one formula: total_levy (the sum above) + service_fee. Clear the fee and this goes to "Not yet available", as any missing plain input does.',
+          'x-computed': {
+            inputs: {
+              total_levy: { path: 'blendsheet_data.*.assessed_levy', aggregate: 'sum' },
+              service_fee: 'service_fee',
+            },
+            formula: 'total_levy + service_fee',
+            decimals: 2,
+          },
+        },
         blend_sheet_count: {
           type: 'number',
           title: 'Blend Sheets — count',
@@ -959,6 +974,13 @@ export const fixtures: Fixture[] = [
         {
           type: 'HorizontalLayout',
           elements: [
+            { type: 'Control', scope: '#/properties/service_fee' },
+            { type: 'Control', scope: '#/properties/levy_with_fee' },
+          ],
+        },
+        {
+          type: 'HorizontalLayout',
+          elements: [
             { type: 'Control', scope: '#/properties/blend_sheet_count' },
             { type: 'Control', scope: '#/properties/average_levy' },
             { type: 'Control', scope: '#/properties/largest_quantity' },
@@ -972,6 +994,7 @@ export const fixtures: Fixture[] = [
         { blend_no: '26/1386', quantity_to_be_exported: 16128, levy_multiplier: 3 },
         { blend_no: '26/1387', quantity_to_be_exported: 8000, levy_multiplier: 3 },
       ],
+      service_fee: 500,
     },
   },
   {

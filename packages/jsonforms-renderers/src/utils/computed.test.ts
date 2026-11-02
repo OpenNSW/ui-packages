@@ -165,6 +165,18 @@ describe('resolveComputedInputs with an aggregate', () => {
     expect(resolveComputedInputs({ form: rootData }, 'form', levy('sum'))).toEqual({ total: 600 })
   })
 
+  it('combines with a plain input in the formula', async () => {
+    const values = resolveComputedInputs({ ...rootData, service_fee: 50 }, '', {
+      total_levy: { path: 'blendsheet_data.*.assessed_levy', aggregate: 'sum' },
+      service_fee: 'service_fee',
+    })
+    expect(values).toEqual({ total_levy: 600, service_fee: 50 })
+    expect(await evaluateComputedFormula(values ?? {}, 'total_levy + service_fee')).toEqual({
+      status: 'ok',
+      value: 650,
+    })
+  })
+
   it('treats a * without an aggregate, or the reverse, as missing', () => {
     expect(resolveComputedInputs(rootData, '', { total: 'blendsheet_data.*.assessed_levy' })).toBeUndefined()
     expect(
