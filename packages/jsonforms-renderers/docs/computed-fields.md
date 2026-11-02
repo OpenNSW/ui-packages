@@ -20,7 +20,7 @@
 
 ## `inputs`: alias → path
 
-Each entry maps an alias (the name used in `formula`) to a path — either a bare string, or `{ path, default }` when the value is legitimately optional.
+Each entry maps an alias (the name used in `formula`) to a path — either a bare string, `{ path, default }` when the value is legitimately optional, or `{ path, aggregate, default }` to reduce one field across every item of an array (see [`aggregate`](#aggregate-one-value-from-every-array-item)).
 
 **Paths are not a syntax invented for this feature.** They're the same dot-joined data-path representation every JSONForms `ControlProps.path` already uses at runtime (`@jsonforms/core`'s own `Resolve.data`/`Paths.compose` — see the source, both just `.split('.')`/join with `.`). A path is resolved **relative to the computed field's own containing object** — e.g. a computed field that's an item inside an array (`items.0.estimated_total`) resolves `"sales_data.derivations.total_quantity.value"` against `items.0`, reaching `items.0.sales_data.derivations.total_quantity.value` — the same array item, never a different one. There's currently no way to address an absolute/root path; every input is relative to the field's own parent.
 
@@ -33,6 +33,31 @@ An input can point at:
 ### `default`
 
 When a path resolves to `null`/`undefined` (an upload that hasn't happened yet, a field left blank) and no `default` is configured, the **whole** computed field goes to `unavailable` — it does not attempt a partial computation with some inputs missing. Configuring `default` lets the computation proceed anyway, which is the right choice for a genuinely optional input (e.g. a spreadsheet upload labeled "if applicable").
+
+### `aggregate`: one value from every array item
+
+A `*` path segment matches every item of the array at that point, and `aggregate` reduces the matched values to one number before the formula sees it:
+
+```json
+"levy_amount": {
+  "type": "number",
+  "x-computed": {
+    "inputs": {
+      "total_levy": { "path": "blendsheet_data.*.assessed_levy", "aggregate": "sum" }
+    },
+    "formula": "total_levy"
+  }
+}
+```
+
+- `aggregate` is one of `sum`, `min`, `max`, `average` or `count`. The formula engine only takes single values, so the reduction happens while resolving the input; the formula can still combine the result with other inputs (`total_levy + service_fee`).
+- A path can have more than one `*` (`containers.*.items.*.weight`); every match across every level is aggregated together.
+- `count` is how many items the path matches, whatever their values — a blank or non-number field still counts — so `{ "path": "rows.*", "aggregate": "count" }` counts rows.
+- For the others, each matched value must be a number. An item left blank (`null` or no value) takes the input's `default`, which must itself be a number, the same as a plain input's `default`; with no `default`, the **whole** field goes to `unavailable`, the same as a missing plain input — never a total over only some items. A value that's there but isn't a number (`"5"`, `true`) can't be aggregated, so it makes the field `unavailable` too, `default` or not, rather than being quietly swapped for the stand-in.
+- An empty array gives `0` for `sum` and `count`, and `unavailable` for `min`, `max` and `average`. `default` doesn't change that: it stands in for an item's value, and an empty array has no items. A missing array (nothing at the path before the `*` — an array never touched, or an item whose inner array hasn't been added yet) counts as no items, the same as an empty one; JSON Forms leaves an untouched array `undefined` but an emptied one `[]`, and the two look the same to the user. A value there that isn't an array is `unavailable`.
+- A `*` without `aggregate`, an `aggregate` without a `*`, an unknown `aggregate`, or an aggregate's `default` that isn't a number (`"0"`, `true`, `null`) is a schema mistake: the field shows it as an error. So is any input, plain or aggregate, without a `path` that's a string.
+- Only `x-computed` takes an `aggregate`. A [numbered row](./numbered-array-rows.md)'s template inputs are single values: a template is filled in once, when its row is added, so a total over sibling rows would be a stale snapshot.
+- The matched values can themselves be computed fields — e.g. a per-row `assessed_levy` computed from that row's own inputs. The total settles on the render after the rows do, as any other chain does, and like any chain it sums the rows' stored values (see [Behavior](#behavior) for read-only forms).
 
 ## `formula`
 
@@ -49,7 +74,8 @@ When in doubt, use a descriptive `snake_case` alias with an underscore — every
 ## Behavior
 
 - **Always recomputes when its inputs/formula are available, regardless of `enabled`/`readonly`** — on this field's own schema, or the whole form's. `x-computed`'s presence on a field is itself the complete signal that it's entirely calculated, not manually entered; there's no legitimate configuration where recomputation should be skipped. A schema author who wants a static, non-computed display value simply omits `x-computed` (falls to the plain number control instead). This is deliberately different from `SpreadsheetControl`, whose own-field `readOnly` genuinely gates a real interactive action (accepting a new upload) that this control has no equivalent of.
-- **The computed value is persisted**, not display-only — `handleChange` writes it to the field's own path, guarded by an equality check so the field's own write can't retrigger its own resolution.
+- **The computed value is persisted**, not display-only — `handleChange` writes it to the field's own path, guarded by an equality check so the field's own write can't retrigger its own resolution. The exception is a form that's read-only as a whole (`<JsonForms readonly>`, e.g. viewing a submitted record): the value is still computed and shown, but not written back, so the record isn't rewritten by recomputing it. One write isn't gated: like most controls in this package, a field a rule hides clears its value (`useClearWhenHidden`), read-only form or not, so a host that saves on every change could still store that clear.
+- **A chained field reads stored values.** A field reading another computed field reads that field's **stored** value, not what it shows. In a form that's read-only as a whole, nothing is written back, so it reads whatever was saved, and an upstream value that was never saved leaves it `unavailable` even though the upstream field shows a number.
 - **Clears its persisted value when `unavailable` or on a formula/type error** (rather than leaving a stale prior value showing). This matters once fields chain: without it, a field reading another computed field's value could silently compute from a number that's no longer true. The key is removed (persisted as `undefined`, never `null`) — since this control only matches `type: 'number'` schemas, a `null` would fail validation with a spurious "must be number" on top of whatever actually went wrong. Input resolution treats a missing key and a `null` identically, so chaining is unaffected either way. Restricted to `type: 'number'` — a formula that evaluates to a non-number (e.g. a `CONCATENATE`-style expression), or to `NaN`/`Infinity`, is treated as a computation error, not persisted; a computed field that should produce a string/boolean/date isn't supported yet.
 - **Renders an already-persisted value immediately on mount**, with no "Not yet available" → "Computing…" flash, and a recompute of an already-good value updates silently in place rather than flashing back to the spinner — only a field with nothing to show yet (or one that just errored) shows the loading state.
 - **Chained computed fields settle automatically** — every control re-renders off the same shared root data, so a downstream field's inputs re-resolve on the render that follows an upstream field's own update. A schema author who creates an actual cycle (field A reads field B, which reads field A) is **not detected** and will loop indefinitely — don't do that.

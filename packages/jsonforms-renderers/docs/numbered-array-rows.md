@@ -30,7 +30,7 @@ A form value with nothing behind it renders as empty, and so does one that can't
 
 ## `inputs`: alias → path
 
-Paths work exactly as in [`x-computed`](./computed-fields.md#inputs-alias--path), through the same `resolveComputedInput`: the dot-joined convention every JSONForms `ControlProps.path` uses, resolved with `Resolve.data`. `{ path, default }` supplies a value for a path that resolves to `null`/`undefined`; an empty string is a value, not a gap.
+Paths work exactly as in [`x-computed`](./computed-fields.md#inputs-alias--path), through the same `resolveComputedInput`: the dot-joined convention every JSONForms `ControlProps.path` uses, resolved with `Resolve.data`. `{ path, default }` supplies a value for a path that resolves to `null`/`undefined`; an empty string is a value, not a gap. `x-computed`'s `aggregate` isn't taken here: a template is filled in once, when its row is added, so a total over sibling rows would never update.
 
 `inputs` is optional. **A placeholder with no entry resolves as a path of its own name**, so it is only needed to alias a deeper path (`"ordered": "meta.dates.ordered"`) or to give one a default. The example above behaves identically with `inputs` omitted.
 
