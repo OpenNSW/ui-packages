@@ -79,9 +79,10 @@ function aggregateProblem(input: ComputedFieldInput): string | undefined {
 const aggregateOf = (input: ComputedFieldInput): unknown =>
   typeof input === 'string' || !('aggregate' in input) ? undefined : input.aggregate
 
-// Has either half of an aggregate, so it's resolved (or rejected) as one.
-const isAggregateInput = (input: ComputedFieldInput): boolean =>
-  aggregateOf(input) !== undefined || hasWildcard(typeof input === 'string' ? input : input.path)
+// Has neither half of an aggregate, so it's a single value. An input with
+// either half is resolved (or rejected) as an aggregate instead.
+const isPlainInput = (input: ComputedFieldInput): input is ComputedInput =>
+  aggregateOf(input) === undefined && !hasWildcard(typeof input === 'string' ? input : input.path)
 
 const hasWildcard = (path: string): boolean => path.split('.').includes(WILDCARD)
 
@@ -179,6 +180,12 @@ const isFiniteNumber = (value: unknown): value is number => typeof value === 'nu
 // default-or-unavailable path as a value that's simply missing — no separate
 // lookup of a sibling `.error` key is needed to get *a* signal, just not a
 // maximally-specific one.
+//
+// That's a plain input, read by resolveComputedInput. An input with a `*` in
+// its path or an `aggregate` goes to resolveAggregateInput instead, which
+// reduces every array item's value to one number (or, for an input
+// aggregateProblem rejects, to missing), and takes the same
+// default-or-unavailable rule per item.
 export function resolveComputedInputs(
   rootData: unknown,
   parentPath: string,
@@ -187,9 +194,9 @@ export function resolveComputedInputs(
   const values: Record<string, CellValue> = {}
 
   for (const [alias, input] of Object.entries(inputs)) {
-    const value = isAggregateInput(input)
-      ? resolveAggregateInput(rootData, parentPath, input)
-      : resolveComputedInput(rootData, parentPath, input as ComputedInput)
+    const value = isPlainInput(input)
+      ? resolveComputedInput(rootData, parentPath, input)
+      : resolveAggregateInput(rootData, parentPath, input)
     if (value === undefined) return undefined
     values[alias] = value
   }
