@@ -77,10 +77,11 @@ function inputProblem(input: ComputedFieldInput): string | undefined {
   return undefined
 }
 
-// unknown, not string: a schema read from JSON can leave `path` out or give
-// it another type, and hasWildcard must not be handed one of those.
+// unknown, not string: a schema read from JSON can leave `path` out, give it
+// another type, or make the whole input null, and hasWildcard must not be
+// handed any of those.
 const pathOf = (input: ComputedFieldInput): unknown =>
-  typeof input === 'string' ? input : (input as { path?: unknown }).path
+  typeof input === 'string' ? input : (input as { path?: unknown } | null)?.path
 
 const aggregateOf = (input: ComputedFieldInput): unknown =>
   typeof input === 'string' || !('aggregate' in input) ? undefined : input.aggregate

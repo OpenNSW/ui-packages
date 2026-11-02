@@ -253,12 +253,13 @@ describe('computedInputsError', () => {
     expect(withDefault(undefined)).toBeUndefined()
   })
 
-  it('reports an input without a string path instead of throwing, plain or aggregate', () => {
+  it('reports an input without a string path instead of throwing, plain, aggregate or null', () => {
     const message = `Input "total" has no path, or one that isn't a string.`
     const withoutPath = [
       { default: 0 },
       { aggregate: 'sum' },
       { path: 5, aggregate: 'sum' },
+      null,
     ] as unknown as ComputedFieldInput[]
     for (const total of withoutPath) {
       expect(computedInputsError({ total })).toBe(message)
