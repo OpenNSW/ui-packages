@@ -177,10 +177,17 @@ describe('resolveComputedInputs with an aggregate', () => {
     })
   })
 
-  it('treats a * without an aggregate, or the reverse, as missing', () => {
+  it('treats a * without an aggregate, the reverse, or a non-number default as missing', () => {
     expect(resolveComputedInputs(rootData, '', { total: 'blendsheet_data.*.assessed_levy' })).toBeUndefined()
     expect(
       resolveComputedInputs(rootData, '', { total: { path: 'blendsheet_data.0.assessed_levy', aggregate: 'sum' } }),
+    ).toBeUndefined()
+    // Every item has a number here, so the default is never needed — but a
+    // schema that gives one that isn't a number is still a mistake.
+    expect(
+      resolveComputedInputs(rootData, '', {
+        total: { path: 'blendsheet_data.*.assessed_levy', aggregate: 'sum', default: '0' as unknown as number },
+      }),
     ).toBeUndefined()
   })
 })
@@ -213,6 +220,19 @@ describe('computedInputsError', () => {
     expect(computedInputsError({ total: { path: 'rows.*.amount', aggregate: 'median' as unknown as 'sum' } })).toBe(
       'Input "total" has an unknown aggregate "median"; use one of sum, min, max, average, count.',
     )
+  })
+
+  it('reports an aggregate default that is not a number, as a schema read from JSON can have', () => {
+    const withDefault = (fallback: unknown) =>
+      computedInputsError({ total: { path: 'rows.*.amount', aggregate: 'sum', default: fallback as number } })
+    expect(withDefault('0')).toBe(
+      `Input "total" has a default "0" that isn't a number; an aggregate's default must be one.`,
+    )
+    expect(withDefault(true)).toBe(
+      `Input "total" has a default true that isn't a number; an aggregate's default must be one.`,
+    )
+    expect(withDefault(0)).toBeUndefined()
+    expect(withDefault(null)).toBeUndefined()
   })
 })
 

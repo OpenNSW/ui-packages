@@ -55,9 +55,12 @@ export function computedInputsError(inputs: Record<string, ComputedFieldInput>):
   return undefined
 }
 
-// What's wrong with an input's `*`/`aggregate` pairing, or undefined when
-// nothing is. The one place that rule lives: computedInputsError words it for
-// the field to show, and resolveAggregateInput won't aggregate what it rejects.
+// What's wrong with an aggregate input — its `*`/`aggregate` pairing, or a
+// `default` that isn't a number — or undefined when nothing is. The one place
+// those rules live: computedInputsError words them for the field to show, and
+// resolveAggregateInput won't aggregate what they reject. The type already
+// says `default` is a number, but a schema read from JSON is never checked
+// against it.
 function aggregateProblem(input: ComputedFieldInput): string | undefined {
   const path = typeof input === 'string' ? input : input.path
   const aggregate = aggregateOf(input)
@@ -66,6 +69,10 @@ function aggregateProblem(input: ComputedFieldInput): string | undefined {
     return `has an unknown aggregate ${JSON.stringify(aggregate)}; use one of ${AGGREGATES.join(', ')}.`
   }
   if (!hasWildcard(path)) return 'has an aggregate but no * in its path.'
+  const fallback: unknown = typeof input === 'string' ? undefined : input.default
+  if (fallback !== undefined && fallback !== null && !isFiniteNumber(fallback)) {
+    return `has a default ${JSON.stringify(fallback)} that isn't a number; an aggregate's default must be one.`
+  }
   return undefined
 }
 
