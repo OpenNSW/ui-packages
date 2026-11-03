@@ -156,9 +156,7 @@ const isAggregate = (value: unknown): value is ComputedAggregate => AGGREGATES.i
 // including an input inputProblem rejects — which ComputedControl shows
 // as an error instead, through computedInputsError.
 function resolveAggregateInput(rootData: unknown, parentPath: string, input: TextFieldInput): number | undefined {
-  if (typeof input === 'string' || aggregateOf(input) === JOIN || inputProblem(input, false) !== undefined) {
-    return undefined
-  }
+  if (typeof input === 'string' || inputProblem(input, false) !== undefined) return undefined
   const { path, default: fallback, aggregate } = input as ComputedAggregateInput
   return resolveAggregate(rootData, parentPath ? `${parentPath}.${path}` : path, aggregate, fallback)
 }
@@ -215,11 +213,26 @@ function resolveJoinInput(
     .map((value) =>
       join.template === undefined
         ? display(value, schema, context.locale)
-        : summarizeRow(join.template, value, schema ?? {}, context.locale),
+        : summarizeRow(join.template, value, schema ?? {}, context.locale, context.rootSchema),
     )
     .filter(Boolean)
     .slice(join.skip ?? 0)
     .join(join.separator ?? ', ')
+}
+
+// With a text context, a plain input's value as an array card shows it, as
+// a join's items are: an option's title, a search pick's label, a number
+// with separators. A true/false, which a card shows as nothing, stays as it
+// is. Without one, as for x-computed, the value is unchanged.
+function showPlain(
+  value: CellValue | undefined,
+  parentPath: string,
+  input: ComputedInput,
+  text: TextContext | undefined,
+): CellValue | undefined {
+  if (!text || value === undefined || typeof value === 'boolean') return value
+  const path = typeof input === 'string' ? input : input.path
+  return display(value, schemaAt(text.rootSchema, parentPath ? `${parentPath}.${path}` : path), text.locale)
 }
 
 const isBlank = (value: unknown): boolean => value === null || value === undefined || value === ''
@@ -299,7 +312,7 @@ export function resolveComputedInputs(
 
   for (const [alias, input] of Object.entries(inputs)) {
     const value = isPlainInput(input)
-      ? resolveComputedInput(rootData, parentPath, input)
+      ? showPlain(resolveComputedInput(rootData, parentPath, input), parentPath, input, text)
       : text && aggregateOf(input) === JOIN
         ? resolveJoinInput(rootData, parentPath, input, text)
         : resolveAggregateInput(rootData, parentPath, input)

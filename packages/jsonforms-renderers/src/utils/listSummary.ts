@@ -72,7 +72,14 @@ export function display(value: unknown, schema: JsonSchema | undefined, locale: 
  * "FINE" rather than "FINE ·  bags". Unlike `renderTemplate`, a missing value
  * is shown as nothing, never as the placeholder.
  */
-export function summarizeRow(template: string, row: unknown, itemsSchema: JsonSchema, locale?: string): string {
+export function summarizeRow(
+  template: string,
+  row: unknown,
+  itemsSchema: JsonSchema,
+  locale?: string,
+  // The form's schema, for a $ref inside the item; itemsSchema itself by default.
+  rootSchema?: JsonSchema,
+): string {
   return template
     .split(SEPARATOR)
     .map((segment) => {
@@ -80,7 +87,7 @@ export function summarizeRow(template: string, row: unknown, itemsSchema: JsonSc
       let filled = 0
       const text = segment.replace(FIELD, (_placeholder, path: string) => {
         fields++
-        const shown = display(valueAt(row, path), schemaAt(itemsSchema, path), locale)
+        const shown = display(valueAt(row, path), schemaAt(itemsSchema, path, rootSchema ?? itemsSchema), locale)
         if (shown) filled++
         return shown
       })

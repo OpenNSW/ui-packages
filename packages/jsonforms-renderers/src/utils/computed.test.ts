@@ -390,6 +390,50 @@ describe('a join input (x-text)', () => {
     expect(join({ template: '{name}' }, { items: 'x' })).toBeUndefined()
   })
 
+  it('shows a $ref option inside the item by its title', () => {
+    const withRef: JsonSchema = {
+      type: 'object',
+      definitions: { treatment: { type: 'string', oneOf: [{ const: 'FUM', title: 'Fumigation' }] } },
+      properties: {
+        items: {
+          type: 'array',
+          items: { type: 'object', properties: { treatment: { $ref: '#/definitions/treatment' } } },
+        },
+      },
+    }
+    const values = resolveComputedInputs(
+      { items: [{ treatment: 'FUM' }] },
+      '',
+      { text: { path: 'items.*', aggregate: 'join', template: '{treatment}' } },
+      { rootSchema: withRef },
+    )
+    expect(values).toEqual({ text: 'Fumigation' })
+  })
+
+  it('shows a plain input as a card does, with a text context only', () => {
+    const schema: JsonSchema = {
+      type: 'object',
+      properties: {
+        port: { type: 'object', properties: { value: { type: 'string' }, label: { type: 'string' } } },
+        treatment: { type: 'string', oneOf: [{ const: 'FUM', title: 'Fumigation' }] },
+        bags: { type: 'number' },
+        sealed: { type: 'boolean' },
+      },
+    }
+    const data = { port: { value: 'LKCMB', label: 'Colombo' }, treatment: 'FUM', bags: 12500, sealed: true }
+    const inputs = { port: 'port', treatment: 'treatment', bags: 'bags', sealed: 'sealed' }
+    expect(resolveComputedInputs(data, '', inputs, { rootSchema: schema, locale: 'en' })).toEqual({
+      port: 'Colombo',
+      treatment: 'Fumigation',
+      bags: '12,500',
+      sealed: true,
+    })
+    expect(resolveComputedInputs(data, '', { bags: 'bags', treatment: 'treatment' })).toEqual({
+      bags: 12500,
+      treatment: 'FUM',
+    })
+  })
+
   it('is refused by x-computed, and checked for x-text', () => {
     const input: TextFieldInput = { path: 'items.*', aggregate: 'join' }
     expect(computedInputsError({ text: input })).toBe(
