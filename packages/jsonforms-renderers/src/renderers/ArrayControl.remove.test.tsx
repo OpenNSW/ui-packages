@@ -126,6 +126,41 @@ describe('a list shown as cards', () => {
     expect(document.querySelectorAll('input')).toHaveLength(0)
   })
 
+  it('hides Item N and the N items count when itemLabel is false', () => {
+    renderList(
+      two,
+      control({
+        display: 'cards',
+        summary: '{grade} · {bags} bags',
+        summaryDetail: '{kg} kg total',
+        itemLabel: false,
+      }),
+    )
+
+    expect(screen.queryByText('2 items')).toBeNull()
+    expect(screen.queryByText(/Item \d/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Open Fine · 500 bags' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open Medium · 240 bags' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove Fine · 500 bags' })).toBeTruthy()
+    expect(screen.getByText('12,500 kg total')).toBeTruthy()
+  })
+
+  it('keeps custom totals without the N items count when itemLabel is false', async () => {
+    const rows = renderList(two, control({ ...cards, itemLabel: false }))
+
+    expect(screen.getByText('740 bags · 18,500 kg total')).toBeTruthy()
+    expect(screen.queryByText(/2 items/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Open Fine · 500 bags' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Medium · 240 bags' }))
+    expect(screen.getByText('Remove Medium · 240 bags?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove item' }))
+
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(screen.getByRole('status').textContent).toBe('Medium · 240 bags removed. Now 500 bags · 12,500 kg total.')
+    expect(screen.queryByText(/1 item/)).toBeNull()
+  })
+
   it('names the item with its summary when asking, and reports the new total', async () => {
     const rows = renderList(two, control(cards))
 
