@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { JsonSchema } from '@jsonforms/core'
-import { listTotals, summarizeRow } from './listSummary'
+import { listTotals, schemaAt, summarizeRow } from './listSummary'
 
 const items: JsonSchema = {
   type: 'object',
@@ -56,5 +56,19 @@ describe('listTotals', () => {
 
   it('leaves out a total no row has a number for', () => {
     expect(listTotals([{ bags: '' }], [{ field: 'bags', label: '{sum} bags' }], 'en')).toEqual([])
+  })
+})
+
+describe('schemaAt', () => {
+  const root: JsonSchema = {
+    type: 'object',
+    definitions: { item: { type: 'object', properties: { grade: { type: 'string' } } } },
+    properties: { rows: { type: 'array', items: { $ref: '#/definitions/item' } } },
+  }
+
+  it('walks properties, array indexes and *, following a $ref', () => {
+    expect(schemaAt(root, 'rows.0.grade')).toEqual({ type: 'string' })
+    expect(schemaAt(root, 'rows.*.grade')).toEqual({ type: 'string' })
+    expect(schemaAt(root, 'rows.*.missing')).toBeUndefined()
   })
 })

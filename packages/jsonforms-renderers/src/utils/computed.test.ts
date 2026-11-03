@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { computedInputsError, evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from './computed'
-import type { ComputedFieldInput } from './computed'
+import {
+  computedInputsError,
+  evaluateComputedFormula,
+  formatComputedValue,
+  resolveComputedInputs,
+  resolveTextInputs,
+  textInputsError,
+} from './computed'
+import type { ComputedFieldInput, TextFieldInput } from './computed'
+import type { JsonSchema } from '@jsonforms/core'
 
 describe('resolveComputedInputs', () => {
   const rootData = {
@@ -324,5 +332,129 @@ describe('formatComputedValue', () => {
 
   it('treats a non-finite decimals value as 0', () => {
     expect(formatComputedValue(1.25, NaN)).toBe('1')
+  })
+})
+
+describe('a join input (x-text)', () => {
+  const rootSchema: JsonSchema = {
+    type: 'object',
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            treatment: {
+              type: 'string',
+              oneOf: [
+                { const: 'FUM', title: 'Fumigation' },
+                { const: 'HT', title: 'Heat treatment' },
+              ],
+            },
+            chemical: { type: 'string' },
+            grade: { type: 'number', oneOf: [{ const: 1, title: 'Grade one' }] },
+          },
+        },
+      },
+    },
+  }
+  const items = [
+    { name: 'Tea', treatment: 'FUM', chemical: 'Methyl bromide' },
+    { name: 'Pepper' },
+    { name: 'Cinnamon', treatment: 'HT' },
+    { name: 'Clove', treatment: 'FUM', chemical: 'Phosphine' },
+  ]
+  const join = (input: Partial<TextFieldInput & object>, data: unknown = { items }) =>
+    resolveTextInputs(
+      data,
+      '',
+      { text: { path: 'items.*', aggregate: 'join', ...input } as TextFieldInput },
+      { rootSchema, locale: 'en' },
+    )?.text
+
+  it('shows each item through the cards summary, with option titles and empty parts left out', () => {
+    expect(join({ where: 'treatment', template: '{name}: {treatment} · {chemical}', separator: '\n' })).toBe(
+      'Tea: Fumigation · Methyl bromide\nCinnamon: Heat treatment\nClove: Fumigation · Phosphine',
+    )
+  })
+
+  it('skips after filtering, so skip 1 leaves out the first treated item', () => {
+    expect(join({ where: 'treatment', template: '{name}', skip: 1 })).toBe('Cinnamon, Clove')
+  })
+
+  it('joins one field of each item, without a template', () => {
+    expect(join({ path: 'items.*.treatment' })).toBe('Fumigation, Heat treatment, Fumigation')
+    expect(join({ path: 'items.*.treatment', default: 'none' })).toBe('Fumigation, none, Heat treatment, Fumigation')
+  })
+
+  it('shows a numeric option code as its title', () => {
+    expect(join({ path: 'items.*.grade' }, { items: [{ grade: 1 }, { grade: 2 }] })).toBe('Grade one, 2')
+  })
+
+  it('gives empty text for no items, and is missing through a value that is not an array', () => {
+    expect(join({ template: '{name}' }, {})).toBe('')
+    expect(join({ template: '{name}' }, { items: 'x' })).toBeUndefined()
+  })
+
+  it('shows a $ref option inside the item by its title', () => {
+    const withRef: JsonSchema = {
+      type: 'object',
+      definitions: { treatment: { type: 'string', oneOf: [{ const: 'FUM', title: 'Fumigation' }] } },
+      properties: {
+        items: {
+          type: 'array',
+          items: { type: 'object', properties: { treatment: { $ref: '#/definitions/treatment' } } },
+        },
+      },
+    }
+    const values = resolveTextInputs(
+      { items: [{ treatment: 'FUM' }] },
+      '',
+      { text: { path: 'items.*', aggregate: 'join', template: '{treatment}' } },
+      { rootSchema: withRef },
+    )
+    expect(values).toEqual({ text: 'Fumigation' })
+  })
+
+  it('shows a plain input as a card does, with a text context only', () => {
+    const schema: JsonSchema = {
+      type: 'object',
+      properties: {
+        port: { type: 'object', properties: { value: { type: 'string' }, label: { type: 'string' } } },
+        treatment: { type: 'string', oneOf: [{ const: 'FUM', title: 'Fumigation' }] },
+        bags: { type: 'number' },
+        sealed: { type: 'boolean' },
+      },
+    }
+    const data = { port: { value: 'LKCMB', label: 'Colombo' }, treatment: 'FUM', bags: 12500, sealed: true }
+    const inputs = { port: 'port', treatment: 'treatment', bags: 'bags', sealed: 'sealed' }
+    expect(resolveTextInputs(data, '', inputs, { rootSchema: schema, locale: 'en' })).toEqual({
+      port: 'Colombo',
+      treatment: 'Fumigation',
+      bags: '12,500',
+      sealed: true,
+    })
+    expect(resolveComputedInputs(data, '', { bags: 'bags', treatment: 'treatment' })).toEqual({
+      bags: 12500,
+      treatment: 'FUM',
+    })
+  })
+
+  it('is refused by x-computed, and checked for x-text', () => {
+    const input: TextFieldInput = { path: 'items.*', aggregate: 'join' }
+    expect(computedInputsError({ text: input } as unknown as Record<string, ComputedFieldInput>)).toBe(
+      'Input "text" has the aggregate "join", which gives text; this field needs a number.',
+    )
+    expect(
+      resolveComputedInputs({ items }, '', { text: input } as unknown as Record<string, ComputedFieldInput>),
+    ).toBeUndefined()
+    expect(textInputsError({ text: input })).toBeUndefined()
+    expect(textInputsError({ text: { ...input, separator: 1 } as unknown as TextFieldInput })).toBe(
+      'Input "text" has a separator 1 that isn\'t text.',
+    )
+    expect(textInputsError({ text: { path: 'items.*', aggregate: 'concat' } as unknown as TextFieldInput })).toBe(
+      'Input "text" has an unknown aggregate "concat"; use one of sum, min, max, average, count, join.',
+    )
   })
 })

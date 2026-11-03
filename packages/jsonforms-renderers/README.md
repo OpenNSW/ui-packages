@@ -1,6 +1,6 @@
 # @opennsw/jsonforms-renderers
 
-[JSON Forms](https://jsonforms.io/) renderers for React, built on [Radix Themes](https://www.radix-ui.com/themes) and used by the OpenNSW portals. They cover text, number, boolean, radio, select, search-select, date, file, array, spreadsheet, XML and computed controls, and the layouts.
+[JSON Forms](https://jsonforms.io/) renderers for React, built on [Radix Themes](https://www.radix-ui.com/themes) and used by the OpenNSW portals. They cover text, number, boolean, radio, select, search-select, date, file, array, spreadsheet, XML, computed and derived-text controls, and the layouts.
 
 ## Install
 

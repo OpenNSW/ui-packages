@@ -29,6 +29,8 @@ import XmlExportControl from './XmlExportControl'
 import { XmlExportControlTester } from './XmlExportControlTester'
 import ComputedControl from './ComputedControl'
 import { ComputedControlTester } from './ComputedControlTester'
+import DerivedTextControl from './DerivedTextControl'
+import { DerivedTextControlTester } from './DerivedTextControlTester'
 import ArrayControl from './ArrayControl'
 import { ArrayControlTester } from './ArrayControlTester'
 import LabelRenderer, { LabelTester } from './LabelRenderer'
@@ -64,6 +66,7 @@ export const radixRenderers = [
   // node (see XmlExportControlTester's own comment).
   { tester: XmlExportControlTester, renderer: XmlExportControl },
   { tester: ComputedControlTester, renderer: ComputedControl },
+  { tester: DerivedTextControlTester, renderer: DerivedTextControl },
   { tester: ArrayControlTester, renderer: ArrayControl },
   { tester: PrimitiveArrayControlTester, renderer: ArrayControl },
   { tester: LabelTester, renderer: LabelRenderer },
@@ -89,6 +92,8 @@ export { default as XmlExportControl } from './XmlExportControl'
 export * from './XmlExportControlTester'
 export { default as ComputedControl } from './ComputedControl'
 export * from './ComputedControlTester'
+export { default as DerivedTextControl } from './DerivedTextControl'
+export * from './DerivedTextControlTester'
 export { default as SearchSelectControl } from './SearchSelectControl'
 export * from './SearchSelectControlTester'
 export { default as ArrayControl } from './ArrayControl'
