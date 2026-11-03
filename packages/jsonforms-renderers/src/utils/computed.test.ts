@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { computedInputsError, evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from './computed'
-import type { ComputedFieldInput } from './computed'
+import type { ComputedFieldInput, TextFieldInput } from './computed'
+import type { JsonSchema } from '@jsonforms/core'
 
 describe('resolveComputedInputs', () => {
   const rootData = {
@@ -324,5 +325,83 @@ describe('formatComputedValue', () => {
 
   it('treats a non-finite decimals value as 0', () => {
     expect(formatComputedValue(1.25, NaN)).toBe('1')
+  })
+})
+
+describe('a join input (x-text)', () => {
+  const rootSchema: JsonSchema = {
+    type: 'object',
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            treatment: {
+              type: 'string',
+              oneOf: [
+                { const: 'FUM', title: 'Fumigation' },
+                { const: 'HT', title: 'Heat treatment' },
+              ],
+            },
+            chemical: { type: 'string' },
+            grade: { type: 'number', oneOf: [{ const: 1, title: 'Grade one' }] },
+          },
+        },
+      },
+    },
+  }
+  const items = [
+    { name: 'Tea', treatment: 'FUM', chemical: 'Methyl bromide' },
+    { name: 'Pepper' },
+    { name: 'Cinnamon', treatment: 'HT' },
+    { name: 'Clove', treatment: 'FUM', chemical: 'Phosphine' },
+  ]
+  const join = (input: Partial<TextFieldInput & object>, data: unknown = { items }) =>
+    resolveComputedInputs(
+      data,
+      '',
+      { text: { path: 'items.*', aggregate: 'join', ...input } as TextFieldInput },
+      { rootSchema, locale: 'en' },
+    )?.text
+
+  it('shows each item through the cards summary, with option titles and empty parts left out', () => {
+    expect(join({ where: 'treatment', template: '{name}: {treatment} · {chemical}', separator: '\n' })).toBe(
+      'Tea: Fumigation · Methyl bromide\nCinnamon: Heat treatment\nClove: Fumigation · Phosphine',
+    )
+  })
+
+  it('skips after filtering, so skip 1 leaves out the first treated item', () => {
+    expect(join({ where: 'treatment', template: '{name}', skip: 1 })).toBe('Cinnamon, Clove')
+  })
+
+  it('joins one field of each item, without a template', () => {
+    expect(join({ path: 'items.*.treatment' })).toBe('Fumigation, Heat treatment, Fumigation')
+    expect(join({ path: 'items.*.treatment', default: 'none' })).toBe('Fumigation, none, Heat treatment, Fumigation')
+  })
+
+  it('shows a numeric option code as its title', () => {
+    expect(join({ path: 'items.*.grade' }, { items: [{ grade: 1 }, { grade: 2 }] })).toBe('Grade one, 2')
+  })
+
+  it('gives empty text for no items, and is missing through a value that is not an array', () => {
+    expect(join({ template: '{name}' }, {})).toBe('')
+    expect(join({ template: '{name}' }, { items: 'x' })).toBeUndefined()
+  })
+
+  it('is refused by x-computed, and checked for x-text', () => {
+    const input: TextFieldInput = { path: 'items.*', aggregate: 'join' }
+    expect(computedInputsError({ text: input })).toBe(
+      'Input "text" has the aggregate "join", which gives text; this field needs a number.',
+    )
+    expect(resolveComputedInputs({ items }, '', { text: input })).toBeUndefined()
+    expect(computedInputsError({ text: input }, true)).toBeUndefined()
+    expect(computedInputsError({ text: { ...input, separator: 1 } as unknown as TextFieldInput }, true)).toBe(
+      'Input "text" has a separator 1 that isn\'t text.',
+    )
+    expect(
+      computedInputsError({ text: { path: 'items.*', aggregate: 'concat' } as unknown as TextFieldInput }, true),
+    ).toBe('Input "text" has an unknown aggregate "concat"; use one of sum, min, max, average, count, join.')
   })
 })

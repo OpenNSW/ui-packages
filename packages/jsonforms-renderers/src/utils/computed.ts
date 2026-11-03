@@ -1,4 +1,6 @@
 import { Resolve } from '@jsonforms/core'
+import type { JsonSchema } from '@jsonforms/core'
+import { display, schemaAt, summarizeRow, valueAt } from './listSummary'
 import { describeFormulaError, evaluateFormulaWithVariables } from './spreadsheet'
 import type { CellValue } from './spreadsheet'
 
@@ -25,6 +27,38 @@ export type ComputedFieldInput = ComputedInput | ComputedAggregateInput
 
 export type ComputedAggregate = 'sum' | 'min' | 'max' | 'average' | 'count'
 
+// An x-text input that joins every item a `*` path matches into one text,
+// e.g. { path: "items.*", aggregate: "join", where: "treatment_type",
+// template: "{commodity_name}: {treatment_type}", separator: "\n", skip: 1 }.
+// Each item is shown as an array card shows it: through `template`, the
+// cards' summary syntax (summarizeRow), or by itself (display). `where`
+// keeps only the items whose field at that path has a value, `skip` leaves
+// out the first that many non-empty texts, and `separator` (default ", ")
+// joins the rest. `default` stands in for an item without a value. Only
+// x-text takes one: x-computed needs a number. See resolveJoinInput.
+export type JoinAggregateInput = {
+  path: string
+  aggregate: 'join'
+  template?: string
+  separator?: string
+  skip?: number
+  where?: string
+  default?: string
+}
+
+// x-text's inputs: x-computed's, plus a join.
+export type TextFieldInput = ComputedFieldInput | JoinAggregateInput
+
+// What a join needs beyond the data: the form's schema, for option titles,
+// and the locale, for numbers. Passing it to resolveComputedInputs, or
+// `true` to computedInputsError, is what allows a join.
+export interface TextContext {
+  rootSchema?: JsonSchema
+  locale?: string
+}
+
+const JOIN = 'join'
+
 const AGGREGATES: readonly ComputedAggregate[] = ['sum', 'min', 'max', 'average', 'count']
 const WILDCARD = '*'
 
@@ -47,9 +81,10 @@ export function resolveComputedInput(
 
 // A misconfigured input, described for the field to show, or undefined when
 // every input is fine.
-export function computedInputsError(inputs: Record<string, ComputedFieldInput>): string | undefined {
+// `text` allows a join, as x-text does.
+export function computedInputsError(inputs: Record<string, TextFieldInput>, text = false): string | undefined {
   for (const [alias, input] of Object.entries(inputs)) {
-    const problem = inputProblem(input)
+    const problem = inputProblem(input, text)
     if (problem !== undefined) return `Input "${alias}" ${problem}`
   }
   return undefined
@@ -61,15 +96,18 @@ export function computedInputsError(inputs: Record<string, ComputedFieldInput>):
 // computedInputsError words them for the field to show, and
 // resolveAggregateInput won't aggregate what they reject. The types already
 // say all this, but a schema read from JSON is never checked against them.
-function inputProblem(input: ComputedFieldInput): string | undefined {
+function inputProblem(input: TextFieldInput, text: boolean): string | undefined {
   const path = pathOf(input)
   if (typeof path !== 'string') return "has no path, or one that isn't a string."
   const aggregate = aggregateOf(input)
   if (aggregate === undefined) return hasWildcard(path) ? 'has a * in its path but no aggregate.' : undefined
-  if (!isAggregate(aggregate)) {
-    return `has an unknown aggregate ${JSON.stringify(aggregate)}; use one of ${AGGREGATES.join(', ')}.`
+  if (aggregate === JOIN && !text) return 'has the aggregate "join", which gives text; this field needs a number.'
+  if (aggregate !== JOIN && !isAggregate(aggregate)) {
+    const known = text ? [...AGGREGATES, JOIN] : AGGREGATES
+    return `has an unknown aggregate ${JSON.stringify(aggregate)}; use one of ${known.join(', ')}.`
   }
   if (!hasWildcard(path)) return 'has an aggregate but no * in its path.'
+  if (aggregate === JOIN) return joinProblem(input as JoinAggregateInput)
   const fallback: unknown = typeof input === 'string' ? undefined : input.default
   if (fallback !== undefined && !isFiniteNumber(fallback)) {
     return `has a default ${JSON.stringify(fallback)} that isn't a number; an aggregate's default must be one.`
@@ -80,16 +118,32 @@ function inputProblem(input: ComputedFieldInput): string | undefined {
 // unknown, not string: a schema read from JSON can leave `path` out, give it
 // another type, or make the whole input null, and hasWildcard must not be
 // handed any of those.
-const pathOf = (input: ComputedFieldInput): unknown =>
+// What's wrong with a join's own options, or undefined.
+function joinProblem(input: JoinAggregateInput): string | undefined {
+  for (const key of ['template', 'separator', 'where', 'default'] as const) {
+    const value: unknown = input[key]
+    if (value !== undefined && typeof value !== 'string') {
+      return `has a ${key} ${JSON.stringify(value)} that isn't text.`
+    }
+  }
+  const skip: unknown = input.skip
+  if (skip !== undefined && !(Number.isInteger(skip) && (skip as number) >= 0)) {
+    return `has a skip ${JSON.stringify(skip)} that isn't a whole number of 0 or more.`
+  }
+  return undefined
+}
+
+const pathOf = (input: TextFieldInput): unknown =>
   typeof input === 'string' ? input : (input as { path?: unknown } | null)?.path
 
-const aggregateOf = (input: ComputedFieldInput): unknown =>
-  typeof input === 'string' || !('aggregate' in input) ? undefined : input.aggregate
+// null-safe, like pathOf: a schema read from JSON can make an input null.
+const aggregateOf = (input: TextFieldInput): unknown =>
+  typeof input !== 'object' || input === null || !('aggregate' in input) ? undefined : input.aggregate
 
 // Has a string path and neither half of an aggregate, so it's a single value.
 // Any other input is resolved as an aggregate instead, or, when inputProblem
 // rejects it (an aggregate gone wrong, or no usable path), refused.
-const isPlainInput = (input: ComputedFieldInput): input is ComputedInput => {
+const isPlainInput = (input: TextFieldInput): input is ComputedInput => {
   const path = pathOf(input)
   return typeof path === 'string' && aggregateOf(input) === undefined && !hasWildcard(path)
 }
@@ -101,8 +155,10 @@ const isAggregate = (value: unknown): value is ComputedAggregate => AGGREGATES.i
 // One aggregate input, relative to `parentPath`. undefined means missing,
 // including an input inputProblem rejects — which ComputedControl shows
 // as an error instead, through computedInputsError.
-function resolveAggregateInput(rootData: unknown, parentPath: string, input: ComputedFieldInput): number | undefined {
-  if (typeof input === 'string' || inputProblem(input) !== undefined) return undefined
+function resolveAggregateInput(rootData: unknown, parentPath: string, input: TextFieldInput): number | undefined {
+  if (typeof input === 'string' || aggregateOf(input) === JOIN || inputProblem(input, false) !== undefined) {
+    return undefined
+  }
   const { path, default: fallback, aggregate } = input as ComputedAggregateInput
   return resolveAggregate(rootData, parentPath ? `${parentPath}.${path}` : path, aggregate, fallback)
 }
@@ -133,6 +189,40 @@ function collectWildcard(data: unknown, segments: string[]): unknown[] | undefin
   }
   return values
 }
+
+// One join input, relative to `parentPath`: the matched items, shown as
+// array cards show them, joined into one text. An item without a value takes
+// `default`; `where` keeps the items whose field has a value; empty texts are
+// left out before `skip` counts. No items is "", not missing, so a field can
+// still say something else. undefined only when the input is misconfigured
+// or a value on the way isn't an array.
+function resolveJoinInput(
+  rootData: unknown,
+  parentPath: string,
+  input: TextFieldInput,
+  context: TextContext,
+): string | undefined {
+  if (aggregateOf(input) !== JOIN || inputProblem(input, true) !== undefined) return undefined
+  const join = input as JoinAggregateInput
+  const fullPath = parentPath ? `${parentPath}.${join.path}` : join.path
+  const matched = collectWildcard(rootData, fullPath.split('.'))
+  if (matched === undefined) return undefined
+  const schema = schemaAt(context.rootSchema, fullPath)
+  const where = join.where
+  return matched
+    .map((value) => value ?? join.default)
+    .filter((value) => where === undefined || !isBlank(valueAt(value, where)))
+    .map((value) =>
+      join.template === undefined
+        ? display(value, schema, context.locale)
+        : summarizeRow(join.template, value, schema ?? {}, context.locale),
+    )
+    .filter(Boolean)
+    .slice(join.skip ?? 0)
+    .join(join.separator ?? ', ')
+}
+
+const isBlank = (value: unknown): boolean => value === null || value === undefined || value === ''
 
 // Reduces the matched values to one number. `count` is how many items
 // matched, whatever their values, so `rows.*` counts rows. For the rest, each
@@ -196,17 +286,23 @@ const isFiniteNumber = (value: unknown): value is number => typeof value === 'nu
 // resolveAggregateInput instead, which reduces every array item's value to
 // one number (or, for an input inputProblem rejects, to missing), and takes
 // the same default-or-unavailable rule per item.
+//
+// `text` is x-text's: with it, a join input is joined into one text by
+// resolveJoinInput. Without it, as for x-computed, a join is refused.
 export function resolveComputedInputs(
   rootData: unknown,
   parentPath: string,
-  inputs: Record<string, ComputedFieldInput>,
+  inputs: Record<string, TextFieldInput>,
+  text?: TextContext,
 ): Record<string, CellValue> | undefined {
   const values: Record<string, CellValue> = {}
 
   for (const [alias, input] of Object.entries(inputs)) {
     const value = isPlainInput(input)
       ? resolveComputedInput(rootData, parentPath, input)
-      : resolveAggregateInput(rootData, parentPath, input)
+      : text && aggregateOf(input) === JOIN
+        ? resolveJoinInput(rootData, parentPath, input, text)
+        : resolveAggregateInput(rootData, parentPath, input)
     if (value === undefined) return undefined
     values[alias] = value
   }

@@ -1,3 +1,4 @@
+import { encode, Resolve } from '@jsonforms/core'
 import type { JsonSchema } from '@jsonforms/core'
 
 /**
@@ -15,16 +16,29 @@ const SEPARATOR = ' · '
 const FIELD = /\{([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)\}/g
 
 /** The value at a dotted path within the row. */
-function valueAt(row: unknown, path: string): unknown {
+export function valueAt(row: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((cur, key) => {
     if (cur === null || typeof cur !== 'object') return undefined
     return (cur as Record<string, unknown>)[key]
   }, row)
 }
 
-/** The schema at a dotted path within the item's schema. */
-function schemaAt(schema: JsonSchema | undefined, path: string): JsonSchema | undefined {
-  return path.split('.').reduce<JsonSchema | undefined>((cur, key) => cur?.properties?.[key], schema)
+/**
+ * The schema of the value at a dotted data path within `schema`: a name goes
+ * into `properties`, an array index or a `*` into `items`, and a `$ref` on
+ * the way is followed from `rootSchema`.
+ */
+export function schemaAt(
+  schema: JsonSchema | undefined,
+  path: string,
+  rootSchema: JsonSchema | undefined = schema,
+): JsonSchema | undefined {
+  if (!schema || !path) return schema
+  const scope = path
+    .split('.')
+    .map((key) => (/^\d+$/.test(key) || key === '*' ? 'items' : `properties/${encode(key)}`))
+    .join('/')
+  return Resolve.schema(schema, `#/${scope}`, rootSchema ?? schema)
 }
 
 function optionTitle(schema: JsonSchema | undefined, value: unknown): string | undefined {
@@ -37,7 +51,7 @@ function optionTitle(schema: JsonSchema | undefined, value: unknown): string | u
  * text, a search pick's `label`, or the title of a `{ value }` object's
  * option. Anything else is empty.
  */
-function display(value: unknown, schema: JsonSchema | undefined, locale: string | undefined): string {
+export function display(value: unknown, schema: JsonSchema | undefined, locale: string | undefined): string {
   if (value === null || value === undefined || value === '') return ''
   if (typeof value === 'object' && !Array.isArray(value)) {
     const object = value as Record<string, unknown>

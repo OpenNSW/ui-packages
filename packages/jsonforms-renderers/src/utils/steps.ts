@@ -7,7 +7,6 @@ import {
   type Translator,
   type UISchemaElement,
   composePaths,
-  encode,
   createLabelDescriptionFrom,
   defaultTranslator,
   getControlPath,
@@ -16,6 +15,7 @@ import {
   Resolve,
   toDataPath,
 } from '@jsonforms/core'
+import { schemaAt } from './listSummary'
 
 /** An error in the form's state: JSON Forms' own, or one the host added. */
 export type FormError = NonNullable<JsonFormsCore['errors']>[number]
@@ -158,15 +158,6 @@ function failingPaths(errors: FormError[], rootSchema: JsonSchema): { path: stri
     else if (!paths.has(path)) paths.set(path, false)
   }
   return [...paths].map(([path, missing]) => ({ path, missing }))
-}
-
-/** The schema of the value at a dotted data path, or undefined. */
-function schemaAt(rootSchema: JsonSchema, path: string): JsonSchema | undefined {
-  const scope = path
-    .split('.')
-    .map((key) => (/^\d+$/.test(key) ? 'items' : `properties/${encode(key)}`))
-    .join('/')
-  return Resolve.schema(rootSchema, `#/${scope}`, rootSchema)
 }
 
 /** What a step not yet reached holds, for the note under it in the step list. */
