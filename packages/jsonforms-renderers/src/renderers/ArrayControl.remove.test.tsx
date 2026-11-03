@@ -157,9 +157,7 @@ describe('a list shown as cards', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove item' }))
 
     await waitFor(() => expect(rows()).toHaveLength(1))
-    expect(screen.getByRole('status').textContent).toBe(
-      'Medium · 240 bags removed. Now 500 bags · 12,500 kg total.',
-    )
+    expect(screen.getByRole('status').textContent).toBe('Medium · 240 bags removed. Now 500 bags · 12,500 kg total.')
     expect(screen.queryByText(/1 item/)).toBeNull()
   })
 
