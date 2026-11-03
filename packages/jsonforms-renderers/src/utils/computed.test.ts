@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { computedInputsError, evaluateComputedFormula, formatComputedValue, resolveComputedInputs } from './computed'
+import {
+  computedInputsError,
+  evaluateComputedFormula,
+  formatComputedValue,
+  resolveComputedInputs,
+  resolveTextInputs,
+  textInputsError,
+} from './computed'
 import type { ComputedFieldInput, TextFieldInput } from './computed'
 import type { JsonSchema } from '@jsonforms/core'
 
@@ -359,7 +366,7 @@ describe('a join input (x-text)', () => {
     { name: 'Clove', treatment: 'FUM', chemical: 'Phosphine' },
   ]
   const join = (input: Partial<TextFieldInput & object>, data: unknown = { items }) =>
-    resolveComputedInputs(
+    resolveTextInputs(
       data,
       '',
       { text: { path: 'items.*', aggregate: 'join', ...input } as TextFieldInput },
@@ -401,7 +408,7 @@ describe('a join input (x-text)', () => {
         },
       },
     }
-    const values = resolveComputedInputs(
+    const values = resolveTextInputs(
       { items: [{ treatment: 'FUM' }] },
       '',
       { text: { path: 'items.*', aggregate: 'join', template: '{treatment}' } },
@@ -422,7 +429,7 @@ describe('a join input (x-text)', () => {
     }
     const data = { port: { value: 'LKCMB', label: 'Colombo' }, treatment: 'FUM', bags: 12500, sealed: true }
     const inputs = { port: 'port', treatment: 'treatment', bags: 'bags', sealed: 'sealed' }
-    expect(resolveComputedInputs(data, '', inputs, { rootSchema: schema, locale: 'en' })).toEqual({
+    expect(resolveTextInputs(data, '', inputs, { rootSchema: schema, locale: 'en' })).toEqual({
       port: 'Colombo',
       treatment: 'Fumigation',
       bags: '12,500',
@@ -436,16 +443,18 @@ describe('a join input (x-text)', () => {
 
   it('is refused by x-computed, and checked for x-text', () => {
     const input: TextFieldInput = { path: 'items.*', aggregate: 'join' }
-    expect(computedInputsError({ text: input })).toBe(
+    expect(computedInputsError({ text: input } as unknown as Record<string, ComputedFieldInput>)).toBe(
       'Input "text" has the aggregate "join", which gives text; this field needs a number.',
     )
-    expect(resolveComputedInputs({ items }, '', { text: input })).toBeUndefined()
-    expect(computedInputsError({ text: input }, true)).toBeUndefined()
-    expect(computedInputsError({ text: { ...input, separator: 1 } as unknown as TextFieldInput }, true)).toBe(
+    expect(
+      resolveComputedInputs({ items }, '', { text: input } as unknown as Record<string, ComputedFieldInput>),
+    ).toBeUndefined()
+    expect(textInputsError({ text: input })).toBeUndefined()
+    expect(textInputsError({ text: { ...input, separator: 1 } as unknown as TextFieldInput })).toBe(
       'Input "text" has a separator 1 that isn\'t text.',
     )
-    expect(
-      computedInputsError({ text: { path: 'items.*', aggregate: 'concat' } as unknown as TextFieldInput }, true),
-    ).toBe('Input "text" has an unknown aggregate "concat"; use one of sum, min, max, average, count, join.')
+    expect(textInputsError({ text: { path: 'items.*', aggregate: 'concat' } as unknown as TextFieldInput })).toBe(
+      'Input "text" has an unknown aggregate "concat"; use one of sum, min, max, average, count, join.',
+    )
   })
 })

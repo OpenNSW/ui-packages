@@ -49,9 +49,8 @@ export type JoinAggregateInput = {
 // x-text's inputs: x-computed's, plus a join.
 export type TextFieldInput = ComputedFieldInput | JoinAggregateInput
 
-// What a join needs beyond the data: the form's schema, for option titles,
-// and the locale, for numbers. Passing it to resolveComputedInputs, or
-// `true` to computedInputsError, is what allows a join.
+// What x-text's inputs need beyond the data: the form's schema, for option
+// titles, and the locale, for numbers. See resolveTextInputs.
 export interface TextContext {
   rootSchema?: JsonSchema
   locale?: string
@@ -81,8 +80,17 @@ export function resolveComputedInput(
 
 // A misconfigured input, described for the field to show, or undefined when
 // every input is fine.
-// `text` allows a join, as x-text does.
-export function computedInputsError(inputs: Record<string, TextFieldInput>, text = false): string | undefined {
+export function computedInputsError(inputs: Record<string, ComputedFieldInput>): string | undefined {
+  return inputsError(inputs, false)
+}
+
+// The same for x-text's inputs, which may also be a join.
+export function textInputsError(inputs: Record<string, TextFieldInput>): string | undefined {
+  return inputsError(inputs, true)
+}
+
+// `text` allows a join.
+function inputsError(inputs: Record<string, TextFieldInput>, text: boolean): string | undefined {
   for (const [alias, input] of Object.entries(inputs)) {
     const problem = inputProblem(input, text)
     if (problem !== undefined) return `Input "${alias}" ${problem}`
@@ -299,14 +307,32 @@ const isFiniteNumber = (value: unknown): value is number => typeof value === 'nu
 // resolveAggregateInput instead, which reduces every array item's value to
 // one number (or, for an input inputProblem rejects, to missing), and takes
 // the same default-or-unavailable rule per item.
-//
-// `text` is x-text's: with it, a join input is joined into one text by
-// resolveJoinInput. Without it, as for x-computed, a join is refused.
 export function resolveComputedInputs(
   rootData: unknown,
   parentPath: string,
+  inputs: Record<string, ComputedFieldInput>,
+): Record<string, CellValue> | undefined {
+  return resolveInputs(rootData, parentPath, inputs, undefined)
+}
+
+// x-text's inputs: as resolveComputedInputs, except that a join input is
+// joined into one text (resolveJoinInput) and every value comes back as an
+// array card shows it (showPlain).
+export function resolveTextInputs(
+  rootData: unknown,
+  parentPath: string,
   inputs: Record<string, TextFieldInput>,
-  text?: TextContext,
+  context: TextContext,
+): Record<string, CellValue> | undefined {
+  return resolveInputs(rootData, parentPath, inputs, context)
+}
+
+// Both of the above. `text` is x-text's context; without it, a join is refused.
+function resolveInputs(
+  rootData: unknown,
+  parentPath: string,
+  inputs: Record<string, TextFieldInput>,
+  text: TextContext | undefined,
 ): Record<string, CellValue> | undefined {
   const values: Record<string, CellValue> = {}
 

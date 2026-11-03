@@ -80,7 +80,7 @@ function renderForm(xText: Record<string, unknown>, seed: Data, readonly = false
 
 const items = [{ name: 'Tea', treatment: 'FUM' }, { name: 'Pepper' }]
 
-describe('TemplateTextControl, read-only', () => {
+describe('DerivedTextControl, read-only', () => {
   it('shows and saves the text, and follows the items', async () => {
     const latest = renderForm(X_TEXT, { items })
     expect(await screen.findByText('Tea: Fumigation')).toBeTruthy()
@@ -111,7 +111,7 @@ describe('TemplateTextControl, read-only', () => {
   })
 })
 
-describe('TemplateTextControl, editable', () => {
+describe('DerivedTextControl, editable', () => {
   const editable = { ...X_TEXT, editable: true }
 
   it('fills an empty field', async () => {

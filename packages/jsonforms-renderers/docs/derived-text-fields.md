@@ -1,6 +1,6 @@
-# Text fields (`x-text`)
+# Derived text fields (`x-text`)
 
-`TemplateTextControl` writes a `type: 'string'` field from other values in the form. Its main use is text built from the items of an array, such as one line per item, offered as a prefill the user can then edit:
+`DerivedTextControl` writes a `type: 'string'` field from other values in the form. Its main use is text built from the items of an array, such as one line per item, offered as a prefill the user can then edit:
 
 ```json
 "additional_information": {

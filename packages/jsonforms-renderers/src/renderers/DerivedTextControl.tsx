@@ -5,14 +5,14 @@ import { useEffect, useMemo } from 'react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
-import { computedInputsError, resolveComputedInputs } from '../utils/computed'
+import { resolveTextInputs, textInputsError } from '../utils/computed'
 import type { TextFieldInput } from '../utils/computed'
 import { renderTemplate } from '../utils/template'
 
 interface XTextOptions {
   /**
    * alias -> path, resolved as x-computed's inputs are, plus a `join` aggregate that joins
-   * array items into one text. See docs/template-text-fields.md.
+   * array items into one text. See docs/derived-text-fields.md.
    */
   inputs?: Record<string, TextFieldInput>
   /** The text, with `{alias}` for each input (utils/template.ts). */
@@ -24,7 +24,7 @@ interface XTextOptions {
   editable?: boolean
 }
 
-type TemplateTextControlProps = ControlProps & {
+type DerivedTextControlProps = ControlProps & {
   schema: JsonSchema & { 'x-text'?: XTextOptions }
 }
 
@@ -32,7 +32,7 @@ type Outcome = { status: 'ok'; text: string } | { status: 'error'; error: string
 
 const EMPTY_INPUTS: Record<string, TextFieldInput> = {}
 
-const TemplateTextControl = ({
+const DerivedTextControl = ({
   data,
   handleChange,
   path,
@@ -43,7 +43,7 @@ const TemplateTextControl = ({
   errors,
   enabled,
   visible = true,
-}: TemplateTextControlProps) => {
+}: DerivedTextControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
   const showRequired = useIsRequired(path, required, visible)
 
@@ -61,10 +61,8 @@ const TemplateTextControl = ({
 
   // A schema mistake is shown on the field rather than left as a silent "Not yet available".
   const configError =
-    typeof template === 'string' ? computedInputsError(inputs, true) : "x-text has no template, or one that isn't text."
-  const values = configError
-    ? undefined
-    : resolveComputedInputs(ctx.core?.data, parentPath, inputs, { rootSchema, locale })
+    typeof template === 'string' ? textInputsError(inputs) : "x-text has no template, or one that isn't text."
+  const values = configError ? undefined : resolveTextInputs(ctx.core?.data, parentPath, inputs, { rootSchema, locale })
   // A stable key: values is a fresh object on every render.
   const valuesKey = values === undefined ? null : JSON.stringify(values)
 
@@ -187,5 +185,5 @@ const TemplateTextControl = ({
   )
 }
 
-const JsonFormsTemplateTextControl = withJsonFormsControlProps(TemplateTextControl)
-export default JsonFormsTemplateTextControl
+const JsonFormsDerivedTextControl = withJsonFormsControlProps(DerivedTextControl)
+export default JsonFormsDerivedTextControl

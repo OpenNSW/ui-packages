@@ -3,7 +3,7 @@ import type { JsonSchema } from '@jsonforms/core'
 
 // Rank 5 beats TextControlTester's rank 1 for a `type: 'string'` schema
 // carrying `x-text`, as ComputedControlTester does for `x-computed`.
-export const TemplateTextControlTester = rankWith(
+export const DerivedTextControlTester = rankWith(
   5,
   schemaMatches((schema: JsonSchema) => {
     // typeof null === 'object': "x-text": null falls through to the text control.
