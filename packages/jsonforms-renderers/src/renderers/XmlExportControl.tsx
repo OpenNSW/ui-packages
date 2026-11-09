@@ -25,7 +25,7 @@ interface XXmlExportOptions {
   /**
    * Downloaded file's name, as a template: `{name}` is a top-level value of
    * the record `writeTo` reads (so under `writeBase: 'parent'`, this item's
-   * own), and `{today(YYYYMMDD)}` today's date. Characters a file name can't
+   * own), and `{today(yyyyMMdd)}` today's date. Characters a file name can't
    * hold become `_`, and an empty result falls back. Default 'export.xml'.
    */
   fileName?: string

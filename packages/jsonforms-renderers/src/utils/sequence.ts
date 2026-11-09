@@ -22,7 +22,7 @@ import type { TemplateFunction, TemplatePart } from './template'
  * which gives ORD-77-2026-05-04-01, -02, -03 as rows are added.
  *
  * Substitution is utils/template.ts's, shared with `x-computed`'s `format`,
- * so its `{name(arg)}` calls work here too — `{today(YYYYMMDD)}`. This module
+ * so its `{name(arg)}` calls work here too — `{today(yyyyMMdd)}`. This module
  * adds where a placeholder's value comes from, and `{seq(padding)}`: the row's
  * number, backed by a count that outlives the row it numbered.
  *
@@ -93,7 +93,7 @@ const isSeq = (part: TemplatePart | undefined): boolean =>
 
 /**
  * A number can only be read back out of a row when literal text separates it
- * from its neighbours: in `{today(YYYYMMDD)}{seq()}` the digits run together.
+ * from its neighbours: in `{today(yyyyMMdd)}{seq()}` the digits run together.
  */
 const isReadable = (parts: TemplatePart[]): boolean =>
   parts.every((part, i) => !isSeq(part) || (typeof parts[i - 1] !== 'object' && typeof parts[i + 1] !== 'object'))
