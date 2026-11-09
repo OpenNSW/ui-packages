@@ -54,9 +54,9 @@ export interface WriteToEntry {
   /**
    * The date's format in the XML, `as: 'date'` only — e.g. 'M/d/yy', in the
    * Unicode date letters the backend's date formats use, read and written by
-   * date-fns. On import a date the document doesn't write this way fails the
-   * upload (the form gets yyyy-MM-dd); on export, the format the form's date
-   * is written in. So one format round-trips.
+   * date-fns. On import the format the document's date is read in (the form
+   * gets yyyy-MM-dd); on export, the format the form's date is written in. So
+   * one format round-trips.
    */
   format?: string
   /**
@@ -163,16 +163,10 @@ function coerce(value: unknown, entry: WriteToEntry, direction: WriteDirection):
         const day = isValid(iso) ? iso : new Date(text)
         return isValid(day) ? found(formatDate(day, FORM_DATE)) : ABSENT
       }
-      // A date the document writes some other way is a mismatch between the
-      // file and the config, so it fails the upload rather than leaving the
-      // field empty or falling back to `default`.
+      // A date the document writes some other way is absent, like any value
+      // that can't be coerced, so the rest of the document still fills.
       const day = parseDate(String(value), entry.format, new Date())
-      if (!isValid(day)) {
-        throw new Error(
-          `writeTo "${entry.to}": ${JSON.stringify(String(value))} is not a date written as ${JSON.stringify(entry.format)}.`,
-        )
-      }
-      return found(formatDate(day, FORM_DATE))
+      return isValid(day) ? found(formatDate(day, FORM_DATE)) : ABSENT
     }
   }
 }

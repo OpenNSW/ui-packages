@@ -129,10 +129,8 @@ describe('resolveWrites', () => {
       ])
     })
 
-    it('fails on a date that does not match the declared format, never a guess or an empty field', async () => {
-      await expect(run([{ from: 'order.customer.code', to: 'on', as: 'date', format: 'M/d/yy' }])).rejects.toThrow(
-        'writeTo "on": "CUST-0042" is not a date written as "M/d/yy".',
-      )
+    it('treats a date that does not match the declared format as absent, never a guess', async () => {
+      expect(await run([{ from: 'order.customer.code', to: 'on', as: 'date', format: 'M/d/yy' }])).toEqual([])
     })
 
     it('reads a boolean from the spellings a document actually uses', async () => {
@@ -432,28 +430,28 @@ describe('resolveWrites on import: dates', () => {
     ['31 April', 'yyyy-MM-dd', '2026-04-31'],
     ['29 February outside a leap year', 'yyyy-MM-dd', '2025-02-29'],
     ['trailing text', 'yyyy-MM-dd', '2026-07-03 extra'],
-  ])('fails on %s, naming the value and the format', async (_name, format, text) => {
-    await expect(read(text, format)).rejects.toThrow(`"${text}" is not a date written as "${format}"`)
+  ])('treats %s as absent', async (_name, format, text) => {
+    expect(await read(text, format)).toEqual([])
   })
 
-  it('fails rather than falling back to default on a mismatched date', async () => {
-    await expect(read('23/3/26', 'M/d/yy', { default: '2000-01-01' })).rejects.toThrow(/is not a date written as/)
+  it('falls back to default on a mismatched date', async () => {
+    expect(await read('23/3/26', 'M/d/yy', { default: null })).toEqual([{ to: 'on', value: null }])
   })
 
-  it('still treats an empty element as absent, so default fills it', async () => {
+  it('treats an empty element as absent, so default fills it', async () => {
     expect(await read('', 'M/d/yy', { default: null })).toEqual([{ to: 'on', value: null }])
     expect(await read('', 'M/d/yy')).toEqual([])
   })
 
-  it('fails the whole import when a date in one repetition does not match', async () => {
+  it('leaves out a mismatched date in one repetition and fills the others', async () => {
     const doc = { rows: [{ d: '7/3/26' }, { d: '23/4/26' }] }
-    await expect(
-      resolveWrites(
+    expect(
+      await resolveWrites(
         doc,
         [{ from: 'rows', to: 'rows', writeTo: [{ from: 'd', to: 'on', as: 'date', format: 'M/d/yy' }] }],
         'import',
       ),
-    ).rejects.toThrow('writeTo "on": "23/4/26" is not a date written as "M/d/yy".')
+    ).toEqual([{ to: 'rows', value: [{ on: '2026-07-03' }, {}] }])
   })
 
   it('writes a Date from a formula as its local day', async () => {
