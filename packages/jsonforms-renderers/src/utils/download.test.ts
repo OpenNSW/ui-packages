@@ -208,6 +208,6 @@ describe('renderFileName', () => {
   })
 
   it('calls template functions such as today()', () => {
-    expect(renderFileName('export-{today(YYYY)}.xml', {}, 'export.xml')).toMatch(/^export-\d{4}\.xml$/)
+    expect(renderFileName('export-{today(yyyy)}.xml', {}, 'export.xml')).toMatch(/^export-\d{4}\.xml$/)
   })
 })

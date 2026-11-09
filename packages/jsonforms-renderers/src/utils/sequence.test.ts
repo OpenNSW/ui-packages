@@ -126,7 +126,7 @@ describe('stampRowTemplates', () => {
     })
 
     // With nothing between them, a neighbour's digits run into the number:
-    // `{today(YYYYMMDD)}{seq()}` would read 2026050401 back as the number.
+    // `{today(yyyyMMdd)}{seq()}` would read 2026050401 back as the number.
     it('does not number a template whose {seq(…)} touches another placeholder', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       expect(stampOne('{orderNo}{seq(2)}')).toEqual({})
@@ -180,7 +180,7 @@ describe('stampRowTemplates', () => {
 
     // The engine's function registry, reached through a stamped row.
     it('passes a {name(arg)} call through to the shared engine', () => {
-      const { ref } = stampOne('{today(YYYY)}-{seq(2)}', {}) as { ref: string }
+      const { ref } = stampOne('{today(yyyy)}-{seq(2)}', {}) as { ref: string }
       expect(ref).toMatch(/^\d{4}-01$/)
     })
 

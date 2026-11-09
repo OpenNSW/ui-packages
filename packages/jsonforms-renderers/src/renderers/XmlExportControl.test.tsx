@@ -356,7 +356,7 @@ describe('XmlExportControl dates and numbers', () => {
         'x-xml-export': {
           rootElement: 'Invoice',
           writeTo: [
-            { from: 'issued_on', to: 'IssueDate', as: 'date', format: 'M/D/YY' },
+            { from: 'issued_on', to: 'IssueDate', as: 'date', format: 'M/d/yy' },
             { from: 'total', to: 'Total', as: 'number', decimals: 1 },
             { from: 'lines', to: 'Lines.Line', writeTo: [{ from: 'qty', to: 'Qty', as: 'number', decimals: 2 }] },
           ],

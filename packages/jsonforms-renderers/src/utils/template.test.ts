@@ -66,13 +66,20 @@ describe('renderTemplate function calls', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
-  it('formats today with dayjs tokens, YYYY-MM-DD by default', () => {
+  it('formats today with the Unicode date letters, yyyy-MM-dd by default', () => {
     expect(renderTemplate('{today()}', {})).toBe('2026-05-04')
-    expect(renderTemplate('{today(DD/MM/YYYY)}', {})).toBe('04/05/2026')
-    expect(renderTemplate('{today(YYYYMMDD)}', {})).toBe('20260504')
-    expect(renderTemplate('{today(MMM D, YYYY)}', {})).toBe('May 4, 2026')
+    expect(renderTemplate('{today(dd/MM/yyyy)}', {})).toBe('04/05/2026')
+    expect(renderTemplate('{today(yyyyMMdd)}', {})).toBe('20260504')
+    expect(renderTemplate('{today(MMM d, yyyy)}', {})).toBe('May 4, 2026')
+  })
+
+  it('leaves today as written when its format uses letters date-fns refuses', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(renderTemplate('cusdec-{today(YYYYMMDD)}.xml', {})).toBe('cusdec-{today(YYYYMMDD)}.xml')
+    expect(renderTemplate('{today(M/D/yy)}', {})).toBe('{today(M/D/yy)}')
   })
 
   it('passes the argument to a caller function', () => {
@@ -109,10 +116,10 @@ describe('renderTemplate function calls', () => {
 
 describe('parseTemplate', () => {
   it('splits literal text, values and calls', () => {
-    expect(parseTemplate('{orderNo}-{today(YYYYMMDD)}-{seq(3)}')).toEqual([
+    expect(parseTemplate('{orderNo}-{today(yyyyMMdd)}-{seq(3)}')).toEqual([
       { name: 'orderNo' },
       '-',
-      { name: 'today', arg: 'YYYYMMDD' },
+      { name: 'today', arg: 'yyyyMMdd' },
       '-',
       { name: 'seq', arg: '3' },
     ])
