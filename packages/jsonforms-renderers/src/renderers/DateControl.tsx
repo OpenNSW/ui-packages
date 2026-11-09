@@ -10,7 +10,7 @@ import {
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { useEffect, type ReactNode } from 'react'
-import { format } from 'date-fns'
+import { format, isValid } from 'date-fns'
 
 import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
@@ -21,8 +21,14 @@ import { timeInputValue, toRfc3339Time } from '../utils/time'
 // RFC 3339 (e.g. 2026-06-05T12:30:00+05:30) with seconds and the local offset,
 // which ajv's strict "date-time" format check requires. xxx writes +00:00, not
 // Z, at UTC. A date and time with no offset is read as local time.
-const toISODateTime = (dateStr: string, timeStr: string) =>
-  format(new Date(`${dateStr}T${timeStr}`), "yyyy-MM-dd'T'HH:mm:ssxxx")
+//
+// A date input accepts years past 9999, which Date can't read. That text is
+// written as it is, so the "date-time" check rejects it and the field shows why.
+const toISODateTime = (dateStr: string, timeStr: string) => {
+  const text = `${dateStr}T${timeStr}`
+  const date = new Date(text)
+  return isValid(date) ? format(date, "yyyy-MM-dd'T'HH:mm:ssxxx") : text
+}
 
 type ShellProps = Pick<ControlProps, 'path' | 'label' | 'required' | 'errors'> & {
   description?: string

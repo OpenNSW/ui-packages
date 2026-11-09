@@ -145,6 +145,15 @@ describe('DateControl date-time', () => {
     expect(new Date(written).getTime()).toBe(new Date(2026, 9, 9, 15, 45).getTime())
   })
 
+  it('writes a year past 9999 as typed, so the field shows it as invalid', async () => {
+    const { writes } = renderForm(appointmentSchema, appointmentControl, { appointment: '2026-10-09T14:30:00' })
+    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement
+    fireEvent.change(dateInput, { target: { value: '10000-01-01' } })
+
+    await waitFor(() => expect(writes[writes.length - 1]?.appointment).toBe('10000-01-01T14:30'))
+    await waitFor(() => expect(screen.getByText(/date-time/)).toBeTruthy())
+  })
+
   it('shows a seconds spinner on date-time when showSeconds is true', () => {
     renderForm(appointmentSchema, appointmentSecondsControl, { appointment: '2026-10-09T14:30:45' })
     const timeInput = document.querySelector('input[type="time"]')
