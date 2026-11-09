@@ -1098,7 +1098,7 @@ export const fixtures: Fixture[] = [
               { id: 'amount', label: 'Amount' },
             ],
             sheetName: 'Sales',
-            fileName: 'sales-{today(YYYY-MM-DD)}.xlsx',
+            fileName: 'sales-{today(yyyy-MM-dd)}.xlsx',
           },
         },
       },
@@ -1174,7 +1174,7 @@ export const fixtures: Fixture[] = [
               },
               { from: 'order.customer.account_number', to: 'account_ref', as: 'string' },
               { from: 'order.header.priority', to: 'priority', map: { '1': 'high', '0': 'normal' }, default: 'normal' },
-              { from: 'order.header.order_date', to: 'orders.0.ordered_on', as: 'date', format: 'M/D/YY' },
+              { from: 'order.header.order_date', to: 'orders.0.ordered_on', as: 'date', format: 'M/d/yy' },
               { from: 'order.header.discount', to: 'orders.0.discount', as: 'number', default: 0 },
               { from: 'order.line', to: 'orders.0.lines.sheet' },
               {
@@ -1241,7 +1241,7 @@ export const fixtures: Fixture[] = [
                   persistDocument: false,
                   writeBase: 'parent',
                   writeTo: [
-                    { from: 'order.header.order_date', to: 'ordered_on', as: 'date', format: 'M/D/YY' },
+                    { from: 'order.header.order_date', to: 'ordered_on', as: 'date', format: 'M/d/yy' },
                     { from: 'order.header.discount', to: 'discount', as: 'number', default: 0 },
                     { from: 'order.line', to: 'lines.sheet' },
                   ],
@@ -1370,14 +1370,14 @@ export const fixtures: Fixture[] = [
           type: 'object',
           title: 'Invoice Export',
           description:
-            'x-xml-export.writeTo assembles a document out of elsewhere in the form — the mirror image of the XML → writeTo fixture\'s importer. Edit the fields above, then click Download XML: the file starts with a standalone="no" declaration, then <Invoice id="(Invoice No.)"><IssueDate>(Issued On as M/D/YY)</IssueDate><Party><Name>...</Name></Party><Amount>(Order Total with 2 decimals)</Amount><Lines><Line sku="...">...</Line></Lines></Invoice>, built entirely from writeTo\'s from/to pairs, and saved as invoice_(Invoice No.).xml — try an Invoice No. with a / in it. invoice_export itself is never read from and never appears in the output — it exists only to place the button and carry the x-xml-export config, exactly the role x-xml.writeTo leaves an importer\'s own scoped field playing when persistDocument: false. Line Items shows nested writeTo on the export side: each item\'s sku becomes an attribute of its <Line> (a last @_ segment), and description/qty/unit_price are renamed to Description/Quantity/UnitPrice per repetition, the same reshaping x-xml\'s own writeTo does for a repeating XML element on import — both controls resolve entries through the same shared function.',
+            'x-xml-export.writeTo assembles a document out of elsewhere in the form — the mirror image of the XML → writeTo fixture\'s importer. Edit the fields above, then click Download XML: the file starts with a standalone="no" declaration, then <Invoice id="(Invoice No.)"><IssueDate>(Issued On as M/d/yy)</IssueDate><Party><Name>...</Name></Party><Amount>(Order Total with 2 decimals)</Amount><Lines><Line sku="...">...</Line></Lines></Invoice>, built entirely from writeTo\'s from/to pairs, and saved as invoice_(Invoice No.).xml — try an Invoice No. with a / in it. invoice_export itself is never read from and never appears in the output — it exists only to place the button and carry the x-xml-export config, exactly the role x-xml.writeTo leaves an importer\'s own scoped field playing when persistDocument: false. Line Items shows nested writeTo on the export side: each item\'s sku becomes an attribute of its <Line> (a last @_ segment), and description/qty/unit_price are renamed to Description/Quantity/UnitPrice per repetition, the same reshaping x-xml\'s own writeTo does for a repeating XML element on import — both controls resolve entries through the same shared function.',
           'x-xml-export': {
             rootElement: 'Invoice',
             declaration: { standalone: 'no' },
             fileName: 'invoice_{invoice_no}.xml',
             writeTo: [
               { from: 'invoice_no', to: '@_id' },
-              { from: 'issued_on', to: 'IssueDate', as: 'date', format: 'M/D/YY' },
+              { from: 'issued_on', to: 'IssueDate', as: 'date', format: 'M/d/yy' },
               { from: 'customer_name', to: 'Party.Name' },
               { from: 'order_total', to: 'Amount', as: 'number', decimals: 2 },
               {
@@ -1560,7 +1560,7 @@ export const fixtures: Fixture[] = [
                     readOnly: true,
                     // Not numbered, but still stamped when the row is added,
                     // so it keeps that day rather than following the clock.
-                    'x-template': { template: '{today(YYYYMMDD)}' },
+                    'x-template': { template: '{today(yyyyMMdd)}' },
                   },
                   description: { type: 'string' },
                   qty: { type: 'integer', minimum: 1 },
