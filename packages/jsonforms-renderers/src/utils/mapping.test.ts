@@ -461,9 +461,18 @@ describe('resolveWrites on import: dates', () => {
     expect(await read(new Date(2026, 6, 3, 0, 30))).toEqual([{ to: 'on', value: '2026-07-03' }])
   })
 
-  it('leaves a date with no format to the loose parse, absent when it fails', async () => {
-    expect(await read('2026-07-03')).toEqual([{ to: 'on', value: '2026-07-03' }])
-    expect(await read('not a date')).toEqual([])
+  it.each([
+    ['an ISO date', '2026-07-03'],
+    ['a compact ISO date the parser turned into a number', 20260703],
+    ['an ISO date and time with no offset', '2026-07-03 10:00'],
+    ['a slashed date the browser reads', '7/3/26'],
+    ['a written-out date the browser reads', 'July 3, 2026'],
+  ])('reads %s loosely when there is no format', async (_name, value) => {
+    expect(await read(value)).toEqual([{ to: 'on', value: '2026-07-03' }])
+  })
+
+  it.each([['not a date'], ['2026-13-01']])('treats %s as absent when there is no format', async (value) => {
+    expect(await read(value)).toEqual([])
   })
 })
 

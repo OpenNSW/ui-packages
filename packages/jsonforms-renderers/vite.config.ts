@@ -39,7 +39,6 @@ export default defineConfig(({ command }) => ({
         '@jsonforms/react',
         '@radix-ui/themes',
         '@radix-ui/react-icons',
-        'dayjs',
         'date-fns',
         '@e965/xlsx',
         'fast-formula-parser',

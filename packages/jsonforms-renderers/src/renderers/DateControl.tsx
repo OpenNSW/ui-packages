@@ -10,7 +10,7 @@ import {
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { useEffect, type ReactNode } from 'react'
-import dayjs from 'dayjs'
+import { format } from 'date-fns'
 
 import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
@@ -18,9 +18,11 @@ import { useReadOnlyMark } from '../contexts/formReview'
 import { ReadOnlyLock } from './ReadOnlyLock'
 import { timeInputValue, toRfc3339Time } from '../utils/time'
 
-// dayjs().format() defaults to RFC 3339 (e.g. 2026-06-05T12:30:00+05:30) with
-// seconds + local offset, which ajv's strict "date-time" format check requires.
-const toISODateTime = (dateStr: string, timeStr: string) => dayjs(`${dateStr}T${timeStr}`).format()
+// RFC 3339 (e.g. 2026-06-05T12:30:00+05:30) with seconds and the local offset,
+// which ajv's strict "date-time" format check requires. xxx writes +00:00, not
+// Z, at UTC. A date and time with no offset is read as local time.
+const toISODateTime = (dateStr: string, timeStr: string) =>
+  format(new Date(`${dateStr}T${timeStr}`), "yyyy-MM-dd'T'HH:mm:ssxxx")
 
 type ShellProps = Pick<ControlProps, 'path' | 'label' | 'required' | 'errors'> & {
   description?: string

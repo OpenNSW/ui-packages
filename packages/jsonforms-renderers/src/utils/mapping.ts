@@ -1,5 +1,5 @@
 import { Resolve } from '@jsonforms/core'
-import { format as formatDate, isValid, parse as parseDate } from 'date-fns'
+import { format as formatDate, isValid, parse as parseDate, parseISO } from 'date-fns'
 import { formatComputedValue } from './computed'
 import { evaluateFormulaWithVariables, describeFormulaError, type CellValue } from './spreadsheet'
 
@@ -124,7 +124,7 @@ const FALSE = new Set(['false', '0', 'no', 'n'])
 const ISO_DATE = /^(\d{4}-\d{2}-\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/
 const FORM_DATE = 'yyyy-MM-dd'
 
-async function coerce(value: unknown, entry: WriteToEntry, direction: WriteDirection): Promise<Resolved> {
+function coerce(value: unknown, entry: WriteToEntry, direction: WriteDirection): Resolved {
   switch (entry.as) {
     case undefined:
       return found(value)
@@ -155,9 +155,13 @@ async function coerce(value: unknown, entry: WriteToEntry, direction: WriteDirec
       }
       if (value instanceof Date) return found(formatDate(value, FORM_DATE))
       if (entry.format === undefined) {
-        const { default: dayjs } = await import('dayjs')
-        const parsed = dayjs(String(value))
-        return parsed.isValid() ? found(parsed.format('YYYY-MM-DD')) : ABSENT
+        // Loosely: an ISO date or date-time first, a local date unless it
+        // carries an offset, then whatever the browser's Date reads, such as
+        // 7/3/26 or July 3, 2026.
+        const text = String(value)
+        const iso = parseISO(text)
+        const day = isValid(iso) ? iso : new Date(text)
+        return isValid(day) ? found(formatDate(day, FORM_DATE)) : ABSENT
       }
       // A date the document writes some other way is a mismatch between the
       // file and the config, so it fails the upload rather than leaving the
@@ -334,7 +338,7 @@ export async function resolveWrites(
       const key = result.value instanceof Date ? result.value.toISOString() : String(result.value)
       if (Object.prototype.hasOwnProperty.call(entry.map, key)) result = found(entry.map[key])
     }
-    if (result.found && !rows) result = await coerce(result.value, entry, direction)
+    if (result.found && !rows) result = coerce(result.value, entry, direction)
     if (!result.found) {
       if (entry.default === undefined) continue
       write(entry.default)
