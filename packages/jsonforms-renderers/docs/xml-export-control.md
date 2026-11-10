@@ -192,7 +192,7 @@ Given `issued_on: "2026-07-23"` and `quantity: 8522`, this writes `<IssueDate>7/
 - **A form date is read as ISO**: `yyyy-MM-dd` from a date field, or a date-time with an offset. Only the date part is used, as written, so no time zone can move the day. A `Date` from a formula is its local day, the way `DATE()` and `TODAY()` build one. Anything else, such as `7/23/26` already in the form, is absent rather than guessed.
 - **`decimals` writes fixed decimal places**, using the same rounding as `x-computed`'s `decimals`. It needs `as: "number"` and a whole number from 0 to 100; anything else is a config error. On the importer it's an error too, since a string would land in a number field.
 - **A `default` is written exactly as given.** With `decimals: 1`, `default: 0` writes `0`; write `"default": "0.0"` for a padded one.
-- `format` uses the Unicode date letters date-fns writes (`yyyy`, `MM`, `d`, …), and time letters write midnight. A `format` date-fns refuses, such as `M/D/YY` in dayjs's letters, fails the download when the form has a date to write there, naming the letter to use instead. Rounding follows `toFixed`: `1.005` with `decimals: 2` writes `1.00`, and `-0.04` with `decimals: 1` writes `-0.0`.
+- `format` uses the Unicode date letters date-fns writes (`yyyy`, `MM`, `d`, …), and time letters write midnight. A `format` date-fns refuses, such as `M/D/YY` in dayjs's letters, fails the download when the form has a date to write there, naming the entry and the letter to use instead. Rounding follows `toFixed`: `1.005` with `decimals: 2` writes `1.00`, and `-0.04` with `decimals: 1` writes `-0.0`.
 
 ## File name
 

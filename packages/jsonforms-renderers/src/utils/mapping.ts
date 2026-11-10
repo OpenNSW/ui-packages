@@ -171,6 +171,23 @@ function coerce(value: unknown, entry: WriteToEntry, direction: WriteDirection):
   }
 }
 
+// date-fns throws a RangeError on a `format` it refuses, worded for formatting
+// and naming leftover text as the input, e.g. "Use `d` instead of `D` (in
+// `M/D/YY`) for formatting days of the month to the input `23/26`; see: …".
+// The part before " (in " names the letter to use, and the entry is named the
+// way every other mapping error is.
+const REFUSED_FORMAT = /^(Use `|Format string contains)/
+
+function coerceNamingEntry(value: unknown, entry: WriteToEntry, direction: WriteDirection): Resolved {
+  try {
+    return coerce(value, entry, direction)
+  } catch (err) {
+    if (!(err instanceof RangeError) || !REFUSED_FORMAT.test(err.message)) throw err
+    const reason = err.message.split(' (in ')[0].split('; see: ')[0]
+    throw new Error(`writeTo "${entry.to}": date-fns can't use the format ${JSON.stringify(entry.format)}. ${reason}.`)
+  }
+}
+
 async function resolveOne(document: unknown, entry: WriteToEntry): Promise<Resolved> {
   if (entry.formula !== undefined) {
     const variables: Record<string, CellValue> = {}
@@ -332,7 +349,7 @@ export async function resolveWrites(
       const key = result.value instanceof Date ? result.value.toISOString() : String(result.value)
       if (Object.prototype.hasOwnProperty.call(entry.map, key)) result = found(entry.map[key])
     }
-    if (result.found && !rows) result = coerce(result.value, entry, direction)
+    if (result.found && !rows) result = coerceNamingEntry(result.value, entry, direction)
     if (!result.found) {
       if (entry.default === undefined) continue
       write(entry.default)

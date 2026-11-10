@@ -475,17 +475,23 @@ describe('resolveWrites on import: dates', () => {
 })
 
 describe('resolveWrites: a format in dayjs letters', () => {
-  it('fails the import when there is a date to read, naming the letter to use', async () => {
+  it('fails the import when there is a date to read, naming the entry and the letter to use', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     await expect(run([{ from: 'order.header.order_date', to: 'on', as: 'date', format: 'M/D/YY' }])).rejects.toThrow(
-      /Use `d` instead of `D`/,
+      'writeTo "on": date-fns can\'t use the format "M/D/YY". Use `d` instead of `D`.',
     )
   })
 
-  it('fails the export, naming the letter to use', async () => {
+  it('fails the export, naming the entry and the letter to use', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     await expect(exportRun([{ from: 'issued_on', to: 'On', as: 'date', format: 'YYYYMMDD' }])).rejects.toThrow(
-      /Use `yyyy` instead of `YYYY`/,
+      'writeTo "On": date-fns can\'t use the format "YYYYMMDD". Use `yyyy` instead of `YYYY`.',
+    )
+  })
+
+  it('names the entry for a letter date-fns does not know', async () => {
+    await expect(exportRun([{ from: 'issued_on', to: 'On', as: 'date', format: 'yyyy-MM-dd f' }])).rejects.toThrow(
+      'writeTo "On": date-fns can\'t use the format "yyyy-MM-dd f". Format string contains an unescaped latin alphabet character `f`.',
     )
   })
 })
