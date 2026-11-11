@@ -25,7 +25,7 @@ const schema = {
             type: 'object',
             properties: {
               lineRef: { type: 'string', readOnly: true, 'x-template': { template: '{orderNo}-{seq(2)}' } },
-              receivedOn: { type: 'string', readOnly: true, 'x-template': { template: '{today(YYYYMMDD)}' } },
+              receivedOn: { type: 'string', readOnly: true, 'x-template': { template: '{today(yyyyMMdd)}' } },
             },
           },
         },

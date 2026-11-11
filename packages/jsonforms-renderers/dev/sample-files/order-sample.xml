@@ -7,7 +7,7 @@
 
     <account_number>   a number so long it must be carried as a string
     <office|serial|number|year>  one identifier split across four elements
-    <order_date>       M/D/YY, which is not what a `format: date` field wants
+    <order_date>       M/d/yy, which is not what a `format: date` field wants
     <priority>         an enum encoded as a number
     <discount>         "empty" spelled as <null/>, which parses to an OBJECT
     <line>             the repeated element that fills a table

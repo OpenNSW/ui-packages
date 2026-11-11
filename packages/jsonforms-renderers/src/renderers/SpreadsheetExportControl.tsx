@@ -32,7 +32,7 @@ interface XSpreadsheetExportOptions {
   fileType?: SpreadsheetExportFileType
   /**
    * Downloaded file's name, as a template: `{name}` is a top-level value of
-   * the object this field sits in, and `{today(YYYYMMDD)}` today's date — the
+   * the object this field sits in, and `{today(yyyyMMdd)}` today's date — the
    * same rules x-xml-export's fileName follows. Characters a file name can't
    * hold become `_`. Defaults to `export.${fileType}`, so the two never
    * mismatch; an empty result falls back to that too.

@@ -63,7 +63,7 @@ Note that `invoiceExport` itself never appears in the output, and is never read 
 | `from`               | Source path in the form's own data. Mutually exclusive with `inputs`/`formula`.                                                                                                          |
 | `inputs` + `formula` | Named sources and an expression over them, for a value gathered from several fields.                                                                                                     |
 | `as`                 | `string`, `number`, `boolean` or `date`.                                                                                                                                                 |
-| `format`             | The date's format in the XML, `as: "date"` only — the format the form's date is written in here, e.g. `M/D/YY`. See [Dates and numbers](#dates-and-numbers).                             |
+| `format`             | The date's format in the XML, `as: "date"` only — the format the form's date is written in here, e.g. `M/d/yy`. See [Dates and numbers](#dates-and-numbers).                             |
 | `decimals`           | Fixed decimal places, `as: "number"` only — `1` writes `23` as `23.0`. Export only.                                                                                                      |
 | `map`                | Substitutes matching values. An unmapped value passes through unchanged.                                                                                                                 |
 | `default`            | Used when the source is absent, written exactly as given — never formatted.                                                                                                              |
@@ -181,18 +181,18 @@ A last `to` segment of `@_name` writes an attribute of the element before it, an
 
 ```jsonc
 "writeTo": [
-  { "from": "issued_on", "to": "IssueDate", "as": "date", "format": "M/D/YY" },
+  { "from": "issued_on", "to": "IssueDate", "as": "date", "format": "M/d/yy" },
   { "from": "quantity", "to": "Quantity", "as": "number", "decimals": 1 }
 ]
 ```
 
 Given `issued_on: "2026-07-23"` and `quantity: 8522`, this writes `<IssueDate>7/23/26</IssueDate>` and `<Quantity>8522.0</Quantity>`.
 
-- **`format` is the date's format in the XML**, the same meaning it has on the importer. There it parses the document's date into the form's `YYYY-MM-DD`; here it writes the form's date back out, so one `format` round-trips. Without `format`, dates are written as `YYYY-MM-DD`.
-- **A form date is read as ISO**: `YYYY-MM-DD` from a date field, or a date-time with an offset. Only the date part is used, as written, so no time zone can move the day. A `Date` from a formula is its local day, the way `DATE()` and `TODAY()` build one. Anything else, such as `7/23/26` already in the form, is absent rather than guessed.
+- **`format` is the date's format in the XML**, the same meaning it has on the importer. There it parses the document's date into the form's `yyyy-MM-dd`; here it writes the form's date back out, so one `format` round-trips. Without `format`, dates are written as `yyyy-MM-dd`.
+- **A form date is read as ISO**: `yyyy-MM-dd` from a date field, or a date-time with an offset. Only the date part is used, as written, so no time zone can move the day. A `Date` from a formula is its local day, the way `DATE()` and `TODAY()` build one. Anything else, such as `7/23/26` already in the form, is absent rather than guessed.
 - **`decimals` writes fixed decimal places**, using the same rounding as `x-computed`'s `decimals`. It needs `as: "number"` and a whole number from 0 to 100; anything else is a config error. On the importer it's an error too, since a string would land in a number field.
 - **A `default` is written exactly as given.** With `decimals: 1`, `default: 0` writes `0`; write `"default": "0.0"` for a padded one.
-- `format` uses dayjs tokens without the advancedFormat plugin, so `Do` isn't available, and time tokens write midnight. Rounding follows `toFixed`: `1.005` with `decimals: 2` writes `1.00`, and `-0.04` with `decimals: 1` writes `-0.0`.
+- `format` uses the Unicode date letters date-fns writes (`yyyy`, `MM`, `d`, …), and time letters write midnight. A `format` date-fns refuses, such as `M/D/YY` in dayjs's letters, fails the download when the form has a date to write there, naming the entry and the letter to use instead. Literal text goes in single quotes: `yyyy-MM-dd'T'HH:mm`, not dayjs's `[T]`. A few dayjs letters mean something else here and write the wrong text without an error: `T` is a timestamp, `X` the time zone offset, and `ddd` the day of the month in three digits. Rounding follows `toFixed`: `1.005` with `decimals: 2` writes `1.00`, and `-0.04` with `decimals: 1` writes `-0.0`.
 
 ## File name
 
@@ -200,7 +200,7 @@ Given `issued_on: "2026-07-23"` and `quantity: 8522`, this writes `<IssueDate>7/
 
 ```jsonc
 "fileName": "blend_{blend_no}.xml"          // blend_121_2026.xml for blend_no "121/2026"
-"fileName": "orders-{today(YYYYMMDD)}.xml"  // today's date
+"fileName": "orders-{today(yyyyMMdd)}.xml"  // today's date
 ```
 
 - `{name}` reads a top-level value of the record `writeTo` reads: the form root, or with `writeBase: "parent"` the control's own item, so each item's file is named after that item. Nested paths aren't supported inside a placeholder.

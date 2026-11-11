@@ -1,4 +1,4 @@
-import dayjs from 'dayjs'
+import { format as formatDate } from 'date-fns'
 
 // {name} is a value; {name(arg)} calls a function with the raw text between the parentheses.
 const PLACEHOLDER = /\{([A-Za-z0-9_]+)(?:\(([^(){}]*)\))?\}/g
@@ -10,7 +10,7 @@ export type TemplatePart = string | { name: string; arg?: string }
 type Printable = string | number | boolean | bigint
 
 const BUILTIN_FUNCTIONS: Readonly<Record<string, TemplateFunction>> = {
-  today: (format) => dayjs().format(format || 'YYYY-MM-DD'),
+  today: (format) => formatDate(new Date(), format || 'yyyy-MM-dd'),
 }
 
 const isPrintable = (value: unknown): value is Printable =>

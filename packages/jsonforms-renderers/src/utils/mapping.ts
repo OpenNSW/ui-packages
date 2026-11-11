@@ -1,4 +1,5 @@
 import { Resolve } from '@jsonforms/core'
+import { format as formatDate, isValid, parse as parseDate, parseISO } from 'date-fns'
 import { formatComputedValue } from './computed'
 import { evaluateFormulaWithVariables, describeFormulaError, type CellValue } from './spreadsheet'
 
@@ -51,9 +52,11 @@ export interface WriteToEntry {
   /** Coercion applied after `map`. */
   as?: 'string' | 'number' | 'boolean' | 'date'
   /**
-   * The date's format in the XML, `as: 'date'` only — e.g. 'M/D/YY'. On import
-   * it's the strict parse format (the form gets YYYY-MM-DD); on export, the
-   * format the form's date is written in. So one format round-trips.
+   * The date's format in the XML, `as: 'date'` only — e.g. 'M/d/yy', in the
+   * Unicode date letters the backend's date formats use, read and written by
+   * date-fns. On import the format the document's date is read in (the form
+   * gets yyyy-MM-dd); on export, the format the form's date is written in. So
+   * one format round-trips.
    */
   format?: string
   /**
@@ -119,8 +122,9 @@ const FALSE = new Set(['false', '0', 'no', 'n'])
 // offset. Only the date part as written is used, so no time zone can move the
 // day.
 const ISO_DATE = /^(\d{4}-\d{2}-\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/
+const FORM_DATE = 'yyyy-MM-dd'
 
-async function coerce(value: unknown, entry: WriteToEntry, direction: WriteDirection): Promise<Resolved> {
+function coerce(value: unknown, entry: WriteToEntry, direction: WriteDirection): Resolved {
   switch (entry.as) {
     case undefined:
       return found(value)
@@ -138,25 +142,49 @@ async function coerce(value: unknown, entry: WriteToEntry, direction: WriteDirec
       return ABSENT
     }
     case 'date': {
-      // dayjs rather than a formula: the allowlist has no TEXT, VALUE or
-      // DATEVALUE, and a 2-digit year is ambiguous without an explicit format.
-      const { default: dayjs } = await import('dayjs')
-      const { default: customParseFormat } = await import('dayjs/plugin/customParseFormat.js')
-      dayjs.extend(customParseFormat)
+      // A date library rather than a formula: the allowlist has no TEXT, VALUE
+      // or DATEVALUE, and a 2-digit year is ambiguous without an explicit
+      // format. date-fns throws on a pattern it refuses, so a bad `format`
+      // fails the upload or the download rather than writing nothing.
+
       if (direction === 'export') {
-        // A Date (a formula's result) is its local day, the way DATE() and
-        // TODAY() build one; slicing its ISO string would be the UTC day.
-        // Anything that isn't ISO is absent rather than guessed.
+        // Anything that isn't a Date or an ISO date is absent rather than guessed.
         const iso = typeof value === 'string' ? ISO_DATE.exec(value) : null
-        const parsed = value instanceof Date ? dayjs(value) : iso ? dayjs(iso[1], 'YYYY-MM-DD', true) : null
-        return parsed?.isValid() ? found(parsed.format(entry.format ?? 'YYYY-MM-DD')) : ABSENT
+        const day = value instanceof Date ? value : iso ? parseDate(iso[1], FORM_DATE, new Date()) : null
+        return day && isValid(day) ? found(formatDate(day, entry.format ?? FORM_DATE)) : ABSENT
       }
-      const raw = value instanceof Date ? value.toISOString() : String(value)
-      // strict, so a format that doesn't match is reported as absent rather
-      // than silently guessed into some other date.
-      const parsed = entry.format ? dayjs(raw, entry.format, true) : dayjs(raw)
-      return parsed.isValid() ? found(parsed.format('YYYY-MM-DD')) : ABSENT
+      if (value instanceof Date) return found(formatDate(value, FORM_DATE))
+      if (entry.format === undefined) {
+        // Loosely: an ISO date or date-time first, a local date unless it
+        // carries an offset, then whatever the browser's Date reads, such as
+        // 7/3/26 or July 3, 2026.
+        const text = String(value)
+        const iso = parseISO(text)
+        const day = isValid(iso) ? iso : new Date(text)
+        return isValid(day) ? found(formatDate(day, FORM_DATE)) : ABSENT
+      }
+      // A date the document writes some other way is absent, like any value
+      // that can't be coerced, so the rest of the document still fills.
+      const day = parseDate(String(value), entry.format, new Date())
+      return isValid(day) ? found(formatDate(day, FORM_DATE)) : ABSENT
     }
+  }
+}
+
+// date-fns throws a RangeError on a `format` it refuses, worded for formatting
+// and naming leftover text as the input, e.g. "Use `d` instead of `D` (in
+// `M/D/YY`) for formatting days of the month to the input `23/26`; see: …".
+// The part before " (in " names the letter to use, and the entry is named the
+// way every other mapping error is.
+const REFUSED_FORMAT = /^(Use `|Format string contains)/
+
+function coerceNamingEntry(value: unknown, entry: WriteToEntry, direction: WriteDirection): Resolved {
+  try {
+    return coerce(value, entry, direction)
+  } catch (err) {
+    if (!(err instanceof RangeError) || !REFUSED_FORMAT.test(err.message)) throw err
+    const reason = err.message.split(' (in ')[0].split('; see: ')[0]
+    throw new Error(`writeTo "${entry.to}": date-fns can't use the format ${JSON.stringify(entry.format)}. ${reason}.`)
   }
 }
 
@@ -321,7 +349,7 @@ export async function resolveWrites(
       const key = result.value instanceof Date ? result.value.toISOString() : String(result.value)
       if (Object.prototype.hasOwnProperty.call(entry.map, key)) result = found(entry.map[key])
     }
-    if (result.found && !rows) result = await coerce(result.value, entry, direction)
+    if (result.found && !rows) result = coerceNamingEntry(result.value, entry, direction)
     if (!result.found) {
       if (entry.default === undefined) continue
       write(entry.default)

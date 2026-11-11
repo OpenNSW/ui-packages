@@ -128,6 +128,21 @@ describe('XmlControl as an importer (writeTo configured)', () => {
 
     expect(latest()?.doc).toBeUndefined()
   })
+
+  it('leaves a field as it was when the date does not match its format, with no error', async () => {
+    const writeTo = [
+      { from: 'order.code', to: 'code', as: 'date', format: 'M/d/yy' },
+      { from: 'order.code', to: 'raw' },
+    ]
+    const { latest } = renderForm(makeSchema({ writeTo, persistDocument: false }))
+    upload('7/3/26')
+    await waitFor(() => expect(latest()?.code).toBe('2026-07-03'))
+
+    upload('23/4/26')
+    await waitFor(() => expect(latest()?.raw).toBe('23/4/26'))
+    expect(latest()?.code).toBe('2026-07-03')
+    expect(screen.queryByText(/23\/4\/26/)).toBeNull()
+  })
 })
 
 describe('XmlControl as a plain parse-and-hold field', () => {

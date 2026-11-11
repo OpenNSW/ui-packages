@@ -134,6 +134,26 @@ describe('DateControl date-time', () => {
     expect((timeInput as HTMLInputElement).value).toBe('14:30')
   })
 
+  it('writes the picked date and time as RFC 3339 with seconds and the local offset', async () => {
+    const { writes } = renderForm(appointmentSchema, appointmentControl, { appointment: '2026-10-09T14:30:00' })
+    const timeInput = document.querySelector('input[type="time"]') as HTMLInputElement
+    fireEvent.change(timeInput, { target: { value: '15:45' } })
+
+    await waitFor(() => expect(writes[writes.length - 1]?.appointment).toMatch(/^2026-10-09T15:45:00[+-]\d{2}:\d{2}$/))
+    const written = writes[writes.length - 1].appointment as string
+    // The offset is this machine's, so the instant is 15:45 local time.
+    expect(new Date(written).getTime()).toBe(new Date(2026, 9, 9, 15, 45).getTime())
+  })
+
+  it('writes a year past 9999 as typed, so the field shows it as invalid', async () => {
+    const { writes } = renderForm(appointmentSchema, appointmentControl, { appointment: '2026-10-09T14:30:00' })
+    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement
+    fireEvent.change(dateInput, { target: { value: '10000-01-01' } })
+
+    await waitFor(() => expect(writes[writes.length - 1]?.appointment).toBe('10000-01-01T14:30'))
+    await waitFor(() => expect(screen.getByText(/date-time/)).toBeTruthy())
+  })
+
   it('shows a seconds spinner on date-time when showSeconds is true', () => {
     renderForm(appointmentSchema, appointmentSecondsControl, { appointment: '2026-10-09T14:30:45' })
     const timeInput = document.querySelector('input[type="time"]')

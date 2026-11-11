@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { buildFromWrites, resolveWrites, validateWriteToEntry } from './mapping'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { buildFromWrites, resolveWrites, validateWriteToEntry, type WriteToEntry } from './mapping'
+
+// date-fns warns on the console as it refuses a dayjs letter; tests that hit
+// one silence it, and this puts the console back.
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 // A document shaped like the ones importers actually meet: values nested at
 // different depths, a date in a local format, an enum as a number, an
@@ -118,13 +124,13 @@ describe('resolveWrites', () => {
     })
 
     it('reformats a date from the format the document uses', async () => {
-      expect(await run([{ from: 'order.header.order_date', to: 'on', as: 'date', format: 'M/D/YY' }])).toEqual([
+      expect(await run([{ from: 'order.header.order_date', to: 'on', as: 'date', format: 'M/d/yy' }])).toEqual([
         { to: 'on', value: '2026-07-23' },
       ])
     })
 
     it('treats a date that does not match the declared format as absent, never a guess', async () => {
-      expect(await run([{ from: 'order.customer.code', to: 'on', as: 'date', format: 'M/D/YY' }])).toEqual([])
+      expect(await run([{ from: 'order.customer.code', to: 'on', as: 'date', format: 'M/d/yy' }])).toEqual([])
     })
 
     it('reads a boolean from the spellings a document actually uses', async () => {
@@ -322,19 +328,19 @@ describe('resolveWrites on export: dates and numbers', () => {
   const at = (value: unknown) => ({ ...form, value })
 
   it('writes a date in the format the XML uses', async () => {
-    expect(await exportRun([{ from: 'issued_on', to: 'On', as: 'date', format: 'M/D/YY' }])).toEqual([
+    expect(await exportRun([{ from: 'issued_on', to: 'On', as: 'date', format: 'M/d/yy' }])).toEqual([
       { to: 'On', value: '7/23/26' },
     ])
   })
 
-  it('writes YYYY-MM-DD when no format is given', async () => {
+  it('writes yyyy-MM-dd when no format is given', async () => {
     expect(await exportRun([{ from: 'issued_on', to: 'On', as: 'date' }])).toEqual([{ to: 'On', value: '2026-07-23' }])
   })
 
   it('uses the date part of a date-time as written, whatever its offset', async () => {
     for (const value of ['2026-07-23T23:30:00-05:00', '2026-07-23T00:30:00+05:30', '2026-07-23T12:00:00.000Z']) {
       expect(
-        await resolveWrites(at(value), [{ from: 'value', to: 'On', as: 'date', format: 'M/D/YY' }], 'export'),
+        await resolveWrites(at(value), [{ from: 'value', to: 'On', as: 'date', format: 'M/d/yy' }], 'export'),
       ).toEqual([{ to: 'On', value: '7/23/26' }])
     }
   })
@@ -342,7 +348,7 @@ describe('resolveWrites on export: dates and numbers', () => {
   it('writes a Date as its local day, never the UTC day its ISO string names', async () => {
     for (const value of [new Date(2026, 6, 23, 0, 30), new Date(2026, 6, 23, 23, 30)]) {
       expect(
-        await resolveWrites(at(value), [{ from: 'value', to: 'On', as: 'date', format: 'M/D/YY' }], 'export'),
+        await resolveWrites(at(value), [{ from: 'value', to: 'On', as: 'date', format: 'M/d/yy' }], 'export'),
       ).toEqual([{ to: 'On', value: '7/23/26' }])
     }
   })
@@ -350,13 +356,13 @@ describe('resolveWrites on export: dates and numbers', () => {
   it('treats a form value that is not an ISO date as absent, never a guess', async () => {
     for (const value of ['7/23/26', '2026-02-30', 20260723]) {
       expect(
-        await resolveWrites(at(value), [{ from: 'value', to: 'On', as: 'date', format: 'M/D/YY' }], 'export'),
+        await resolveWrites(at(value), [{ from: 'value', to: 'On', as: 'date', format: 'M/d/yy' }], 'export'),
       ).toEqual([])
     }
   })
 
-  it('still reads a date with the format on import, into YYYY-MM-DD', async () => {
-    expect(await run([{ from: 'order.header.order_date', to: 'on', as: 'date', format: 'M/D/YY' }])).toEqual([
+  it('still reads a date with the format on import, into yyyy-MM-dd', async () => {
+    expect(await run([{ from: 'order.header.order_date', to: 'on', as: 'date', format: 'M/d/yy' }])).toEqual([
       { to: 'on', value: '2026-07-23' },
     ])
   })
@@ -399,6 +405,97 @@ describe('resolveWrites on export: dates and numbers', () => {
   })
 })
 
+describe('resolveWrites on import: dates', () => {
+  const read = (value: unknown, format?: string, extra: Partial<WriteToEntry> = {}) =>
+    resolveWrites({ d: value }, [{ from: 'd', to: 'on', as: 'date', format, ...extra }], 'import')
+
+  it.each([
+    ['M/d/yy', '7/3/26', '2026-07-03'],
+    ['M/d/yy', '12/25/26', '2026-12-25'],
+    ['M/d/yy', '07/03/26', '2026-07-03'],
+    ['MM/dd/yy', '7/3/26', '2026-07-03'],
+    ['d/M/yyyy', '3/7/2026', '2026-07-03'],
+    ['yyyyMMdd', '20260703', '2026-07-03'],
+  ])('reads %s %s into yyyy-MM-dd, padded or not', async (format, text, want) => {
+    expect(await read(text, format)).toEqual([{ to: 'on', value: want }])
+  })
+
+  it('reads a date the parser turned into a number', async () => {
+    expect(await read(20260703, 'yyyyMMdd')).toEqual([{ to: 'on', value: '2026-07-03' }])
+  })
+
+  it.each([
+    ['a four-digit year under yy', 'M/d/yy', '7/3/2026'],
+    ['a day-first date under a month-first format', 'M/d/yy', '23/3/26'],
+    ['31 April', 'yyyy-MM-dd', '2026-04-31'],
+    ['29 February outside a leap year', 'yyyy-MM-dd', '2025-02-29'],
+    ['trailing text', 'yyyy-MM-dd', '2026-07-03 extra'],
+  ])('treats %s as absent', async (_name, format, text) => {
+    expect(await read(text, format)).toEqual([])
+  })
+
+  it('falls back to default on a mismatched date', async () => {
+    expect(await read('23/3/26', 'M/d/yy', { default: null })).toEqual([{ to: 'on', value: null }])
+  })
+
+  it('treats an empty element as absent, so default fills it', async () => {
+    expect(await read('', 'M/d/yy', { default: null })).toEqual([{ to: 'on', value: null }])
+    expect(await read('', 'M/d/yy')).toEqual([])
+  })
+
+  it('leaves out a mismatched date in one repetition and fills the others', async () => {
+    const doc = { rows: [{ d: '7/3/26' }, { d: '23/4/26' }] }
+    expect(
+      await resolveWrites(
+        doc,
+        [{ from: 'rows', to: 'rows', writeTo: [{ from: 'd', to: 'on', as: 'date', format: 'M/d/yy' }] }],
+        'import',
+      ),
+    ).toEqual([{ to: 'rows', value: [{ on: '2026-07-03' }, {}] }])
+  })
+
+  it('writes a Date from a formula as its local day', async () => {
+    expect(await read(new Date(2026, 6, 3, 23, 30), 'M/d/yy')).toEqual([{ to: 'on', value: '2026-07-03' }])
+    expect(await read(new Date(2026, 6, 3, 0, 30))).toEqual([{ to: 'on', value: '2026-07-03' }])
+  })
+
+  it.each([
+    ['an ISO date', '2026-07-03'],
+    ['a compact ISO date the parser turned into a number', 20260703],
+    ['an ISO date and time with no offset', '2026-07-03 10:00'],
+    ['a slashed date the browser reads', '7/3/26'],
+    ['a written-out date the browser reads', 'July 3, 2026'],
+  ])('reads %s loosely when there is no format', async (_name, value) => {
+    expect(await read(value)).toEqual([{ to: 'on', value: '2026-07-03' }])
+  })
+
+  it.each([['not a date'], ['2026-13-01']])('treats %s as absent when there is no format', async (value) => {
+    expect(await read(value)).toEqual([])
+  })
+})
+
+describe('resolveWrites: a format in dayjs letters', () => {
+  it('fails the import when there is a date to read, naming the entry and the letter to use', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await expect(run([{ from: 'order.header.order_date', to: 'on', as: 'date', format: 'M/D/YY' }])).rejects.toThrow(
+      'writeTo "on": date-fns can\'t use the format "M/D/YY". Use `d` instead of `D`.',
+    )
+  })
+
+  it('fails the export, naming the entry and the letter to use', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await expect(exportRun([{ from: 'issued_on', to: 'On', as: 'date', format: 'YYYYMMDD' }])).rejects.toThrow(
+      'writeTo "On": date-fns can\'t use the format "YYYYMMDD". Use `yyyy` instead of `YYYY`.',
+    )
+  })
+
+  it('names the entry for a letter date-fns does not know', async () => {
+    await expect(exportRun([{ from: 'issued_on', to: 'On', as: 'date', format: 'yyyy-MM-dd f' }])).rejects.toThrow(
+      'writeTo "On": date-fns can\'t use the format "yyyy-MM-dd f". Format string contains an unescaped latin alphabet character `f`.',
+    )
+  })
+})
+
 describe('validateWriteToEntry: format and decimals', () => {
   it('rejects decimals on import, where a string would land in a number field', () => {
     expect(validateWriteToEntry({ from: 'a', to: 'b', as: 'number', decimals: 1 }, 'import')).toMatch(
@@ -419,10 +516,10 @@ describe('validateWriteToEntry: format and decimals', () => {
   })
 
   it('requires as: date for format, either way', () => {
-    expect(validateWriteToEntry({ from: 'a', to: 'b', format: 'M/D/YY' }, 'import')).toMatch(
+    expect(validateWriteToEntry({ from: 'a', to: 'b', format: 'M/d/yy' }, 'import')).toMatch(
       /"format" needs "as": "date"/,
     )
-    expect(validateWriteToEntry({ from: 'a', to: 'b', format: 'M/D/YY' }, 'export')).toMatch(
+    expect(validateWriteToEntry({ from: 'a', to: 'b', format: 'M/d/yy' }, 'export')).toMatch(
       /"format" needs "as": "date"/,
     )
   })

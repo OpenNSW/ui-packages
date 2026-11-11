@@ -53,7 +53,7 @@ Only `x-text` takes `join`. `x-computed` shows it as an error, since it needs a 
 
 ## `template`
 
-The field's text, with `{alias}` for each input, in the same syntax as other templates in this package ([`utils/template.ts`](../src/utils/template.ts)). `{today(DD/MM/YYYY)}` gives today's date. A plain input is written as a card shows it, the same as a `join`'s items: an option's title, a search pick's label, a number with the locale's separators. A true/false is written as `true` or `false`. Leading and trailing whitespace is trimmed.
+The field's text, with `{alias}` for each input, in the same syntax as other templates in this package ([`utils/template.ts`](../src/utils/template.ts)). `{today(dd/MM/yyyy)}` gives today's date. A plain input is written as a card shows it, the same as a `join`'s items: an option's title, a search pick's label, a number with the locale's separators. A true/false is written as `true` or `false`. Leading and trailing whitespace is trimmed.
 
 ## `editable`
 
