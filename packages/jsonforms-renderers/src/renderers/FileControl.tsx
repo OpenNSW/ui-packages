@@ -14,6 +14,7 @@ import { useUpload } from '../contexts/UploadContext'
 import { getErrorMessage } from '../utils/error'
 import { formatBytes, formatAccept } from '../utils/format'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useDefaultFrom } from '../hooks/useDefaultFrom'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { UNNAMED_FILE, downloadFromUrl, downloadName } from '../utils/download'
 import { isBrowserViewable, matchesAccept } from '../utils/file'
@@ -91,6 +92,7 @@ const FileControl = ({
   // shown field stuck on "must be string". undefined restores the pristine
   // "nothing selected" state instead.
   useClearWhenHidden(visible, path, handleChange)
+  useDefaultFrom(data, path, schema, enabled, visible, handleChange)
   const showRequired = useIsRequired(path, required, visible)
 
   const isValid = !errors || errors.length === 0

@@ -9,7 +9,10 @@ import { radixRenderers } from './index'
 
 type Data = Record<string, unknown>
 
+const finishers: (() => void)[] = []
 afterEach(async () => {
+  for (const stop of finishers) stop()
+  finishers.length = 0
   // JsonForms debounces onChange by 10ms. Flush it before jsdom is torn down.
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -59,6 +62,10 @@ const uischema = {
 function renderForm(seed: Data) {
   function Harness() {
     const [data, setData] = useState(seed)
+    let live = true
+    finishers.push(() => {
+      live = false
+    })
     return (
       <Theme>
         <JsonForms
@@ -66,7 +73,10 @@ function renderForm(seed: Data) {
           uischema={uischema}
           data={data}
           renderers={radixRenderers}
-          onChange={({ data: next }) => setData(next as Data)}
+          onChange={({ data: next }) => {
+            if (!live) return
+            setData(next as Data)
+          }}
         />
       </Theme>
     )

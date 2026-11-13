@@ -12,6 +12,7 @@ import { TextField, Text, Flex, Box } from '@radix-ui/themes'
 import { useEffect, type ReactNode } from 'react'
 import { format, isValid } from 'date-fns'
 
+import { useDefaultFrom } from '../hooks/useDefaultFrom'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { getErrorMessage } from '../utils/error'
 import { useReadOnlyMark } from '../contexts/formReview'
@@ -76,6 +77,7 @@ export const DateControl = ({
       handleChange(path, undefined)
     }
   }, [visible, path, handleChange])
+  useDefaultFrom(data, path, schema, enabled, visible, handleChange)
   const showRequired = useIsRequired(path, required, visible)
   const locked = useReadOnlyMark(enabled)
 

@@ -93,6 +93,12 @@ query-param name → sibling property (`dependsOn: { "commodity": "commodity_com
 Fetching waits until every listed sibling has a value; changing any sibling that already
 had a value clears this field.
 
+## Default from a sibling
+
+To mirror another field, set [`x-defaultFrom`](./default-from.md) on the schema. It is not
+an `x-search` option: the same keyword works on every value control, and the field stays
+editable between sibling changes. `dependsOn` still only filters this field's options.
+
 ## Display template
 
 `displayTemplate` is required on every `x-search` field. `{id}` and `{name}` are
