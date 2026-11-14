@@ -22,9 +22,12 @@ import { ChevronRightIcon, Cross2Icon, FileTextIcon, PlusIcon, TrashIcon } from 
 interface ListOptions {
   addable?: boolean
   removable?: boolean
-  itemLabel?: string
+  /** The word in front of the row number. `false` hides the visible row name. Defaults to "Item". */
+  itemLabel?: string | false
   /** "word" spells the row number in English (Attachment One). Defaults to a digit. */
   itemNumber?: 'number' | 'word'
+  /** `false` hides the "N items" count above the list. */
+  itemCount?: false
   addLabel?: string
   emptyLabel?: string
   errorMessage?: string
@@ -182,6 +185,10 @@ export const ArrayControl = ({
   const cards = options.display === 'cards'
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
+  // `itemLabel: false` hides only the visible row name. aria-labels, confirm
+  // dialogs and status lines still use the numbered name so each row stays unique.
+  const hideItemName = options.itemLabel === false
+  const hideItemCount = options.itemCount === false
   const itemLabel = options.itemLabel || 'Item'
   const addLabel = options.addLabel || t('addItem')
   const emptyLabel = options.emptyLabel || t('empty')
@@ -214,12 +221,16 @@ export const ArrayControl = ({
     return summary ? `${nameOf(index)} (${summary})` : nameOf(index)
   }
   // "2 items · 740 bags · 18,500 kg total", for the rows given.
-  const totalsOf = (rows: unknown[]) =>
-    [
-      t(rows.length === 1 ? 'countOne' : 'countOther', { count: rows.length }),
+  // `itemCount: false` omits the "N items" count; custom totals still show.
+  const hasCustomTotals = (options.totals?.length ?? 0) > 0
+  const totalsOf = (rows: unknown[]) => {
+    const parts = [
+      ...(hideItemCount ? [] : [t(rows.length === 1 ? 'countOne' : 'countOther', { count: rows.length })]),
       ...listTotals(rows, options.totals ?? [], locale),
-    ].join(' · ')
-  const showTotals = items.length > 0 && (cards || (options.totals?.length ?? 0) > 0)
+    ]
+    return parts.join(' · ')
+  }
+  const showTotals = items.length > 0 && (hasCustomTotals || (cards && !hideItemCount))
 
   // Rows with errors, marked on their cards once the form shows errors at all.
   const showErrors = ctx.core?.validationMode !== 'ValidateAndHide' && ctx.core?.validationMode !== 'NoValidation'
@@ -400,23 +411,27 @@ export const ArrayControl = ({
               style={{ outline: 'none' }}
             >
               <Flex direction="column" gap="4">
-                <Flex justify="between" align="center">
-                  <Text size="3" weight="bold">
-                    {nameOf(index)}
-                  </Text>
-                  {canRemove && (
-                    <Button
-                      type="button"
-                      color="red"
-                      variant="soft"
-                      onClick={() => setConfirmIndex(index)}
-                      aria-label={t('removeItem', { item: fullNameOf(index) })}
-                    >
-                      <TrashIcon />
-                      {t('remove')}
-                    </Button>
-                  )}
-                </Flex>
+                {(!hideItemName || canRemove) && (
+                  <Flex justify={hideItemName ? 'end' : 'between'} align="center">
+                    {!hideItemName && (
+                      <Text size="3" weight="bold">
+                        {nameOf(index)}
+                      </Text>
+                    )}
+                    {canRemove && (
+                      <Button
+                        type="button"
+                        color="red"
+                        variant="soft"
+                        onClick={() => setConfirmIndex(index)}
+                        aria-label={t('removeItem', { item: fullNameOf(index) })}
+                      >
+                        <TrashIcon />
+                        {t('remove')}
+                      </Button>
+                    )}
+                  </Flex>
+                )}
                 <Box>{fields(index, enabled)}</Box>
               </Flex>
             </Card>
@@ -440,11 +455,17 @@ export const ArrayControl = ({
 
       {cards && open && open.index < items.length && (
         <Dialog.Root open onOpenChange={(isOpen) => !isOpen && setOpen(null)}>
-          <Dialog.Content maxWidth="640px">
+          <Dialog.Content
+            maxWidth="640px"
+            // Radix still wires aria-describedby when Description is absent; opt out.
+            {...(summaryOf(items[open.index]) ? {} : { 'aria-describedby': undefined })}
+          >
             <Dialog.Title>{nameOf(open.index)}</Dialog.Title>
-            <Dialog.Description size="2" color="gray" mb="4">
-              {summaryOf(items[open.index])}
-            </Dialog.Description>
+            {summaryOf(items[open.index]) ? (
+              <Dialog.Description size="2" color="gray" mb="4">
+                {summaryOf(items[open.index])}
+              </Dialog.Description>
+            ) : null}
             {fields(open.index, enabled)}
             <Flex gap="3" mt="4" justify="between">
               {!open.isNew && canRemove ? (
