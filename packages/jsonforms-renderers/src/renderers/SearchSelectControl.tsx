@@ -547,7 +547,10 @@ const SearchSelectControl = ({
             placeholder={open && modeConfig?.searchable ? 'Search...' : placeholderProps.placeholder}
             data-empty-answer={placeholderProps['data-empty-answer']}
             disabled={!isEnabled}
-            readOnly={(open && !modeConfig?.searchable) || (isMulti && !open)}
+            // Not read-only while closed, multi included: Radix Themes gives a
+            // read-only input that shows its placeholder a not-allowed cursor,
+            // and a closed multi input always shows it (picks go to the chips).
+            readOnly={open && !modeConfig?.searchable}
             style={!isValid ? { outline: '2px solid var(--red-7)', outlineOffset: '-1px' } : undefined}
             onChange={(e) => {
               if (!modeConfig?.searchable) return

@@ -506,6 +506,24 @@ describe('SearchSelectControl multi (array of x-search objects)', () => {
     })
   })
 
+  // Radix Themes gives a read-only input that shows its placeholder a
+  // not-allowed cursor. The closed multi input always shows its placeholder
+  // (picks go to the chips), so it must not be read-only or it looks disabled.
+  it('keeps the closed input editable, before and after a pick', async () => {
+    renderForm({}, () => Promise.resolve({ options: multiOptions }), multiSchema, multiUi)
+
+    const input = screen.getByRole<HTMLInputElement>('textbox')
+    expect(input.readOnly).toBe(false)
+
+    fireEvent.focus(input)
+    fireEvent.click(await screen.findByText('India'))
+    fireEvent.keyDown(input, { key: 'Escape' })
+
+    await waitFor(() => expect(screen.queryByText('Singapore')).toBeNull())
+    expect(screen.getByText('India')).toBeTruthy()
+    expect(input.readOnly).toBe(false)
+  })
+
   it('resolves string-array ids to chip labels on mount', async () => {
     const stringMultiSchema = {
       type: 'object',
