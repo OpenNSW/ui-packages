@@ -26,12 +26,12 @@ A list whose uiSchema sets `options.display: "cards"` shows each item as a one-l
 }
 ```
 
-| Option          | Meaning                                                                                                     |
-| --------------- | ----------------------------------------------------------------------------------------------------------- |
-| `display`       | `"cards"` turns cards on. Without it, items show their full form, as before.                                |
-| `summary`       | A card's first line. Without it, the card shows "Item 2".                                                   |
-| `summaryDetail` | A card's second line.                                                                                       |
-| `totals`        | Running totals above the list, after the item count: `field` is summed across items, shown through `label`. |
+| Option          | Meaning                                                                                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `display`       | `"cards"` turns cards on. Without it, items show their full form, as before.                                                                    |
+| `summary`       | A card's first line. Without it, the card shows the row name ("Item 2"), including when `itemLabel` is `false`.                                 |
+| `summaryDetail` | A card's second line.                                                                                                                           |
+| `totals`        | Running totals above the list: `field` is summed across items, shown through `label`. Shown after the item count unless `itemCount` is `false`. |
 
 `summary` and `summaryDetail` name the item's own fields in `{braces}`, as dotted paths for nested ones (`{tarification.hsCode}`); `totals` fields take dotted paths too. The text is split on " · ", and a part whose fields are all empty is left out, so a half-filled item reads "FINE" rather than "FINE · bags". An option's title is shown instead of its value, a search pick shows its `label`, a `{ value }` object shows its value's option title, and numbers get the form's locale separators. `totals` works without cards too.
 
@@ -44,7 +44,8 @@ These apply to every list, with or without cards.
 | Option       | Meaning                                                                                                                                                                                                                                                                                |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `label`      | On the Control, the same property as any other control. A string replaces the schema `title`. `false` hides the heading. The required `*` is part of the heading, so it hides with it. A required list with no heading still fails validation, and that message uses the schema title. |
-| `itemLabel`  | The word in front of the row number. Without it, rows are "Item 1". `false` hides the row name and the "N items" count above the list; Remove and dialog titles still use the summary, or the list heading. Custom `totals` still show.                                                |
+| `itemLabel`  | The word in front of the row number. Without it, rows are "Item 1". `false` hides the visible row name; Remove, confirm dialogs, status lines and dialog titles still use the numbered name ("Item 2") so each row stays unique.                                                       |
+| `itemCount`  | `false` hides the "N items" count above the list. Custom `totals` still show.                                                                                                                                                                                                          |
 | `itemNumber` | `"word"` spells the number in English: Attachment One, Attachment Twenty-One. 100 and above stay digits. The words are English only.                                                                                                                                                   |
 | `addLabel`   | The add button, shown as written. Without it, the button is translated.                                                                                                                                                                                                                |
 | `emptyLabel` | The empty-state line, shown as written. Without it, that line is translated.                                                                                                                                                                                                           |

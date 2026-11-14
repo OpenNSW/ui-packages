@@ -126,39 +126,76 @@ describe('a list shown as cards', () => {
     expect(document.querySelectorAll('input')).toHaveLength(0)
   })
 
-  it('hides Item N and the N items count when itemLabel is false', () => {
+  it('hides the visible row name when itemLabel is false, and keeps Remove named Item N', async () => {
+    const rows = renderList(two, control({ itemLabel: false }))
+
+    expect(screen.queryByText('Item 1')).toBeNull()
+    expect(screen.queryByText('Item 2')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove Item 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove Item 2' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Item 2' }))
+    expect(screen.getByText('Remove Item 2?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove item' }))
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(screen.getByRole('status').textContent).toBe('Item 2 removed.')
+  })
+
+  it('leaves out the row header when itemLabel is false and the row cannot be removed', () => {
+    renderList(two, control({ itemLabel: false, removable: false }))
+
+    expect(screen.queryByText('Item 1')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Remove/ })).toBeNull()
+  })
+
+  it('hides the N items count when itemCount is false, and keeps custom totals', async () => {
+    const rows = renderList(two, control({ ...cards, itemCount: false }))
+
+    expect(screen.getByText('740 bags · 18,500 kg total')).toBeTruthy()
+    expect(screen.queryByText(/2 items/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Item 2 (Medium · 240 bags)' }))
+    expect(screen.getByText('Remove Item 2 (Medium · 240 bags)?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove item' }))
+
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(screen.getByRole('status').textContent).toBe(
+      'Item 2 (Medium · 240 bags) removed. Now 500 bags · 12,500 kg total.',
+    )
+    expect(screen.queryByText(/1 item/)).toBeNull()
+  })
+
+  it('hides the N items count on cards without custom totals when itemCount is false', () => {
     renderList(
       two,
       control({
         display: 'cards',
         summary: '{grade} · {bags} bags',
         summaryDetail: '{kg} kg total',
-        itemLabel: false,
+        itemCount: false,
       }),
     )
 
     expect(screen.queryByText('2 items')).toBeNull()
-    expect(screen.queryByText(/Item \d/)).toBeNull()
-    expect(screen.getByRole('button', { name: 'Open Fine · 500 bags' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Open Medium · 240 bags' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Remove Fine · 500 bags' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' })).toBeTruthy()
     expect(screen.getByText('12,500 kg total')).toBeTruthy()
   })
 
-  it('keeps custom totals without the N items count when itemLabel is false', async () => {
-    const rows = renderList(two, control({ ...cards, itemLabel: false }))
+  it('opens a card dialog titled Item N when itemLabel is false', async () => {
+    renderList(two, control({ ...cards, itemLabel: false }))
 
-    expect(screen.getByText('740 bags · 18,500 kg total')).toBeTruthy()
-    expect(screen.queryByText(/2 items/)).toBeNull()
-    expect(screen.getByRole('button', { name: 'Open Fine · 500 bags' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Item 1')).toBeTruthy()
+    expect(within(dialog).getByText('Fine · 500 bags')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Medium · 240 bags' }))
-    expect(screen.getByText('Remove Medium · 240 bags?')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove item' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 
-    await waitFor(() => expect(rows()).toHaveLength(1))
-    expect(screen.getByRole('status').textContent).toBe('Medium · 240 bags removed. Now 500 bags · 12,500 kg total.')
-    expect(screen.queryByText(/1 item/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Add Item' }))
+    await waitFor(() => expect(within(screen.getByRole('dialog')).getByText('Item 3')).toBeTruthy())
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
   })
 
   it('names the item with its summary when asking, and reports the new total', async () => {
