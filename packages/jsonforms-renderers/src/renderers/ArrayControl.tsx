@@ -22,10 +22,14 @@ import { ChevronRightIcon, Cross2Icon, FileTextIcon, PlusIcon, TrashIcon } from 
 interface ListOptions {
   addable?: boolean
   removable?: boolean
-  /** The word in front of the row number. `false` hides the visible row name. Defaults to "Item". */
-  itemLabel?: string | false
+  /** The word in front of the row number. Defaults to "Item". */
+  itemLabel?: string
   /** "word" spells the row number in English (Attachment One). Defaults to a digit. */
   itemNumber?: 'number' | 'word'
+  /** `false` hides the row's visible heading ("Item 2" above each row, or the dialog title on cards). */
+  itemHeading?: false
+  /** `false` leaves the summary out of the dialog a card opens. The card still shows it. */
+  summaryInDialog?: false
   /** `false` hides the "N items" count above the list. */
   itemCount?: false
   addLabel?: string
@@ -41,6 +45,19 @@ interface ListOptions {
   /** Running totals above the list. */
   totals?: ListTotal[]
 }
+
+/** Screen-reader-only text when a dialog has no visible title. */
+const visuallyHiddenStyle = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  whiteSpace: 'nowrap',
+  borderWidth: 0,
+} as const
 
 interface AddItemButtonProps {
   path: string
@@ -185,9 +202,9 @@ export const ArrayControl = ({
   const cards = options.display === 'cards'
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
-  // `itemLabel: false` hides only the visible row name. aria-labels, confirm
-  // dialogs and status lines still use the numbered name so each row stays unique.
-  const hideItemName = options.itemLabel === false
+  // Visibility switches are separate from the word used in names.
+  const hideItemHeading = options.itemHeading === false
+  const hideSummaryInDialog = options.summaryInDialog === false
   const hideItemCount = options.itemCount === false
   const itemLabel = options.itemLabel || 'Item'
   const addLabel = options.addLabel || t('addItem')
@@ -279,6 +296,23 @@ export const ArrayControl = ({
       cells={undefined} /* use inherited cells */
     />
   )
+
+  // Card dialog title / description: one option per thing (heading, summary).
+  // Heading shown → title is the row name; summary may sit under it.
+  // Heading hidden → summary becomes the title when shown in the dialog.
+  // No visible title → keep a visually hidden full name for screen readers.
+  const openSummary = cards && open && open.index < items.length ? summaryOf(items[open.index]) : ''
+  const openVisibleTitle =
+    cards && open && open.index < items.length
+      ? !hideItemHeading
+        ? nameOf(open.index)
+        : !hideSummaryInDialog && openSummary
+          ? openSummary
+          : null
+      : null
+  const openShowDescription =
+    cards && open && open.index < items.length && !hideItemHeading && !hideSummaryInDialog && !!openSummary
+  const openAnnouncement = cards && open && open.index < items.length ? fullNameOf(open.index) : ''
 
   return (
     <Box mb="6" id={path} tabIndex={-1} style={{ outline: 'none' }}>
@@ -411,9 +445,9 @@ export const ArrayControl = ({
               style={{ outline: 'none' }}
             >
               <Flex direction="column" gap="4">
-                {(!hideItemName || canRemove) && (
-                  <Flex justify={hideItemName ? 'end' : 'between'} align="center">
-                    {!hideItemName && (
+                {(!hideItemHeading || canRemove) && (
+                  <Flex justify={hideItemHeading ? 'end' : 'between'} align="center">
+                    {!hideItemHeading && (
                       <Text size="3" weight="bold">
                         {nameOf(index)}
                       </Text>
@@ -458,12 +492,16 @@ export const ArrayControl = ({
           <Dialog.Content
             maxWidth="640px"
             // Radix still wires aria-describedby when Description is absent; opt out.
-            {...(summaryOf(items[open.index]) ? {} : { 'aria-describedby': undefined })}
+            {...(openShowDescription ? {} : { 'aria-describedby': undefined })}
           >
-            <Dialog.Title>{nameOf(open.index)}</Dialog.Title>
-            {summaryOf(items[open.index]) ? (
+            {openVisibleTitle ? (
+              <Dialog.Title>{openVisibleTitle}</Dialog.Title>
+            ) : (
+              <Dialog.Title style={visuallyHiddenStyle}>{openAnnouncement}</Dialog.Title>
+            )}
+            {openShowDescription ? (
               <Dialog.Description size="2" color="gray" mb="4">
-                {summaryOf(items[open.index])}
+                {openSummary}
               </Dialog.Description>
             ) : null}
             {fields(open.index, enabled)}
