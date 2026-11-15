@@ -113,6 +113,44 @@ describe('removing a list item', () => {
     expect(screen.getByRole('status').textContent).toBe('Item 2 removed.')
     await waitFor(() => expect(document.activeElement?.textContent).toContain('Item 2'))
   })
+
+  it('hides the visible row heading when itemHeading is false, and keeps Remove named Item N', async () => {
+    const rows = renderList(two, control({ itemHeading: false }))
+
+    expect(screen.queryByText('Item 1')).toBeNull()
+    expect(screen.queryByText('Item 2')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove Item 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove Item 2' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Item 2' }))
+    expect(screen.getByText('Remove Item 2?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove item' }))
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(screen.getByRole('status').textContent).toBe('Item 2 removed.')
+  })
+
+  it('keeps a custom itemLabel in the confirm dialog when the heading is hidden', () => {
+    renderList(two, control({ itemLabel: 'Container', itemHeading: false }))
+
+    expect(screen.queryByText('Container 2')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Container 2' }))
+    expect(screen.getByText('Remove Container 2?')).toBeTruthy()
+  })
+
+  it('leaves out the row header when itemHeading is false and the row cannot be removed', () => {
+    renderList(two, control({ itemHeading: false, removable: false }))
+
+    expect(screen.queryByText('Item 1')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Remove/ })).toBeNull()
+  })
+
+  it('hides the N items count without cards when itemCount is false, and keeps custom totals', () => {
+    renderList(two, control({ itemCount: false, totals: cards.totals }))
+
+    expect(screen.getByText('740 bags · 18,500 kg total')).toBeTruthy()
+    expect(screen.queryByText(/2 items/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove Item 1' })).toBeTruthy()
+  })
 })
 
 describe('a list shown as cards', () => {
@@ -124,6 +162,92 @@ describe('a list shown as cards', () => {
     expect(screen.getByText('12,500 kg total')).toBeTruthy()
     // The fields themselves are not on the page until an item is opened.
     expect(document.querySelectorAll('input')).toHaveLength(0)
+  })
+
+  it('hides the N items count when itemCount is false, and keeps custom totals', async () => {
+    const rows = renderList(two, control({ ...cards, itemCount: false }))
+
+    expect(screen.getByText('740 bags · 18,500 kg total')).toBeTruthy()
+    expect(screen.queryByText(/2 items/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Item 2 (Medium · 240 bags)' }))
+    expect(screen.getByText('Remove Item 2 (Medium · 240 bags)?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove item' }))
+
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(screen.getByRole('status').textContent).toBe(
+      'Item 2 (Medium · 240 bags) removed. Now 500 bags · 12,500 kg total.',
+    )
+    expect(screen.queryByText(/1 item/)).toBeNull()
+  })
+
+  it('hides the N items count on cards without custom totals when itemCount is false', () => {
+    renderList(
+      two,
+      control({
+        display: 'cards',
+        summary: '{grade} · {bags} bags',
+        summaryDetail: '{kg} kg total',
+        itemCount: false,
+      }),
+    )
+
+    expect(screen.queryByText('2 items')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' })).toBeTruthy()
+    expect(screen.getByText('12,500 kg total')).toBeTruthy()
+  })
+
+  it('opens with the row name as title and the summary as description by default', () => {
+    renderList(two, control(cards))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('heading', { name: 'Item 1' })).toBeTruthy()
+    expect(within(dialog).getByText('Fine · 500 bags')).toBeTruthy()
+    expect(dialog.getAttribute('aria-describedby')).toBeTruthy()
+  })
+
+  it('leaves the summary out of the dialog when summaryInDialog is false', () => {
+    renderList(two, control({ ...cards, summaryInDialog: false }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('heading', { name: 'Item 1' })).toBeTruthy()
+    expect(within(dialog).queryByText('Fine · 500 bags')).toBeNull()
+    expect(dialog.getAttribute('aria-describedby')).toBeNull()
+  })
+
+  it('uses the summary as the dialog title when itemHeading is false', () => {
+    renderList(two, control({ ...cards, itemHeading: false }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('heading', { name: 'Fine · 500 bags' })).toBeTruthy()
+    expect(within(dialog).queryByRole('heading', { name: 'Item 1' })).toBeNull()
+    expect(dialog.getAttribute('aria-describedby')).toBeNull()
+  })
+
+  it('keeps a screen-reader-only title when heading and summary are both hidden in the dialog', () => {
+    renderList(two, control({ ...cards, itemHeading: false, summaryInDialog: false }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' }))
+    const dialog = screen.getByRole('dialog')
+    const title = within(dialog).getByRole('heading', { name: 'Item 1 (Fine · 500 bags)' })
+    expect(title).toBeTruthy()
+    expect((title as HTMLElement).style.clip).toMatch(/rect\(0(px)?, 0(px)?, 0(px)?, 0(px)?\)/)
+    expect(within(dialog).queryByText('Fine · 500 bags')).toBeNull()
+    expect(dialog.getAttribute('aria-describedby')).toBeNull()
+  })
+
+  it('keeps a custom itemLabel in Add dialog titles when the heading is hidden', async () => {
+    renderList(two, control({ ...cards, itemLabel: 'Container', itemHeading: false }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Item' }))
+    await waitFor(() =>
+      expect(within(screen.getByRole('dialog')).getByRole('heading', { name: 'Container 3' })).toBeTruthy(),
+    )
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
   })
 
   it('names the item with its summary when asking, and reports the new total', async () => {

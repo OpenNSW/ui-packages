@@ -16,15 +16,22 @@ import { useIsRequired } from '../hooks/useIsRequired'
 import { type ListMessage, type MessageValues, listText } from '../utils/messages'
 import { type ListTotal, listTotals, summarizeRow } from '../utils/listSummary'
 import { ConfirmRemoveDialog } from './ConfirmRemoveDialog'
-import { Card, Button, Dialog, Flex, IconButton, Separator, Text, Box } from '@radix-ui/themes'
+import { Card, Button, Dialog, Flex, IconButton, Separator, Text, Box, VisuallyHidden } from '@radix-ui/themes'
 import { ChevronRightIcon, Cross2Icon, FileTextIcon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 
 interface ListOptions {
   addable?: boolean
   removable?: boolean
+  /** The word in front of the row number. Defaults to "Item". */
   itemLabel?: string
   /** "word" spells the row number in English (Attachment One). Defaults to a digit. */
   itemNumber?: 'number' | 'word'
+  /** `false` hides the row's visible heading ("Item 2" above each row, or the dialog title on cards). */
+  itemHeading?: false
+  /** `false` leaves the summary out of the dialog a card opens. The card still shows it. */
+  summaryInDialog?: false
+  /** `false` hides the "N items" count above the list. */
+  itemCount?: false
   addLabel?: string
   emptyLabel?: string
   errorMessage?: string
@@ -182,6 +189,10 @@ export const ArrayControl = ({
   const cards = options.display === 'cards'
   const canAdd = enabled && options.addable !== false
   const canRemove = enabled && options.removable !== false
+  // Visibility switches are separate from the word used in names.
+  const hideItemHeading = options.itemHeading === false
+  const hideSummaryInDialog = options.summaryInDialog === false
+  const hideItemCount = options.itemCount === false
   const itemLabel = options.itemLabel || 'Item'
   const addLabel = options.addLabel || t('addItem')
   const emptyLabel = options.emptyLabel || t('empty')
@@ -214,12 +225,16 @@ export const ArrayControl = ({
     return summary ? `${nameOf(index)} (${summary})` : nameOf(index)
   }
   // "2 items · 740 bags · 18,500 kg total", for the rows given.
-  const totalsOf = (rows: unknown[]) =>
-    [
-      t(rows.length === 1 ? 'countOne' : 'countOther', { count: rows.length }),
+  // `itemCount: false` omits the "N items" count; custom totals still show.
+  const hasCustomTotals = (options.totals?.length ?? 0) > 0
+  const totalsOf = (rows: unknown[]) => {
+    const parts = [
+      ...(hideItemCount ? [] : [t(rows.length === 1 ? 'countOne' : 'countOther', { count: rows.length })]),
       ...listTotals(rows, options.totals ?? [], locale),
-    ].join(' · ')
-  const showTotals = items.length > 0 && (cards || (options.totals?.length ?? 0) > 0)
+    ]
+    return parts.join(' · ')
+  }
+  const showTotals = items.length > 0 && (hasCustomTotals || (cards && !hideItemCount))
 
   // Rows with errors, marked on their cards once the form shows errors at all.
   const showErrors = ctx.core?.validationMode !== 'ValidateAndHide' && ctx.core?.validationMode !== 'NoValidation'
@@ -268,6 +283,17 @@ export const ArrayControl = ({
       cells={undefined} /* use inherited cells */
     />
   )
+
+  // Card dialog title / description: one option per thing (heading, summary).
+  // Heading shown → title is the row name; summary may sit under it.
+  // Heading hidden → summary becomes the title when shown in the dialog.
+  // No visible title → keep a visually hidden full name for screen readers.
+  const openIndex = cards && open && open.index < items.length ? open.index : null
+  const openSummary = openIndex === null ? '' : summaryOf(items[openIndex])
+  const summaryShown = !hideSummaryInDialog && openSummary
+  const openVisibleTitle = openIndex === null ? null : hideItemHeading ? summaryShown || null : nameOf(openIndex)
+  const openShowDescription = !hideItemHeading && !!summaryShown
+  const openAnnouncement = openIndex === null ? '' : fullNameOf(openIndex)
 
   return (
     <Box mb="6" id={path} tabIndex={-1} style={{ outline: 'none' }}>
@@ -400,23 +426,27 @@ export const ArrayControl = ({
               style={{ outline: 'none' }}
             >
               <Flex direction="column" gap="4">
-                <Flex justify="between" align="center">
-                  <Text size="3" weight="bold">
-                    {nameOf(index)}
-                  </Text>
-                  {canRemove && (
-                    <Button
-                      type="button"
-                      color="red"
-                      variant="soft"
-                      onClick={() => setConfirmIndex(index)}
-                      aria-label={t('removeItem', { item: fullNameOf(index) })}
-                    >
-                      <TrashIcon />
-                      {t('remove')}
-                    </Button>
-                  )}
-                </Flex>
+                {(!hideItemHeading || canRemove) && (
+                  <Flex justify={hideItemHeading ? 'end' : 'between'} align="center">
+                    {!hideItemHeading && (
+                      <Text size="3" weight="bold">
+                        {nameOf(index)}
+                      </Text>
+                    )}
+                    {canRemove && (
+                      <Button
+                        type="button"
+                        color="red"
+                        variant="soft"
+                        onClick={() => setConfirmIndex(index)}
+                        aria-label={t('removeItem', { item: fullNameOf(index) })}
+                      >
+                        <TrashIcon />
+                        {t('remove')}
+                      </Button>
+                    )}
+                  </Flex>
+                )}
                 <Box>{fields(index, enabled)}</Box>
               </Flex>
             </Card>
@@ -438,14 +468,26 @@ export const ArrayControl = ({
         )}
       </Flex>
 
-      {cards && open && open.index < items.length && (
+      {openIndex !== null && open && (
         <Dialog.Root open onOpenChange={(isOpen) => !isOpen && setOpen(null)}>
-          <Dialog.Content maxWidth="640px">
-            <Dialog.Title>{nameOf(open.index)}</Dialog.Title>
-            <Dialog.Description size="2" color="gray" mb="4">
-              {summaryOf(items[open.index])}
-            </Dialog.Description>
-            {fields(open.index, enabled)}
+          <Dialog.Content
+            maxWidth="640px"
+            // Radix still wires aria-describedby when Description is absent; opt out.
+            {...(openShowDescription ? {} : { 'aria-describedby': undefined })}
+          >
+            {openVisibleTitle ? (
+              <Dialog.Title>{openVisibleTitle}</Dialog.Title>
+            ) : (
+              <VisuallyHidden asChild>
+                <Dialog.Title>{openAnnouncement}</Dialog.Title>
+              </VisuallyHidden>
+            )}
+            {openShowDescription ? (
+              <Dialog.Description size="2" color="gray" mb="4">
+                {openSummary}
+              </Dialog.Description>
+            ) : null}
+            {fields(openIndex, enabled)}
             <Flex gap="3" mt="4" justify="between">
               {!open.isNew && canRemove ? (
                 <Button
@@ -453,7 +495,7 @@ export const ArrayControl = ({
                   color="red"
                   variant="soft"
                   onClick={() => {
-                    const index = open.index
+                    const index = openIndex
                     setOpen(null)
                     setConfirmIndex(index)
                   }}
@@ -472,7 +514,7 @@ export const ArrayControl = ({
                     color="gray"
                     onClick={() => {
                       // Cancelling a row just added discards it: nothing was there to keep.
-                      removeRow(open.index)
+                      removeRow(openIndex)
                       setOpen(null)
                       addRef.current?.focus()
                     }}

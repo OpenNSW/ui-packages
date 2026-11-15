@@ -65,6 +65,22 @@ describe('ArrayControl itemLabel', () => {
     expect(html).not.toContain('Container 1')
   })
 
+  it('hides the visible row heading when itemHeading is false, and keeps Remove named Item N', () => {
+    const html = renderArray({ itemHeading: false })
+    expect(html).toContain('aria-label="Remove Item 1"')
+    expect(html).toContain('aria-label="Remove Item 2"')
+    expect(html).not.toMatch(/>Item 1</)
+    expect(html).not.toMatch(/>Item 2</)
+  })
+
+  it('keeps a custom itemLabel in Remove names when the heading is hidden', () => {
+    const html = renderArray({ itemLabel: 'Container', itemHeading: false })
+    expect(html).toContain('aria-label="Remove Container 1"')
+    expect(html).toContain('aria-label="Remove Container 2"')
+    expect(html).not.toMatch(/>Container 1</)
+    expect(html).not.toMatch(/>Container 2</)
+  })
+
   it('spells the row number when itemNumber is word', () => {
     const html = renderArray({ itemLabel: 'Attachment', itemNumber: 'word' })
     expect(html).toContain('Attachment One')
