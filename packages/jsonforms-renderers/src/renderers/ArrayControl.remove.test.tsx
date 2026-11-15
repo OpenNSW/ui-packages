@@ -129,6 +129,14 @@ describe('removing a list item', () => {
     expect(screen.getByRole('status').textContent).toBe('Item 2 removed.')
   })
 
+  it('keeps a custom itemLabel in the confirm dialog when the heading is hidden', () => {
+    renderList(two, control({ itemLabel: 'Container', itemHeading: false }))
+
+    expect(screen.queryByText('Container 2')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Container 2' }))
+    expect(screen.getByText('Remove Container 2?')).toBeTruthy()
+  })
+
   it('leaves out the row header when itemHeading is false and the row cannot be removed', () => {
     renderList(two, control({ itemHeading: false, removable: false }))
 
@@ -225,7 +233,9 @@ describe('a list shown as cards', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Item 1 (Fine · 500 bags)' }))
     const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByRole('heading', { name: 'Item 1 (Fine · 500 bags)' })).toBeTruthy()
+    const title = within(dialog).getByRole('heading', { name: 'Item 1 (Fine · 500 bags)' })
+    expect(title).toBeTruthy()
+    expect((title as HTMLElement).style.clip).toMatch(/rect\(0(px)?, 0(px)?, 0(px)?, 0(px)?\)/)
     expect(within(dialog).queryByText('Fine · 500 bags')).toBeNull()
     expect(dialog.getAttribute('aria-describedby')).toBeNull()
   })

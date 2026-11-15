@@ -16,7 +16,7 @@ import { useIsRequired } from '../hooks/useIsRequired'
 import { type ListMessage, type MessageValues, listText } from '../utils/messages'
 import { type ListTotal, listTotals, summarizeRow } from '../utils/listSummary'
 import { ConfirmRemoveDialog } from './ConfirmRemoveDialog'
-import { Card, Button, Dialog, Flex, IconButton, Separator, Text, Box } from '@radix-ui/themes'
+import { Card, Button, Dialog, Flex, IconButton, Separator, Text, Box, VisuallyHidden } from '@radix-ui/themes'
 import { ChevronRightIcon, Cross2Icon, FileTextIcon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 
 interface ListOptions {
@@ -45,19 +45,6 @@ interface ListOptions {
   /** Running totals above the list. */
   totals?: ListTotal[]
 }
-
-/** Screen-reader-only text when a dialog has no visible title. */
-const visuallyHiddenStyle = {
-  position: 'absolute',
-  width: 1,
-  height: 1,
-  padding: 0,
-  margin: -1,
-  overflow: 'hidden',
-  clip: 'rect(0, 0, 0, 0)',
-  whiteSpace: 'nowrap',
-  borderWidth: 0,
-} as const
 
 interface AddItemButtonProps {
   path: string
@@ -301,18 +288,12 @@ export const ArrayControl = ({
   // Heading shown → title is the row name; summary may sit under it.
   // Heading hidden → summary becomes the title when shown in the dialog.
   // No visible title → keep a visually hidden full name for screen readers.
-  const openSummary = cards && open && open.index < items.length ? summaryOf(items[open.index]) : ''
-  const openVisibleTitle =
-    cards && open && open.index < items.length
-      ? !hideItemHeading
-        ? nameOf(open.index)
-        : !hideSummaryInDialog && openSummary
-          ? openSummary
-          : null
-      : null
-  const openShowDescription =
-    cards && open && open.index < items.length && !hideItemHeading && !hideSummaryInDialog && !!openSummary
-  const openAnnouncement = cards && open && open.index < items.length ? fullNameOf(open.index) : ''
+  const openIndex = cards && open && open.index < items.length ? open.index : null
+  const openSummary = openIndex === null ? '' : summaryOf(items[openIndex])
+  const summaryShown = !hideSummaryInDialog && openSummary
+  const openVisibleTitle = openIndex === null ? null : hideItemHeading ? summaryShown || null : nameOf(openIndex)
+  const openShowDescription = !hideItemHeading && !!summaryShown
+  const openAnnouncement = openIndex === null ? '' : fullNameOf(openIndex)
 
   return (
     <Box mb="6" id={path} tabIndex={-1} style={{ outline: 'none' }}>
@@ -487,7 +468,7 @@ export const ArrayControl = ({
         )}
       </Flex>
 
-      {cards && open && open.index < items.length && (
+      {openIndex !== null && open && (
         <Dialog.Root open onOpenChange={(isOpen) => !isOpen && setOpen(null)}>
           <Dialog.Content
             maxWidth="640px"
@@ -497,14 +478,16 @@ export const ArrayControl = ({
             {openVisibleTitle ? (
               <Dialog.Title>{openVisibleTitle}</Dialog.Title>
             ) : (
-              <Dialog.Title style={visuallyHiddenStyle}>{openAnnouncement}</Dialog.Title>
+              <VisuallyHidden asChild>
+                <Dialog.Title>{openAnnouncement}</Dialog.Title>
+              </VisuallyHidden>
             )}
             {openShowDescription ? (
               <Dialog.Description size="2" color="gray" mb="4">
                 {openSummary}
               </Dialog.Description>
             ) : null}
-            {fields(open.index, enabled)}
+            {fields(openIndex, enabled)}
             <Flex gap="3" mt="4" justify="between">
               {!open.isNew && canRemove ? (
                 <Button
@@ -512,7 +495,7 @@ export const ArrayControl = ({
                   color="red"
                   variant="soft"
                   onClick={() => {
-                    const index = open.index
+                    const index = openIndex
                     setOpen(null)
                     setConfirmIndex(index)
                   }}
@@ -531,7 +514,7 @@ export const ArrayControl = ({
                     color="gray"
                     onClick={() => {
                       // Cancelling a row just added discards it: nothing was there to keep.
-                      removeRow(open.index)
+                      removeRow(openIndex)
                       setOpen(null)
                       addRef.current?.focus()
                     }}
