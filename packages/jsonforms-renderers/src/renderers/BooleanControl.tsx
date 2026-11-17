@@ -2,6 +2,7 @@ import { type ControlProps, isBooleanControl, type RankedTester, rankWith } from
 import { withJsonFormsControlProps } from '@jsonforms/react'
 import { Checkbox, Text, Flex, Box } from '@radix-ui/themes'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
+import { useDefaultFrom } from '../hooks/useDefaultFrom'
 import { useIsRequired } from '../hooks/useIsRequired'
 
 import { getErrorMessage } from '../utils/error'
@@ -18,6 +19,7 @@ export const BooleanControl = ({
   visible = true,
 }: ControlProps) => {
   useClearWhenHidden(visible, path, handleChange)
+  useDefaultFrom(data, path, schema, enabled, visible, handleChange)
   const showRequired = useIsRequired(path, required, visible)
 
   if (visible === false) {
