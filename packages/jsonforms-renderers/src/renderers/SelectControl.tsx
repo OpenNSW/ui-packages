@@ -56,6 +56,7 @@ export const SelectControl = ({
   const [inputValue, setInputValue] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!isAutocomplete || !open) return
@@ -120,8 +121,12 @@ export const SelectControl = ({
   // drops the key, so an emptied optional field is left out of the data rather than saved as "".
   const onClear = (e: SyntheticEvent) => {
     e.stopPropagation()
+    // The × unmounts once the value is gone. If it held keyboard focus, hand that to the dropdown's
+    // trigger so focus doesn't fall back to <body>. The autocomplete renders no trigger.
+    const hadFocus = e.currentTarget === document.activeElement
     handleChange(path, undefined)
     setInputValue('')
+    if (hadFocus) triggerRef.current?.focus()
   }
 
   const onClearKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
@@ -301,6 +306,7 @@ export const SelectControl = ({
             disabled={!enabled}
           >
             <Select.Trigger
+              ref={triggerRef}
               {...placeholderProps}
               color={!isValid ? 'red' : undefined}
               id={path}

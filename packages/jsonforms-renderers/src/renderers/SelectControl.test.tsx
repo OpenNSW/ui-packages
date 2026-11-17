@@ -204,6 +204,27 @@ describe('SelectControl plain dropdown clear', () => {
     })
   })
 
+  it.each(['Enter', ' '])('hands focus to the trigger after clearing with %j', async (key) => {
+    renderForm(plainUischema, { country: 'India' })
+    const clear = screen.getByLabelText('Clear selection')
+    clear.focus()
+
+    fireEvent.keyDown(clear, { key })
+
+    await waitFor(() => expect(screen.queryByLabelText('Clear selection')).toBeNull())
+    expect(document.activeElement).toBe(screen.getByRole('combobox'))
+    expect(screen.getByRole('combobox').getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('leaves focus alone when cleared with the mouse', async () => {
+    renderForm(plainUischema, { country: 'India' })
+
+    fireEvent.click(screen.getByLabelText('Clear selection'))
+
+    await waitFor(() => expect(screen.queryByLabelText('Clear selection')).toBeNull())
+    expect(document.activeElement).not.toBe(screen.getByRole('combobox'))
+  })
+
   it('is reachable with Tab', () => {
     renderForm(plainUischema, { country: 'India' })
     expect(screen.getByLabelText('Clear selection').getAttribute('tabindex')).toBe('0')
