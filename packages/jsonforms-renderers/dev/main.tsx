@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { Theme, Flex, Box, Heading, Card, Text, Separator, TextArea, Badge } from '@radix-ui/themes'
 import '@radix-ui/themes/styles.css'
 import { JsonForms } from '@jsonforms/react'
-import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
-import { radixRenderers, SearchServiceProvider } from '../src'
+import { defaultErrorTranslator, type ErrorTranslator, type JsonSchema, type UISchemaElement } from '@jsonforms/core'
+import { radixRenderers, schemaErrorMessage, SearchServiceProvider } from '../src'
 import { ajv } from './ajv'
 import { fixtures, type Fixture } from './fixtures'
 import { searchServices } from './searchServices'
@@ -114,6 +114,13 @@ function Playground() {
   // Remount JsonForms when switching fixtures so it doesn't hold onto stale internal state.
   const formKey = selectedId
 
+  // The schema's x-error-message first, as an app wires it; JSON Forms' default otherwise.
+  const i18n = useMemo(() => {
+    const translateError: ErrorTranslator = (error, translate, uischema) =>
+      schemaErrorMessage(error, schema) ?? defaultErrorTranslator(error, translate, uischema)
+    return { translateError }
+  }, [schema])
+
   return (
     <Flex align="start" style={{ minHeight: '100vh' }}>
       {/* Sidebar: one entry per component fixture */}
@@ -170,6 +177,7 @@ function Playground() {
                 data={data}
                 renderers={radixRenderers}
                 ajv={ajv}
+                i18n={i18n}
                 onChange={({ data }) => setLiveData(data as Record<string, unknown>)}
                 validationMode="ValidateAndShow"
               />

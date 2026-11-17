@@ -141,6 +141,72 @@ export const fixtures: Fixture[] = [
     data: { reviewOutcome: 'approve' },
   },
   {
+    id: 'error-messages',
+    name: 'Error messages (x-error-message)',
+    schema: {
+      type: 'object',
+      properties: {
+        phone: {
+          type: 'string',
+          title: 'Phone',
+          pattern: '^(\\+[0-9]{11}|[0-9]{10})$',
+          'x-error-message': 'Enter a 10-digit number, or + and 11 digits.',
+        },
+        deliveryMethod: {
+          type: 'string',
+          title: 'Delivery Method',
+          oneOf: [
+            { const: 'courier', title: 'Courier' },
+            { const: 'pickup', title: 'Pickup' },
+          ],
+        },
+        documents: {
+          type: 'array',
+          title: 'Documents',
+          items: {
+            type: 'object',
+            properties: {
+              type: {
+                type: 'string',
+                title: 'Type',
+                oneOf: [
+                  { const: 'Invoice', title: 'Invoice' },
+                  { const: 'Proof of address', title: 'Proof of address' },
+                ],
+              },
+              note: { type: 'string', title: 'Note' },
+            },
+          },
+        },
+      },
+      if: {
+        properties: { deliveryMethod: { const: 'courier' } },
+        required: ['deliveryMethod'],
+      },
+      then: {
+        'x-error-message': 'Add a proof of address to the documents.',
+        required: ['documents'],
+        properties: {
+          documents: {
+            contains: {
+              properties: { type: { const: 'Proof of address' } },
+              required: ['type'],
+            },
+          },
+        },
+      },
+    } as JsonSchema,
+    uischema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/phone' },
+        { type: 'Control', scope: '#/properties/deliveryMethod', options: { format: 'radio' } },
+        { type: 'Control', scope: '#/properties/documents' },
+      ],
+    } as UISchemaElement,
+    data: { phone: 'abc', deliveryMethod: 'courier', documents: [{ type: 'Invoice' }] },
+  },
+  {
     id: 'boolean',
     name: 'Boolean',
     schema: {
