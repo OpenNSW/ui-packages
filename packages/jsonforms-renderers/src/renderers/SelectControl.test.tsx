@@ -40,7 +40,12 @@ const schema: JsonSchema = {
   },
 }
 
-function renderForm(uischema: UISchemaElement, seed: Data, formSchema: JsonSchema = schema) {
+function renderForm(
+  uischema: UISchemaElement,
+  seed: Data,
+  formSchema: JsonSchema = schema,
+  { readonly = false }: { readonly?: boolean } = {},
+) {
   const writes: Data[] = []
   let live = true
   finishers.push(() => {
@@ -56,6 +61,7 @@ function renderForm(uischema: UISchemaElement, seed: Data, formSchema: JsonSchem
           uischema={uischema}
           data={initial}
           renderers={radixRenderers}
+          readonly={readonly}
           onChange={({ data }) => {
             if (live) writes.push(data as Data)
           }}
@@ -152,6 +158,66 @@ describe('SelectControl autocomplete', () => {
 
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.getByRole('combobox')).toBeTruthy()
+  })
+})
+
+describe('SelectControl plain dropdown clear', () => {
+  const plainUischema = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/country' }],
+  } as UISchemaElement
+
+  it('clears back to the placeholder and leaves the field out of the data', async () => {
+    const { writes } = renderForm(plainUischema, { country: 'Maldives' })
+    expect(screen.getByRole('combobox').textContent).toContain('Maldives')
+
+    fireEvent.click(screen.getByLabelText('Clear selection'))
+
+    await waitFor(() => {
+      expect(writes.length).toBeGreaterThan(0)
+      expect('country' in writes[writes.length - 1]).toBe(false)
+    })
+    expect(screen.getByRole('combobox').textContent).toContain('Select an option')
+    expect(screen.queryByLabelText('Clear selection')).toBeNull()
+  })
+
+  it('does not open the dropdown', () => {
+    renderForm(plainUischema, { country: 'Maldives' })
+
+    const clear = screen.getByLabelText('Clear selection')
+    fireEvent.pointerDown(clear)
+    fireEvent.mouseDown(clear)
+    fireEvent.click(clear)
+
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(screen.getByRole('combobox').getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it.each(['Enter', ' '])('clears from the keyboard with %j', async (key) => {
+    const { writes } = renderForm(plainUischema, { country: 'India' })
+
+    fireEvent.keyDown(screen.getByLabelText('Clear selection'), { key })
+
+    await waitFor(() => {
+      expect(writes.length).toBeGreaterThan(0)
+      expect('country' in writes[writes.length - 1]).toBe(false)
+    })
+  })
+
+  it('is reachable with Tab', () => {
+    renderForm(plainUischema, { country: 'India' })
+    expect(screen.getByLabelText('Clear selection').getAttribute('tabindex')).toBe('0')
+  })
+
+  it('shows no clear button when nothing is selected', () => {
+    renderForm(plainUischema, {})
+    expect(screen.queryByLabelText('Clear selection')).toBeNull()
+  })
+
+  it('shows no clear button when the field is disabled', () => {
+    renderForm(plainUischema, { country: 'India' }, schema, { readonly: true })
+    expect(screen.getByRole('combobox').textContent).toContain('India')
+    expect(screen.queryByLabelText('Clear selection')).toBeNull()
   })
 })
 
@@ -254,6 +320,20 @@ describe('SelectControl object-shaped field', () => {
     await waitFor(() => {
       expect(writes[writes.length - 1]?.commodity).toBeUndefined()
     })
+  })
+
+  it('clears the whole object from the plain dropdown', async () => {
+    const optionalSchema = { ...objectSchema, required: [] } as JsonSchema
+    const { writes } = renderForm(plainUischema, { commodity: { value: '7', label: 'Cinnamon quill' } }, optionalSchema)
+    expect(screen.getByRole('combobox').textContent).toContain('Cinnamon quill')
+
+    fireEvent.click(screen.getByLabelText('Clear selection'))
+
+    await waitFor(() => {
+      expect(writes.length).toBeGreaterThan(0)
+      expect('commodity' in writes[writes.length - 1]).toBe(false)
+    })
+    expect(screen.getByRole('combobox').textContent).toContain('Select an option')
   })
 
   it('reports a required field left empty', () => {

@@ -116,6 +116,23 @@ export const SelectControl = ({
     handleChange(path, isObjectMode ? { value: opt.raw, label: opt.label } : opt.value)
   }
 
+  // `undefined` in both shapes, like SearchSelectControl and useClearWhenHidden: JSON Forms then
+  // drops the key, so an emptied optional field is left out of the data rather than saved as "".
+  const onClear = (e: SyntheticEvent) => {
+    e.stopPropagation()
+    handleChange(path, undefined)
+    setInputValue('')
+  }
+
+  const onClearKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault() // keep Space from scrolling the page
+      onClear(e)
+    }
+  }
+
+  const clearable = value !== '' && enabled
+
   if (isAutocomplete) {
     const filteredOptions = open
       ? options.filter((o) => o.label.toLowerCase().includes(inputValue.toLowerCase()))
@@ -126,16 +143,6 @@ export const SelectControl = ({
     const onSelect = (opt: SelectOption) => {
       commit(opt)
       setOpen(false)
-    }
-
-    const onClear = (e: SyntheticEvent) => {
-      e.stopPropagation()
-      handleChange(path, undefined)
-      setInputValue('')
-    }
-
-    const onClearKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
-      if (e.key === 'Enter' || e.key === ' ') onClear(e)
     }
 
     return (
@@ -188,7 +195,7 @@ export const SelectControl = ({
             >
               <TextField.Slot side="right">
                 <Flex align="center" gap="1">
-                  {value && enabled && (
+                  {clearable && (
                     <span
                       role="button"
                       tabIndex={0}
@@ -282,26 +289,61 @@ export const SelectControl = ({
         <Text as="label" size="2" weight="bold" htmlFor={path}>
           {label} {showRequired && <Text color="red">*</Text>}
         </Text>
-        <Select.Root
-          value={value}
-          onValueChange={(val) => {
-            const selected = options.find((o) => o.value === val)
-            if (selected) commit(selected)
-          }}
-          disabled={!enabled}
-        >
-          <Select.Trigger {...placeholderProps} color={!isValid ? 'red' : undefined} id={path}>
-            {/* shows the stored label even when its value is no longer one of the options */}
-            {isObjectMode && currentLabel ? currentLabel : undefined}
-          </Select.Trigger>
-          <Select.Content>
-            {options.map((opt) => (
-              <Select.Item key={opt.value} value={opt.value}>
-                {opt.label}
-              </Select.Item>
-            ))}
-          </Select.Content>
-        </Select.Root>
+        {/* column Flex so the trigger keeps stretching to full width inside the positioned wrapper */}
+        <Flex direction="column" position="relative">
+          <Select.Root
+            value={value}
+            onValueChange={(val) => {
+              // '' (cleared) matches no option, so a reset from Radix never writes back
+              const selected = options.find((o) => o.value === val)
+              if (selected) commit(selected)
+            }}
+            disabled={!enabled}
+          >
+            <Select.Trigger
+              {...placeholderProps}
+              color={!isValid ? 'red' : undefined}
+              id={path}
+              // widen the label–chevron gap to make room for the clear button laid over it
+              style={clearable ? { gap: 'calc(var(--space-1) * 1.5 + var(--space-4))' } : undefined}
+            >
+              {/* shows the stored label even when its value is no longer one of the options */}
+              {isObjectMode && currentLabel ? currentLabel : undefined}
+            </Select.Trigger>
+            <Select.Content>
+              {options.map((opt) => (
+                <Select.Item key={opt.value} value={opt.value}>
+                  {opt.label}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+          {/* A sibling of the trigger, not a child: a button can't hold another one, and Radix
+              opens the list on any pointerdown inside the trigger. Sits just left of the 9px chevron. */}
+          {clearable && (
+            <span
+              role="button"
+              tabIndex={0}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={onClear}
+              onKeyDown={onClearKeyDown}
+              style={{
+                position: 'absolute',
+                top: '50%',
+                right: 'calc(var(--space-3) + 9px + var(--space-1))',
+                transform: 'translateY(-50%)',
+                fontSize: 'var(--font-size-2)', // the trigger's text size, as inside the autocomplete's input
+                lineHeight: 1,
+                color: 'var(--gray-9)',
+                padding: '0 2px',
+                cursor: 'pointer',
+              }}
+              aria-label="Clear selection"
+            >
+              ×
+            </span>
+          )}
+        </Flex>
         {!isValid && (
           <Text color="red" size="1">
             {errorMessage}
