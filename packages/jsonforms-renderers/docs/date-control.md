@@ -68,6 +68,6 @@ Pass that instance to `<JsonForms ajv={ajv} />`. Without the wrap, `"today"` fai
 | `formatExclusiveMinimum` | `min` = the day after  | must be after today / after …               |
 | `formatExclusiveMaximum` | `max` = the day before | must be before today / before …             |
 
-`DateControl` sets the picker's `min` and `max` from those keywords, resolving `"today"` to the current day through the same helper the error messages use. Whatever is typed is stored, including each padded year a browser emits while the year is typed. Ajv then reports an out-of-range day through the field's normal error, which blocks submit.
+`DateControl` sets the picker's `min` and `max` from those keywords. `"today"` and fixed dates resolve through `resolveFormatDay`, which the error messages also use when formatting a fixed limit. Exclusive keywords move the picker bound by one day. Non-string limits such as `{ "$data": "1/other" }` are left to Ajv alone — the picker does not set a bound for them. Whatever is typed is stored, including each padded year a browser emits while the year is typed. Ajv then reports an out-of-range day through the field's normal error, which blocks submit.
 
 `"today"` is the local calendar day in the browser. A server that validates the same schema has to resolve `"today"` the same way, in the timezone it and the browser agree on.

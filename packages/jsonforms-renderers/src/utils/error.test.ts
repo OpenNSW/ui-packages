@@ -27,6 +27,9 @@ describe('getErrorMessage', () => {
     expect(getErrorMessage('should be > 2026-01-01', 'Start Date')).toBe('Start Date must be after 1 Jan 2026')
     expect(getErrorMessage('should be < today', 'End Date')).toBe('End Date must be before today')
     expect(getErrorMessage('should be < 2026-12-31', 'End Date')).toBe('End Date must be before 31 Dec 2026')
+    expect(getErrorMessage('should be >= 2026-01-01T00:00:00+05:30', 'Start Date')).toBe(
+      'Start Date must be on or after 1 Jan 2026',
+    )
   })
 
   it('passes through unknown messages', () => {
