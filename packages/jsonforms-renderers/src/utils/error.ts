@@ -12,8 +12,8 @@ function formatDay(value: string): string {
 export const getErrorMessage = (errors: string, label?: string): string => {
   if (!errors) return ''
   const field = label || 'This field'
-  return errors
-    .split('\n')
+  // Rules that share one x-error-message fail with the same line; show it once.
+  return [...new Set(errors.split('\n'))]
     .map((err) => {
       const trimmed = err.trim()
       if (trimmed === 'is a required property') {
