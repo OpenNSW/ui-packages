@@ -65,14 +65,25 @@ same shape an object-typed `x-search` field stores (see
 - A record saved while the field was still `type: "string"` holds a bare code. The
   control shows it by its option's title, but the form fails validation ("must be
   object") until the field is picked again, which stores `{ value, label }`.
-- With `options.autocomplete`, clearing the field removes it, as with the string shape.
-  The plain dropdown has no clear control.
+- Clearing the field removes the whole object, as with the string shape (see
+  [Clearing a selection](#clearing-a-selection)).
 
 Switching a field from `type: "string"` to `type: "object"` changes what it stores, so
 whatever reads it has to change with it. A workflow condition reads `.value`
 (`form.commodity.value == '7'`), a uischema rule scopes to
 `#/properties/commodity/properties/value`, and a template prints `.label`. Fields left as
 `type: "string"` are unaffected.
+
+## Clearing a selection
+
+While a value is picked and the field is enabled, the dropdown shows a `×` ("Clear
+selection") beside its arrow, as the autocomplete and `SearchSelectControl` do. Clicking
+it, or pressing Enter or Space on it, empties the field without opening the list, and the
+placeholder shows again.
+
+A cleared field is left out of the form data, not stored as `""` or `null`, in either
+shape. An optional field the trader picked by mistake is therefore submitted exactly as
+if it had never been touched. A required field reports that it is required again.
 
 ## Type to filter (`options.autocomplete`)
 
