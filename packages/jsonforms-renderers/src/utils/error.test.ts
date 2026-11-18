@@ -12,12 +12,23 @@ describe('getErrorMessage', () => {
     expect(getErrorMessage('must be multiple of 0.01', 'Amount')).toBe('Amount must be a multiple of 0.01')
   })
 
-  it('rewrites a formatMinimum bound', () => {
+  it('rewrites format-limit bounds for all four comparisons', () => {
     expect(getErrorMessage('should be >= today', 'Estimated Shipment Date')).toBe(
       'Estimated Shipment Date must be today or later',
     )
     expect(getErrorMessage('should be >= 2026-01-01', 'Estimated Shipment Date')).toBe(
       'Estimated Shipment Date must be on or after 1 Jan 2026',
+    )
+    expect(getErrorMessage('should be <= today', 'Expiry Date')).toBe('Expiry Date must be today or earlier')
+    expect(getErrorMessage('should be <= 2026-12-31', 'Expiry Date')).toBe(
+      'Expiry Date must be on or before 31 Dec 2026',
+    )
+    expect(getErrorMessage('should be > today', 'Start Date')).toBe('Start Date must be after today')
+    expect(getErrorMessage('should be > 2026-01-01', 'Start Date')).toBe('Start Date must be after 1 Jan 2026')
+    expect(getErrorMessage('should be < today', 'End Date')).toBe('End Date must be before today')
+    expect(getErrorMessage('should be < 2026-12-31', 'End Date')).toBe('End Date must be before 31 Dec 2026')
+    expect(getErrorMessage('should be >= 2026-01-01T00:00:00+05:30', 'Start Date')).toBe(
+      'Start Date must be on or after 1 Jan 2026',
     )
   })
 

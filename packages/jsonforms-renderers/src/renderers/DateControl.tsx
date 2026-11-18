@@ -15,7 +15,7 @@ import { format, isValid } from 'date-fns'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { useReadOnlyMark } from '../contexts/formReview'
 import { getErrorMessage } from '../utils/error'
-import { localISODate } from '../utils/localDate'
+import { datePickerBounds } from '../utils/localDate'
 import { timeInputValue, toRfc3339Time } from '../utils/time'
 import { ReadOnlyLock } from './ReadOnlyLock'
 
@@ -32,14 +32,6 @@ const toISODateTime = (dateStr: string, timeStr: string) => {
 }
 
 export { localISODate } from '../utils/localDate'
-
-/** The picker's minimum from schema `formatMinimum`. `"today"` is the current local day. */
-function earliestDay(schema: { format?: string; formatMinimum?: unknown }): string | undefined {
-  if (schema.format === 'time' || typeof schema.formatMinimum !== 'string') return undefined
-  if (schema.formatMinimum === 'today') return localISODate()
-  const day = schema.formatMinimum.slice(0, 10)
-  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : undefined
-}
 
 type ShellProps = Pick<ControlProps, 'path' | 'label' | 'required' | 'errors'> & {
   description?: string
@@ -99,7 +91,7 @@ export const DateControl = ({
   // Stored values always include seconds so AJV format "time" still passes.
   const showSeconds = uischema?.options?.showSeconds === true
   const timeStep = showSeconds ? 1 : 60
-  const earliestDate = earliestDay(schema)
+  const { min: earliestDate, max: latestDate } = datePickerBounds(schema)
 
   const shell = (children: ReactNode) => (
     <FieldShell path={path} label={label} required={showRequired} errors={errors} description={schema.description}>
@@ -143,6 +135,7 @@ export const DateControl = ({
         type="date"
         value={datePart}
         min={earliestDate}
+        max={latestDate}
         disabled={!enabled}
         color={!isValid ? 'red' : undefined}
         onChange={(e) => commit(e.target.value, timeForInput)}
