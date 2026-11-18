@@ -12,7 +12,7 @@ import { withJsonFormsControlProps } from '@jsonforms/react'
 import { useClearWhenHidden } from '../hooks/useClearWhenHidden'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { useAnswerPlaceholder } from '../contexts/formReview'
-import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react'
 
 import { Select, Text, Flex, Box, TextField, ScrollArea } from '@radix-ui/themes'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
@@ -28,6 +28,62 @@ interface SelectOption {
 interface SelectValue {
   value: string | number | boolean
   label?: string
+}
+
+// The plain dropdown's × is laid over its trigger, so its placement mirrors the CSS of Radix Themes'
+// `Select.Trigger` at size 2: right padding `--space-3`, a 9px chevron, and a `1.5 × --space-1` gap
+// between label and chevron. Recheck these when Radix Themes is upgraded or the trigger's size changes.
+const TRIGGER_SIZE = '2'
+const TRIGGER_PADDING_RIGHT = 'var(--space-3)'
+const TRIGGER_CHEVRON_WIDTH = '9px'
+const TRIGGER_GAP = 'calc(var(--space-1) * 1.5)'
+
+// widen the label–chevron gap so a long label ellipsizes before the ×
+const TRIGGER_STYLE_WITH_CLEAR: CSSProperties = { gap: `calc(${TRIGGER_GAP} + var(--space-4))` }
+
+// just left of the chevron, vertically centred on the trigger
+const PLAIN_CLEAR_BUTTON_STYLE: CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  right: `calc(${TRIGGER_PADDING_RIGHT} + ${TRIGGER_CHEVRON_WIDTH} + var(--space-1))`,
+  transform: 'translateY(-50%)',
+  fontSize: 'var(--font-size-2)', // the trigger's text size, as inside the autocomplete's input
+}
+
+const CLEAR_BUTTON_BASE_STYLE: CSSProperties = {
+  margin: 0,
+  padding: '0 2px',
+  border: 0,
+  background: 'none',
+  fontFamily: 'inherit',
+  fontSize: 'inherit',
+  lineHeight: 1,
+  color: 'var(--gray-9)',
+  cursor: 'pointer',
+}
+
+function ClearButton({
+  onClick,
+  style,
+}: {
+  onClick: (e: ReactMouseEvent<HTMLButtonElement>) => void
+  style?: CSSProperties
+}) {
+  return (
+    <button
+      type="button"
+      tabIndex={0} // Safari leaves native buttons out of the Tab order without it
+      aria-label="Clear selection"
+      onMouseDown={(e) => e.preventDefault()} // a click leaves focus where it was
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick(e)
+      }}
+      style={{ ...CLEAR_BUTTON_BASE_STYLE, ...style }}
+    >
+      ×
+    </button>
+  )
 }
 
 export const SelectControl = ({
@@ -119,22 +175,7 @@ export const SelectControl = ({
 
   // `undefined` in both shapes, like SearchSelectControl and useClearWhenHidden: JSON Forms then
   // drops the key, so an emptied optional field is left out of the data rather than saved as "".
-  const onClear = (e: SyntheticEvent) => {
-    e.stopPropagation()
-    // The × unmounts once the value is gone. If it held keyboard focus, hand that to the dropdown's
-    // trigger so focus doesn't fall back to <body>. The autocomplete renders no trigger.
-    const hadFocus = e.currentTarget === document.activeElement
-    handleChange(path, undefined)
-    setInputValue('')
-    if (hadFocus) triggerRef.current?.focus()
-  }
-
-  const onClearKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault() // keep Space from scrolling the page
-      onClear(e)
-    }
-  }
+  const clear = () => handleChange(path, undefined)
 
   const clearable = value !== '' && enabled
 
@@ -201,17 +242,12 @@ export const SelectControl = ({
               <TextField.Slot side="right">
                 <Flex align="center" gap="1">
                   {clearable && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onMouseDown={(e) => e.preventDefault()} // prevent input blur before click fires
-                      onClick={onClear}
-                      onKeyDown={onClearKeyDown}
-                      style={{ lineHeight: 1, color: 'var(--gray-9)', padding: '0 2px', cursor: 'pointer' }}
-                      aria-label="Clear selection"
-                    >
-                      ×
-                    </span>
+                    <ClearButton
+                      onClick={() => {
+                        clear()
+                        setInputValue('')
+                      }}
+                    />
                   )}
                   <ChevronDownIcon
                     style={{ transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }}
@@ -297,6 +333,7 @@ export const SelectControl = ({
         {/* column Flex so the trigger keeps stretching to full width inside the positioned wrapper */}
         <Flex direction="column" position="relative">
           <Select.Root
+            size={TRIGGER_SIZE}
             value={value}
             onValueChange={(val) => {
               // '' (cleared) matches no option, so a reset from Radix never writes back
@@ -310,8 +347,7 @@ export const SelectControl = ({
               {...placeholderProps}
               color={!isValid ? 'red' : undefined}
               id={path}
-              // widen the label–chevron gap to make room for the clear button laid over it
-              style={clearable ? { gap: 'calc(var(--space-1) * 1.5 + var(--space-4))' } : undefined}
+              style={clearable ? TRIGGER_STYLE_WITH_CLEAR : undefined}
             >
               {/* shows the stored label even when its value is no longer one of the options */}
               {isObjectMode && currentLabel ? currentLabel : undefined}
@@ -325,29 +361,18 @@ export const SelectControl = ({
             </Select.Content>
           </Select.Root>
           {/* A sibling of the trigger, not a child: a button can't hold another one, and Radix
-              opens the list on any pointerdown inside the trigger. Sits just left of the 9px chevron. */}
+              opens the list on any pointerdown inside the trigger. */}
           {clearable && (
-            <span
-              role="button"
-              tabIndex={0}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={onClear}
-              onKeyDown={onClearKeyDown}
-              style={{
-                position: 'absolute',
-                top: '50%',
-                right: 'calc(var(--space-3) + 9px + var(--space-1))',
-                transform: 'translateY(-50%)',
-                fontSize: 'var(--font-size-2)', // the trigger's text size, as inside the autocomplete's input
-                lineHeight: 1,
-                color: 'var(--gray-9)',
-                padding: '0 2px',
-                cursor: 'pointer',
+            <ClearButton
+              style={PLAIN_CLEAR_BUTTON_STYLE}
+              onClick={(e) => {
+                // The × unmounts once the value is gone. If it held keyboard focus, hand that to the
+                // trigger so focus doesn't fall back to <body>.
+                const hadFocus = e.currentTarget === document.activeElement
+                clear()
+                if (hadFocus) triggerRef.current?.focus()
               }}
-              aria-label="Clear selection"
-            >
-              ×
-            </span>
+            />
           )}
         </Flex>
         {!isValid && (

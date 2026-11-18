@@ -193,25 +193,27 @@ describe('SelectControl plain dropdown clear', () => {
     expect(screen.getByRole('combobox').getAttribute('aria-expanded')).toBe('false')
   })
 
-  it.each(['Enter', ' '])('clears from the keyboard with %j', async (key) => {
-    const { writes } = renderForm(plainUischema, { country: 'India' })
+  // jsdom doesn't turn Enter/Space into a click, so these check for a native button (which the
+  // browser activates on both keys) and stand in a click for the key press.
+  it('is a native button, so Enter and Space work without custom key handling', () => {
+    renderForm(plainUischema, { country: 'India' })
+    const clear = screen.getByLabelText('Clear selection')
+    expect(clear.tagName).toBe('BUTTON')
+    expect(clear.getAttribute('type')).toBe('button')
+  })
 
-    fireEvent.keyDown(screen.getByLabelText('Clear selection'), { key })
+  it('hands focus to the trigger after clearing from the keyboard', async () => {
+    const { writes } = renderForm(plainUischema, { country: 'India' })
+    const clear = screen.getByLabelText('Clear selection')
+    clear.focus()
+
+    fireEvent.click(clear)
 
     await waitFor(() => {
       expect(writes.length).toBeGreaterThan(0)
       expect('country' in writes[writes.length - 1]).toBe(false)
     })
-  })
-
-  it.each(['Enter', ' '])('hands focus to the trigger after clearing with %j', async (key) => {
-    renderForm(plainUischema, { country: 'India' })
-    const clear = screen.getByLabelText('Clear selection')
-    clear.focus()
-
-    fireEvent.keyDown(clear, { key })
-
-    await waitFor(() => expect(screen.queryByLabelText('Clear selection')).toBeNull())
+    expect(screen.queryByLabelText('Clear selection')).toBeNull()
     expect(document.activeElement).toBe(screen.getByRole('combobox'))
     expect(screen.getByRole('combobox').getAttribute('aria-expanded')).toBe('false')
   })
