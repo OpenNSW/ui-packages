@@ -24,4 +24,10 @@ describe('getErrorMessage', () => {
   it('passes through unknown messages', () => {
     expect(getErrorMessage('must be string', 'Name')).toBe('must be string')
   })
+
+  it('shows a repeated line once', () => {
+    expect(getErrorMessage('Enter 10 digits.\nEnter 10 digits.\nmust be string', 'Phone')).toBe(
+      'Enter 10 digits.\nmust be string',
+    )
+  })
 })
