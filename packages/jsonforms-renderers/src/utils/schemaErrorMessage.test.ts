@@ -143,3 +143,57 @@ describe('schemaErrorMessage', () => {
     expect(schemaErrorMessage({ schemaPath: 'other.json#/minLength' }, {})).toBeUndefined()
   })
 })
+
+describe('a property named like a schema keyword', () => {
+  it.each(['then', 'else'])("doesn't treat a property named %s as a conditional block", (name) => {
+    const schema = {
+      properties: {
+        [name]: {
+          'x-error-message': 'Message on the object.',
+          properties: { name: { type: 'string', minLength: 3 } },
+        },
+      },
+    }
+
+    expect(
+      messages(schema, { [name]: { name: 'a' } })[`#/properties/${name}/properties/name/minLength`],
+    ).toBeUndefined()
+  })
+
+  it("doesn't treat the items of a property named allOf as allOf entries", () => {
+    const schema = {
+      properties: {
+        allOf: {
+          type: 'array',
+          items: { 'x-error-message': 'Message on the items.', properties: { code: { minLength: 3 } } },
+        },
+      },
+    }
+
+    expect(
+      messages(schema, { allOf: [{ code: 'a' }] })['#/properties/allOf/items/properties/code/minLength'],
+    ).toBeUndefined()
+  })
+
+  it("still uses a then's message around a property named then", () => {
+    const schema = {
+      if: { required: ['a'] },
+      then: { 'x-error-message': 'Real block.', properties: { then: { properties: { name: { minLength: 3 } } } } },
+    }
+
+    expect(messages(schema, { a: 1, then: { name: 'x' } })['#/then/properties/then/properties/name/minLength']).toBe(
+      'Real block.',
+    )
+  })
+
+  it("doesn't stop at a property named contains", () => {
+    const schema = {
+      if: { required: ['a'] },
+      then: { 'x-error-message': 'Real block.', properties: { contains: { properties: { name: { minLength: 3 } } } } },
+    }
+
+    expect(
+      messages(schema, { a: 1, contains: { name: 'x' } })['#/then/properties/contains/properties/name/minLength'],
+    ).toBe('Real block.')
+  })
+})
