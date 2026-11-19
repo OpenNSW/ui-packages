@@ -115,6 +115,45 @@ describe('schemaErrorMessage', () => {
     expect(result['#/then/properties/documents/contains']).toBe('Add a proof of address.')
   })
 
+  it("uses a message written inside a contains for the items' rules", () => {
+    const schema = {
+      properties: {
+        documents: {
+          'x-error-message': 'Add a proof of address.',
+          contains: {
+            properties: { type: { const: 'Proof of address', 'x-error-message': 'Type must be Proof of address.' } },
+            required: ['type'],
+          },
+        },
+      },
+    }
+
+    const result = messages(schema, { documents: [{ type: 'Invoice' }] })
+    expect(result['#/properties/documents/contains/properties/type/const']).toBe('Type must be Proof of address.')
+    expect(result['#/properties/documents/contains']).toBe('Add a proof of address.')
+  })
+
+  it("uses a then's message written inside a contains for the items' rules", () => {
+    const schema = {
+      properties: {
+        documents: {
+          'x-error-message': 'Add a proof of address.',
+          contains: {
+            if: { required: ['type'] },
+            then: {
+              'x-error-message': 'Type must be Proof of address.',
+              properties: { type: { const: 'Proof of address' } },
+            },
+          },
+        },
+      },
+    }
+
+    const result = messages(schema, { documents: [{ type: 'Invoice' }] })
+    expect(result['#/properties/documents/contains/then/properties/type/const']).toBe('Type must be Proof of address.')
+    expect(result['#/properties/documents/contains']).toBe('Add a proof of address.')
+  })
+
   it('reads the message inside a local $ref target', () => {
     const schema = {
       $defs: { code: { type: 'string', minLength: 3, 'x-error-message': 'Use a 3-letter code.' } },

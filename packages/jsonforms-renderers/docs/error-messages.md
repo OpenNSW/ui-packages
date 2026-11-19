@@ -59,7 +59,7 @@ Put the message on the innermost `then`/`else` it describes. An outer `then` usu
 
 - **The nearest message wins.** A field's own message overrides one on the `then` around it, and an inner `then`'s overrides an outer one's.
 - **A message on an object doesn't cover its fields.** `minProperties` on `consignee` gets the object's message; `minLength` on `consignee.name` doesn't. Put a message on each field instead.
-- **Not inside a `contains`.** AJV also reports why each item didn't match a `contains`. Those errors keep AJV's text, so a non-matching row doesn't show the message meant for the list.
+- **A message outside a `contains` doesn't reach into it.** AJV also reports why each item didn't match a `contains`. Those errors keep AJV's text unless you write a message inside the `contains` schema, so a non-matching row doesn't show the message meant for the list.
 - **`$ref`.** AJV reports a rule inside a referenced schema at the referenced location, so put the message inside the referenced schema. A `$ref` to another schema file isn't followed.
 - **Repeated lines show once.** Two rules that fail under one message show it once on the field.
 

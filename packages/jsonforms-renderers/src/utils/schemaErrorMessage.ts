@@ -88,7 +88,8 @@ export function schemaErrorMessage(error: { schemaPath: string }, rootSchema: Js
 
   // nodes[i] was reached through segments[i - 1].
   for (let i = nodes.length - 2; i > 0; i--) {
-    // Errors inside a `contains` say why an item didn't match, not that the rule failed.
+    // Errors inside a `contains` say why an item didn't match, not that the rule failed, so a message
+    // from outside it doesn't apply to them. One written inside it is found before the climb gets here.
     if (edges[i] === 'keyword' && segments[i] === 'contains') return undefined
     if (coversInside(segments, edges, i)) {
       const message = messageOf(nodes[i])
