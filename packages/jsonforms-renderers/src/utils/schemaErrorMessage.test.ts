@@ -132,6 +132,16 @@ describe('schemaErrorMessage', () => {
     expect(messages(schema, { 'a/b~c': 'x' })['#/properties/a~1b~0c/minLength']).toBe('Too short.')
   })
 
+  it.each(['full name', 'naïve', '日本', '100%', '%41', 'a#b', '50%/~x'])('follows a property named %j', (name) => {
+    const schema = { properties: { [name]: { type: 'string', minLength: 3, 'x-error-message': 'Too short.' } } }
+
+    expect(Object.values(messages(schema, { [name]: 'a' }))).toEqual(['Too short.'])
+  })
+
+  it('reads a path with a stray % as written instead of throwing', () => {
+    expect(schemaErrorMessage({ schemaPath: '#/properties/100%/minLength' }, { properties: {} })).toBeUndefined()
+  })
+
   it('returns undefined when the form has no message', () => {
     const schema = { properties: { name: { type: 'string', minLength: 2 } } }
 

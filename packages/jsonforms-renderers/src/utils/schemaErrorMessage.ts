@@ -49,8 +49,19 @@ const coversInside = (segments: string[], edges: Edge[], nodeIndex: number) => {
 const messageOf = (node: SchemaNode): string | undefined =>
   typeof node[KEYWORD] === 'string' ? node[KEYWORD] : undefined
 
-/** One JSON Pointer token, unescaped (RFC 6901). */
-const decode = (segment: string) => segment.replace(/~1/g, '/').replace(/~0/g, '~')
+/**
+ * One schema-path token as the property name it stands for. AJV builds a token by escaping `~` and `/`
+ * (RFC 6901) and then percent-encoding the result, so this undoes those steps in the reverse order.
+ */
+const decode = (segment: string) => {
+  let token = segment
+  try {
+    token = decodeURIComponent(segment)
+  } catch {
+    // Not a token AJV produced (a stray %); read it as written rather than fail the form.
+  }
+  return token.replace(/~1/g, '/').replace(/~0/g, '~')
+}
 
 /**
  * The form's own message for a failed rule, from `x-error-message`, or undefined
