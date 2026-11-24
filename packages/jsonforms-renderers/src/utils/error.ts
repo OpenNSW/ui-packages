@@ -1,12 +1,30 @@
+import { resolveFormatDay } from './localDate'
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /** `2026-01-01` becomes `1 Jan 2026`. A value that is not a calendar day is left as written. */
 function formatDay(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  const day = resolveFormatDay(value) ?? value
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day)
   if (!match) return value
   const month = MONTHS[Number(match[2]) - 1]
   if (!month) return value
   return `${Number(match[3])} ${month} ${match[1]}`
+}
+
+/** Ajv format-limit messages: should be >= / <= / > / < {limit}. */
+function formatLimitMessage(field: string, op: '>=' | '<=' | '>' | '<', limit: string): string {
+  if (limit === 'today') {
+    if (op === '>=') return `${field} must be today or later`
+    if (op === '<=') return `${field} must be today or earlier`
+    if (op === '>') return `${field} must be after today`
+    return `${field} must be before today`
+  }
+  const day = formatDay(limit)
+  if (op === '>=') return `${field} must be on or after ${day}`
+  if (op === '<=') return `${field} must be on or before ${day}`
+  if (op === '>') return `${field} must be after ${day}`
+  return `${field} must be before ${day}`
 }
 
 export const getErrorMessage = (errors: string, label?: string): string => {
@@ -28,11 +46,9 @@ export const getErrorMessage = (errors: string, label?: string): string => {
       if (trimmed.startsWith('must be multiple of ')) {
         return `${field} must be a multiple of ${trimmed.slice('must be multiple of '.length)}`
       }
-      const formatBound = /^should be >= (\S+)$/.exec(trimmed)
+      const formatBound = /^should be (>=|<=|>|<) (\S+)$/.exec(trimmed)
       if (formatBound) {
-        const limit = formatBound[1]
-        if (limit === 'today') return `${field} must be today or later`
-        return `${field} must be on or after ${formatDay(limit)}`
+        return formatLimitMessage(field, formatBound[1] as '>=' | '<=' | '>' | '<', formatBound[2])
       }
       return err
     })

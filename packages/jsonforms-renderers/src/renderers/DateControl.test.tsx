@@ -250,6 +250,74 @@ describe('DateControl no past days', () => {
     })
     expect(screen.queryByText(/must be today or later/)).toBeNull()
   })
+
+  it('sets the picker max from formatMaximum', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        expiry: {
+          type: 'string',
+          format: 'date',
+          title: 'Expiry Date',
+          formatMaximum: '2026-12-31',
+        },
+      },
+    } as JsonSchema
+    const control = {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/expiry' }],
+    } as UISchemaElement
+
+    renderForm(schema, control, {}, ajv)
+    const input = screen.getByLabelText(/Expiry Date/)
+    expect(input.getAttribute('max')).toBe('2026-12-31')
+    expect(input.getAttribute('min')).toBeNull()
+  })
+
+  it('moves exclusive format limits by one day on the picker', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        window: {
+          type: 'string',
+          format: 'date',
+          title: 'Window',
+          formatExclusiveMinimum: 'today',
+          formatExclusiveMaximum: '2026-12-31',
+        },
+      },
+    } as JsonSchema
+    const control = {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/window' }],
+    } as UISchemaElement
+
+    renderForm(schema, control, {}, ajv)
+    const input = screen.getByLabelText(/Window/)
+    expect(input.getAttribute('min')).toBe('2026-10-23')
+    expect(input.getAttribute('max')).toBe('2026-12-30')
+  })
+
+  it('reports a formatMaximum failure in plain language', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        expiry: {
+          type: 'string',
+          format: 'date',
+          title: 'Expiry Date',
+          formatMaximum: 'today',
+        },
+      },
+    } as JsonSchema
+    const control = {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/expiry' }],
+    } as UISchemaElement
+
+    renderForm(schema, control, { expiry: '2026-10-23' }, ajv)
+    expect(screen.getByText('Expiry Date must be today or earlier')).toBeTruthy()
+  })
 })
 
 describe('DateControl visibility', () => {
