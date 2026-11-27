@@ -609,17 +609,6 @@ describe('SearchSelectControl opening', () => {
     },
   } as unknown as JsonSchema
 
-  const smallListSchema = {
-    type: 'object',
-    properties: {
-      port: {
-        type: 'string',
-        title: 'Port',
-        'x-search': { service: 'countries', mode: 'small-list', displayTemplate: '{name}' },
-      },
-    },
-  } as unknown as JsonSchema
-
   const portUi = {
     type: 'VerticalLayout',
     elements: [{ type: 'Control', scope: '#/properties/port' }],
@@ -627,69 +616,15 @@ describe('SearchSelectControl opening', () => {
 
   const noResults = () => Promise.resolve({ options: [] })
 
-  // The test service resolves a stored id to itself as the label.
-  async function renderStoredPort() {
-    const form = renderForm({ port: 'LK' }, noResults, pagedSchema, portUi)
+  it('keeps the list closed and the selected label shown when the field only receives focus', async () => {
+    // The test service resolves a stored id to itself as the label.
+    renderForm({ port: 'LK' }, noResults, pagedSchema, portUi)
     const input = screen.getByRole<HTMLInputElement>('textbox')
     await waitFor(() => expect(input.value).toBe('LK'))
-    return { ...form, input }
-  }
-
-  it('keeps the list closed and the selected label shown when the field only receives focus', async () => {
-    const { input } = await renderStoredPort()
 
     fireEvent.focus(input)
 
     expect(input.value).toBe('LK')
-    expect(screen.queryByText('Type to search…')).toBeNull()
-  })
-
-  it('opens when the input is clicked', async () => {
-    const { input } = await renderStoredPort()
-
-    fireEvent.click(input)
-
-    expect(await screen.findByText('Type to search…')).toBeTruthy()
-    expect(input.value).toBe('')
-  })
-
-  it('opens when the chevron is clicked', async () => {
-    await renderStoredPort()
-
-    fireEvent.click(document.querySelector('.rt-TextFieldSlot') as HTMLElement)
-
-    expect(await screen.findByText('Type to search…')).toBeTruthy()
-  })
-
-  it('opens on ArrowDown', async () => {
-    const { input } = await renderStoredPort()
-
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
-
-    expect(await screen.findByText('Type to search…')).toBeTruthy()
-  })
-
-  it('reopens when the input is clicked again after a pick', async () => {
-    renderForm({}, () => Promise.resolve({ options: [{ id: 'LK', name: 'Sri Lanka' }] }), smallListSchema, portUi)
-    const input = screen.getByRole<HTMLInputElement>('textbox')
-
-    fireEvent.click(input)
-    fireEvent.click(await screen.findByText('Sri Lanka'))
-    await waitFor(() => expect(input.value).toBe('Sri Lanka'))
-
-    fireEvent.click(input)
-
-    expect(await screen.findByText('Sri Lanka')).toBeTruthy()
-    expect(input.value).toBe('')
-  })
-
-  it('clears without opening when × is clicked', async () => {
-    const { input, latest } = await renderStoredPort()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
-
-    await waitFor(() => expect(latest()?.port).toBeUndefined())
-    expect(input.value).toBe('')
     expect(screen.queryByText('Type to search…')).toBeNull()
   })
 

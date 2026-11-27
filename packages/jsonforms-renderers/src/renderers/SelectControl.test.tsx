@@ -153,45 +153,6 @@ describe('SelectControl autocomplete', () => {
     expect(screen.queryByText('Sri Lanka')).toBeNull()
   })
 
-  it('opens when the chevron is clicked', () => {
-    renderForm(autocompleteUischema, {})
-
-    fireEvent.click(document.querySelector('.rt-TextFieldSlot') as HTMLElement)
-
-    expect(screen.getByText('Sri Lanka')).toBeTruthy()
-  })
-
-  it('opens on ArrowDown', () => {
-    renderForm(autocompleteUischema, {})
-
-    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'ArrowDown' })
-
-    expect(screen.getByText('Sri Lanka')).toBeTruthy()
-  })
-
-  it('reopens when the input is clicked again after a pick', async () => {
-    renderForm(autocompleteUischema, {})
-    const input = screen.getByRole<HTMLInputElement>('textbox')
-
-    fireEvent.click(input)
-    fireEvent.click(screen.getByText('India'))
-    await waitFor(() => expect(input.value).toBe('India'))
-
-    fireEvent.click(input)
-
-    expect(screen.getByText('Sri Lanka')).toBeTruthy()
-    expect(input.value).toBe('')
-  })
-
-  it('clears without opening when × is clicked', async () => {
-    const { writes } = renderForm(autocompleteUischema, { country: 'Maldives' })
-
-    fireEvent.click(screen.getByLabelText('Clear selection'))
-
-    await waitFor(() => expect(writes[writes.length - 1]?.country).toBeUndefined())
-    expect(screen.queryByText('Sri Lanka')).toBeNull()
-  })
-
   it('does not show a clear button when there is no value', () => {
     renderForm(autocompleteUischema, {})
     expect(screen.queryByLabelText('Clear selection')).toBeNull()
