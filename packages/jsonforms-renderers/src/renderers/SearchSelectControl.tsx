@@ -453,6 +453,13 @@ const SearchSelectControl = ({
     setOpen(true)
   }
 
+  // The list opens on a click, a keystroke or ArrowDown, never on focus alone: a dialog
+  // focuses its first field on open, and an open list replaces the selected label with
+  // the empty search text.
+  const openIfClosed = () => {
+    if (isEnabled && !open) openDropdown()
+  }
+
   const onSelect = (option: SearchOption) => {
     if (isMulti) {
       const exists = selectedIds.has(option.id)
@@ -554,17 +561,22 @@ const SearchSelectControl = ({
             style={!isValid ? { outline: '2px solid var(--red-7)', outlineOffset: '-1px' } : undefined}
             onChange={(e) => {
               if (!modeConfig?.searchable) return
-              setInputValue(e.target.value)
+              // Open first: openDropdown() empties the query, and the typed text must win.
               if (!open) openDropdown()
+              setInputValue(e.target.value)
             }}
-            onFocus={() => {
-              if (isEnabled && !open) openDropdown()
-            }}
+            onClick={openIfClosed}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') setOpen(false)
+              if (e.key === 'Escape') {
+                setOpen(false)
+              } else if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                openIfClosed()
+              }
             }}
           >
-            <TextField.Slot side="right">
+            {/* The slot sits beside the input, so a click on the chevron doesn't reach the input's onClick. */}
+            <TextField.Slot side="right" onClick={openIfClosed}>
               <Flex align="center" gap="1">
                 {hasSelection && isEnabled && (
                   <span

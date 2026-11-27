@@ -84,7 +84,7 @@ describe('SelectControl autocomplete', () => {
     const { writes } = renderForm(autocompleteUischema, {})
 
     const input = screen.getByRole('textbox')
-    fireEvent.focus(input)
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: 'ind' } })
 
     expect(screen.getByText('India')).toBeTruthy()
@@ -119,7 +119,7 @@ describe('SelectControl autocomplete', () => {
     const { writes } = renderForm(autocompleteUischema, {})
 
     const input = screen.getByRole('textbox')
-    fireEvent.focus(input)
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: 'ind' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -132,7 +132,7 @@ describe('SelectControl autocomplete', () => {
     const { writes } = renderForm(autocompleteUischema, {})
 
     const input = screen.getByRole('textbox')
-    fireEvent.focus(input) // opens with the full list: Sri Lanka, India, Maldives
+    fireEvent.click(input) // opens with the full list: Sri Lanka, India, Maldives
     fireEvent.keyDown(input, { key: 'ArrowDown' }) // -> India
     fireEvent.keyDown(input, { key: 'ArrowDown' }) // -> Maldives
     fireEvent.keyDown(input, { key: 'ArrowUp' }) // -> India
@@ -141,6 +141,16 @@ describe('SelectControl autocomplete', () => {
     await waitFor(() => {
       expect(writes[writes.length - 1]?.country).toBe('India')
     })
+  })
+
+  it('keeps the list closed and the selected label shown when the field only receives focus', () => {
+    renderForm(autocompleteUischema, { country: 'Maldives' })
+    const input = screen.getByRole<HTMLInputElement>('textbox')
+
+    fireEvent.focus(input)
+
+    expect(input.value).toBe('Maldives')
+    expect(screen.queryByText('Sri Lanka')).toBeNull()
   })
 
   it('does not show a clear button when there is no value', () => {
@@ -292,7 +302,7 @@ describe('SelectControl object-shaped field', () => {
     const { writes } = renderForm(autocompleteUischema, {}, objectSchema)
 
     const input = screen.getByRole('textbox')
-    fireEvent.focus(input)
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: 'leaf' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -381,7 +391,7 @@ describe('SelectControl object-shaped field', () => {
     const { writes } = renderForm(uischema, {}, numericSchema)
 
     const input = screen.getByRole('textbox')
-    fireEvent.focus(input)
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: '2' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { StrictMode, useState } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { JsonForms } from '@jsonforms/react'
 import { Theme } from '@radix-ui/themes'
 import type { JsonSchema, UISchemaElement } from '@jsonforms/core'
@@ -92,7 +92,7 @@ describe('SearchSelectControl dependsOn', () => {
     })
 
     const country = screen.getAllByRole('textbox')[1]
-    fireEvent.focus(country)
+    fireEvent.click(country)
 
     expect(await screen.findByText('Select the related field first.')).toBeTruthy()
     expect(searches).toHaveLength(0)
@@ -150,7 +150,7 @@ describe('SearchSelectControl dependsOn', () => {
       mapUi,
     )
 
-    fireEvent.focus(screen.getAllByRole('textbox')[2])
+    fireEvent.click(screen.getAllByRole('textbox')[2])
     expect(await screen.findByText('Select the related field first.')).toBeTruthy()
     expect(searches).toHaveLength(0)
 
@@ -225,7 +225,7 @@ describe('SearchSelectControl dependsOn', () => {
       mapUi,
     )
 
-    fireEvent.focus(screen.getAllByRole('textbox')[2])
+    fireEvent.click(screen.getAllByRole('textbox')[2])
 
     await waitFor(() => {
       expect(searches.length).toBeGreaterThan(0)
@@ -270,7 +270,7 @@ describe('SearchSelectControl dependsOn', () => {
       brokenUi,
     )
 
-    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(screen.getByRole('textbox'))
     expect(await screen.findByText('Select the related field first.')).toBeTruthy()
     expect(searches).toHaveLength(0)
   })
@@ -307,7 +307,7 @@ describe('SearchSelectControl displayTemplate', () => {
       stringUi,
     )
 
-    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(screen.getByRole('textbox'))
     expect(await screen.findByText('x-search.displayTemplate is required.')).toBeTruthy()
     expect(screen.queryByText('ALTHEIMER')).toBeNull()
     expect(searches).toHaveLength(0)
@@ -354,7 +354,7 @@ describe('SearchSelectControl displayTemplate', () => {
 
     const { latest } = renderForm({}, () => Promise.resolve({ options: [portOption] }), formSchema, stringUi)
 
-    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(screen.getByRole('textbox'))
     fireEvent.click(await screen.findByText('USTMR-ALTHEIMER'))
 
     await waitFor(() => {
@@ -429,7 +429,7 @@ describe('SearchSelectControl displayTemplate', () => {
 
     const { latest } = renderForm({}, () => Promise.resolve({ options: [portOption] }), formSchema, stringUi)
 
-    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(screen.getByRole('textbox'))
     fireEvent.click(await screen.findByText('USTMR-ALTHEIMER'))
 
     await waitFor(() => {
@@ -478,7 +478,7 @@ describe('SearchSelectControl multi (array of x-search objects)', () => {
     const { latest } = renderForm({}, async () => ({ options: multiOptions }), multiSchema, multiUi)
 
     expect(screen.queryByRole('button', { name: /Add Item/ })).toBeNull()
-    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(screen.getByRole('textbox'))
     fireEvent.click(await screen.findByText('India'))
     fireEvent.click(await screen.findByText('Singapore'))
 
@@ -493,7 +493,7 @@ describe('SearchSelectControl multi (array of x-search objects)', () => {
   it('does not add another option once schema.maxItems is reached', async () => {
     const { latest } = renderForm({}, async () => ({ options: multiOptions }), multiSchema, multiUi)
 
-    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.click(screen.getByRole('textbox'))
     fireEvent.click(await screen.findByText('India'))
     fireEvent.click(await screen.findByText('Singapore'))
     fireEvent.click(await screen.findByText('Sri Lanka'))
@@ -515,7 +515,7 @@ describe('SearchSelectControl multi (array of x-search objects)', () => {
     const input = screen.getByRole<HTMLInputElement>('textbox')
     expect(input.readOnly).toBe(false)
 
-    fireEvent.focus(input)
+    fireEvent.click(input)
     fireEvent.click(await screen.findByText('India'))
     fireEvent.keyDown(input, { key: 'Escape' })
 
@@ -584,5 +584,105 @@ describe('SearchSelectControl multi (array of x-search objects)', () => {
     expect(await screen.findByText('India')).toBeTruthy()
     expect(screen.getByText('Singapore')).toBeTruthy()
     expect(screen.queryByText('IN')).toBeNull()
+  })
+})
+
+describe('SearchSelectControl opening', () => {
+  // Radix's dialogs measure themselves with ResizeObserver, which jsdom lacks.
+  beforeAll(() => {
+    globalThis.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  })
+
+  // Paginated mode doesn't fetch on open, so an open list shows "Type to search…".
+  const pagedSchema = {
+    type: 'object',
+    properties: {
+      port: {
+        type: 'string',
+        title: 'Port',
+        'x-search': { service: 'countries', mode: 'large-paginated-list', displayTemplate: '{name}' },
+      },
+    },
+  } as unknown as JsonSchema
+
+  const portUi = {
+    type: 'VerticalLayout',
+    elements: [{ type: 'Control', scope: '#/properties/port' }],
+  } as UISchemaElement
+
+  const noResults = () => Promise.resolve({ options: [] })
+
+  it('keeps the list closed and the selected label shown when the field only receives focus', async () => {
+    // The test service resolves a stored id to itself as the label.
+    renderForm({ port: 'LK' }, noResults, pagedSchema, portUi)
+    const input = screen.getByRole<HTMLInputElement>('textbox')
+    await waitFor(() => expect(input.value).toBe('LK'))
+
+    fireEvent.focus(input)
+
+    expect(input.value).toBe('LK')
+    expect(screen.queryByText('Type to search…')).toBeNull()
+  })
+
+  it('keeps the typed text and searches for it when typing opens the list', async () => {
+    const queries: string[] = []
+    renderForm(
+      {},
+      (args) => {
+        queries.push(args.query)
+        return Promise.resolve({ options: [] })
+      },
+      pagedSchema,
+      portUi,
+    )
+    const input = screen.getByRole<HTMLInputElement>('textbox')
+
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'Sri' } })
+
+    expect(input.value).toBe('Sri')
+    await waitFor(() => expect(queries).toContain('Sri'))
+  })
+
+  it('shows the selected label when a list dialog opens with this field first', async () => {
+    const listSchema = {
+      type: 'object',
+      properties: {
+        commodities: {
+          type: 'array',
+          title: 'Commodities',
+          items: {
+            type: 'object',
+            properties: {
+              commodity: {
+                type: 'string',
+                title: 'Commodity',
+                'x-search': { service: 'countries', mode: 'large-paginated-list', displayTemplate: '{name}' },
+              },
+              quantity: { type: 'number', title: 'Quantity' },
+            },
+          },
+        },
+      },
+    } as unknown as JsonSchema
+    const listUi = {
+      type: 'VerticalLayout',
+      elements: [{ type: 'Control', scope: '#/properties/commodities', options: { display: 'cards' } }],
+    } as UISchemaElement
+
+    renderForm({ commodities: [{ commodity: 'LK', quantity: 2 }] }, noResults, listSchema, listUi)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Open Item 1/ }))
+    const dialog = screen.getByRole('dialog')
+    const input = within(dialog).getAllByRole<HTMLInputElement>('textbox')[0]
+
+    // The dialog focuses its first field on open.
+    await waitFor(() => expect(document.activeElement).toBe(input))
+    await waitFor(() => expect(input.value).toBe('LK'))
+    expect(within(dialog).queryByText('Type to search…')).toBeNull()
   })
 })
