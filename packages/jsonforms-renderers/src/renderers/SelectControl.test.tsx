@@ -84,7 +84,7 @@ describe('SelectControl autocomplete', () => {
     const { writes } = renderForm(autocompleteUischema, {})
 
     const input = screen.getByRole('textbox')
-    fireEvent.focus(input)
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: 'ind' } })
 
     expect(screen.getByText('India')).toBeTruthy()
@@ -119,7 +119,7 @@ describe('SelectControl autocomplete', () => {
     const { writes } = renderForm(autocompleteUischema, {})
 
     const input = screen.getByRole('textbox')
-    fireEvent.focus(input)
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: 'ind' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -132,7 +132,7 @@ describe('SelectControl autocomplete', () => {
     const { writes } = renderForm(autocompleteUischema, {})
 
     const input = screen.getByRole('textbox')
-    fireEvent.focus(input) // opens with the full list: Sri Lanka, India, Maldives
+    fireEvent.click(input) // opens with the full list: Sri Lanka, India, Maldives
     fireEvent.keyDown(input, { key: 'ArrowDown' }) // -> India
     fireEvent.keyDown(input, { key: 'ArrowDown' }) // -> Maldives
     fireEvent.keyDown(input, { key: 'ArrowUp' }) // -> India
@@ -141,6 +141,55 @@ describe('SelectControl autocomplete', () => {
     await waitFor(() => {
       expect(writes[writes.length - 1]?.country).toBe('India')
     })
+  })
+
+  it('keeps the list closed and the selected label shown when the field only receives focus', () => {
+    renderForm(autocompleteUischema, { country: 'Maldives' })
+    const input = screen.getByRole<HTMLInputElement>('textbox')
+
+    fireEvent.focus(input)
+
+    expect(input.value).toBe('Maldives')
+    expect(screen.queryByText('Sri Lanka')).toBeNull()
+  })
+
+  it('opens when the chevron is clicked', () => {
+    renderForm(autocompleteUischema, {})
+
+    fireEvent.click(document.querySelector('.rt-TextFieldSlot') as HTMLElement)
+
+    expect(screen.getByText('Sri Lanka')).toBeTruthy()
+  })
+
+  it('opens on ArrowDown', () => {
+    renderForm(autocompleteUischema, {})
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'ArrowDown' })
+
+    expect(screen.getByText('Sri Lanka')).toBeTruthy()
+  })
+
+  it('reopens when the input is clicked again after a pick', async () => {
+    renderForm(autocompleteUischema, {})
+    const input = screen.getByRole<HTMLInputElement>('textbox')
+
+    fireEvent.click(input)
+    fireEvent.click(screen.getByText('India'))
+    await waitFor(() => expect(input.value).toBe('India'))
+
+    fireEvent.click(input)
+
+    expect(screen.getByText('Sri Lanka')).toBeTruthy()
+    expect(input.value).toBe('')
+  })
+
+  it('clears without opening when × is clicked', async () => {
+    const { writes } = renderForm(autocompleteUischema, { country: 'Maldives' })
+
+    fireEvent.click(screen.getByLabelText('Clear selection'))
+
+    await waitFor(() => expect(writes[writes.length - 1]?.country).toBeUndefined())
+    expect(screen.queryByText('Sri Lanka')).toBeNull()
   })
 
   it('does not show a clear button when there is no value', () => {
@@ -292,7 +341,7 @@ describe('SelectControl object-shaped field', () => {
     const { writes } = renderForm(autocompleteUischema, {}, objectSchema)
 
     const input = screen.getByRole('textbox')
-    fireEvent.focus(input)
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: 'leaf' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -381,7 +430,7 @@ describe('SelectControl object-shaped field', () => {
     const { writes } = renderForm(uischema, {}, numericSchema)
 
     const input = screen.getByRole('textbox')
-    fireEvent.focus(input)
+    fireEvent.click(input)
     fireEvent.change(input, { target: { value: '2' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 

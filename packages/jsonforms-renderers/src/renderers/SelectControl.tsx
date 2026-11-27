@@ -191,6 +191,17 @@ export const SelectControl = ({
       setOpen(false)
     }
 
+    // The list opens on a click, a keystroke or ArrowDown, never on focus alone: a dialog
+    // focuses its first field on open, and an open list replaces the selected label with
+    // the empty filter text.
+    const openIfClosed = () => {
+      if (enabled && !open) {
+        setInputValue('')
+        setHighlightedIndex(0)
+        setOpen(true)
+      }
+    }
+
     return (
       <Box mb="4">
         <Flex direction="column" gap="1">
@@ -210,13 +221,7 @@ export const SelectControl = ({
                 setHighlightedIndex(0)
                 if (!open) setOpen(true)
               }}
-              onFocus={() => {
-                if (enabled && !open) {
-                  setInputValue('')
-                  setHighlightedIndex(0)
-                  setOpen(true)
-                }
-              }}
+              onClick={openIfClosed}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   setOpen(false)
@@ -239,7 +244,8 @@ export const SelectControl = ({
                 }
               }}
             >
-              <TextField.Slot side="right">
+              {/* The slot sits beside the input, so a click on the chevron doesn't reach the input's onClick. */}
+              <TextField.Slot side="right" onClick={openIfClosed}>
                 <Flex align="center" gap="1">
                   {clearable && (
                     <ClearButton
