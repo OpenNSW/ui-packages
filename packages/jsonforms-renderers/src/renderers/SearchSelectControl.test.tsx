@@ -628,6 +628,26 @@ describe('SearchSelectControl opening', () => {
     expect(screen.queryByText('Type to search…')).toBeNull()
   })
 
+  it('keeps the typed text and searches for it when typing opens the list', async () => {
+    const queries: string[] = []
+    renderForm(
+      {},
+      (args) => {
+        queries.push(args.query)
+        return Promise.resolve({ options: [] })
+      },
+      pagedSchema,
+      portUi,
+    )
+    const input = screen.getByRole<HTMLInputElement>('textbox')
+
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'Sri' } })
+
+    expect(input.value).toBe('Sri')
+    await waitFor(() => expect(queries).toContain('Sri'))
+  })
+
   it('shows the selected label when a list dialog opens with this field first', async () => {
     const listSchema = {
       type: 'object',

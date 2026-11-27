@@ -561,8 +561,9 @@ const SearchSelectControl = ({
             style={!isValid ? { outline: '2px solid var(--red-7)', outlineOffset: '-1px' } : undefined}
             onChange={(e) => {
               if (!modeConfig?.searchable) return
-              setInputValue(e.target.value)
+              // Open first: openDropdown() empties the query, and the typed text must win.
               if (!open) openDropdown()
+              setInputValue(e.target.value)
             }}
             onClick={openIfClosed}
             onKeyDown={(e) => {
