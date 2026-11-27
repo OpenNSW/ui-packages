@@ -12,6 +12,7 @@ import { stampRowTemplates } from '../utils/sequence'
 import type { SequenceCounters } from '../utils/sequence'
 import { spellNumber } from '../utils/numberWords'
 import { getErrorMessage } from '../utils/error'
+import { isPointerOnScrollbar } from '../utils/scrollbar'
 import { useIsRequired } from '../hooks/useIsRequired'
 import { type ListMessage, type MessageValues, listText } from '../utils/messages'
 import { type ListTotal, listTotals, summarizeRow } from '../utils/listSummary'
@@ -474,6 +475,16 @@ export const ArrayControl = ({
             maxWidth="640px"
             // Radix still wires aria-describedby when Description is absent; opt out.
             {...(openShowDescription ? {} : { 'aria-describedby': undefined })}
+            // The dialog's scrollbar sits on the overlay, outside the content, so Radix counts a
+            // press on it as an outside press. It waits for a click to close the dialog, which a
+            // scrollbar never sends, and a Select opening inside the dialog can then trigger that
+            // pending close. A press on a scrollbar never closes the dialog.
+            onPointerDownOutside={(event) => {
+              const { target, clientX, clientY } = event.detail.originalEvent
+              if (target instanceof Element && isPointerOnScrollbar(target, clientX, clientY)) {
+                event.preventDefault()
+              }
+            }}
           >
             {openVisibleTitle ? (
               <Dialog.Title>{openVisibleTitle}</Dialog.Title>
